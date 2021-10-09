@@ -2,6 +2,9 @@ import numpy as np
 import math
 
 # Cálculo de retorno linear
+import pandas as pd
+
+
 def r_linear(p_fin, p_ini):
     return (p_fin/p_ini) - 1
 
@@ -21,12 +24,22 @@ def retorno_periodo(_df):
 
 # Converte o retorno entre períodos
 def conv_retorno(rt_p, total_periodos):
-    # rt_p = retorno do período
-    # total_periodos = tempo para o qual o retorno vai ser convertido
-    rt = ((1 + rt_p) ** total_periodos) - 1
-    return rt
+    return ((1 + rt_p) ** total_periodos) - 1
 
 # Converte o desvio padrão entre períodos
 def conv_risco(ris_p, total_periodos):
-    ris = ris_p * math.sqrt(total_periodos)
-    return ris
+    return ris_p * math.sqrt(total_periodos)
+
+def coef_var(risco, ret_medio):
+    return risco / ret_medio
+
+#calcula correlacao entre dois lista de ativos usando o arquivo .csv localizado em dados
+def correlacao(ativos):
+    new_df = pd.DataFrame()
+    for a in ativos:
+        df1 = pd.read_csv(f"dados/{a}.csv")
+        df1.rename({"Return": f"{a}"}, axis=1, inplace=True)
+        ret_a = df1[f"{a}"]
+        new_df[f"{a}"] = ret_a.copy()
+    return new_df.corr(method="pearson")
+

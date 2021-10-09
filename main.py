@@ -12,7 +12,7 @@ if __name__ == '__main__':
     # data_in = input("Data de inicio (MM-DD-AAAA): ")
     # data_fim = input("Data de fim (MM-DD-AAAA): ")
 
-    ativos = ['PETR4', 'VALE3', 'WIZS3']
+    ativos = ['PETR4', 'ITUB3', 'BBDC4', 'VALE3', 'WIZS3']
     d_in = '01-01-2021'
     d_fim = '09-30-2021'
 
@@ -28,9 +28,6 @@ if __name__ == '__main__':
         # Calcula o retorno
         print(f"Calculado retornos de {a}")
         df['Return'] = rt.r_log(df['Adj Close'], df['Adj Close'].shift(1))
-        ret_periodo = df['Return'].sum()
-        ret_medio = df['Return'].mean()
-        desvio = df['Return'].std()
         # Salva dados em .csv
         df.to_csv(f"dados/{a}.csv")
 
@@ -39,25 +36,28 @@ if __name__ == '__main__':
         df = pd.read_csv(f"dados/{a}.csv")
         retorno_total = df['Return'].sum()
         retorno_medio = df['Return'].mean()
-        desvio = df['Return'].std()
+        risco = df['Return'].std()
         retorno_anual = rt.conv_retorno(retorno_medio, 252)
-        risco_anual = rt.conv_risco(desvio, 252)
+        risco_anual = rt.conv_risco(risco, 252)
 
-        print(f"\n{a}")
+        print(f"\n--------{a}--------")
         print(f"Retorno total do período: {round((retorno_total * 100), 4)}%")
         print(f"Retorno médio ao dia: {round((retorno_medio * 100), 4)}%")
-        print(f"Risco ao dia: {round((desvio * 100), 4)}%")
+        print(f"Risco ao dia: {round((risco * 100), 4)}%")
         print(f"Retorno médio ao ano: {round((retorno_anual * 100), 4)}%")
         print(f"Risco ao ano: {round(risco_anual * 100, 4)}%")
+        print(f"Coeficiente de variação(dia):{rt.coef_var(risco, retorno_medio)}")
+
         # Calcula projeção de faixa de expectativa de retorno
         ultimo_preco = round(df.tail(1).values[0][6], 2)
         proj_preco = ultimo_preco * (1 + retorno_anual)
-        print(f"Projeçoes para o 1 ano:")
+        print('\nProjeçoes para o 1 ano:')
         print(f"Ultimo Preco: {ultimo_preco}")
         print(f"Retorno máximo: {round(((retorno_anual + risco_anual) * 100), 4)}%")
         print(f"Preço máximo: {proj_preco * (1 + risco_anual)}")
         print(f"Retorno mínimo: {round(((retorno_anual - risco_anual) * 100), 4)}%")
         print(f"Preço mínimo: {proj_preco * (1 - risco_anual)}")
 
-
-
+    # Calcula correlação entre os ativos
+    newdf = rt.correlacao(ativos)
+    print(newdf)
