@@ -14,7 +14,7 @@ def cotacao_indice_dia(indice, data_inicio, data_fim):
 
 def cotacao_ativo_dia(ativo, data_inicio, data_fim):
     # Coleta valores do OHLCV e Adj Close do <ativo> entre <data_inicio> e <data_fim>
-    print(f"Coletando dados do ativo {ativo}...")
+    print(f"Coletando dados dos ativos {ativo}...")
     return web.DataReader(
         f'{ativo}.SA',
         data_source='yahoo',
