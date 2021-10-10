@@ -3,8 +3,10 @@ import src.retorno as rt
 
 import pandas as pd
 import os
+from datetime import date, timedelta
 import numpy as np
 
+d_atual = date.today()
 
 if __name__ == '__main__':
     # ativos_entrada = input("Lista de Ativos, separados por vírgula (exemplo: PETR4,BBDC3): ")
@@ -12,9 +14,15 @@ if __name__ == '__main__':
     # data_in = input("Data de inicio (MM-DD-AAAA): ")
     # data_fim = input("Data de fim (MM-DD-AAAA): ")
 
-    ativos = ['PETR4', 'ITUB3', 'BBDC4', 'VALE3', 'WIZS3']
-    d_in = '01-01-2021'
-    d_fim = '09-30-2021'
+    # Define ativos a serem pesquisados
+    ativos = ['PETR4', 'ITUB3', 'BBDC4', 'VALE3', 'WIZS3', 'ECOR3']
+
+    periodo_dados = 52 # Periodo total dos dados em semanas
+    time_skew = timedelta(weeks=periodo_dados)
+
+    d_fim = d_atual.strftime("%m-%d-%Y")
+    d_in = (d_atual - time_skew).strftime("%m-%d-%Y")
+    print(d_in, d_fim)
 
     for a in ativos:
         # Verifica se os arquivo já existem
@@ -24,7 +32,11 @@ if __name__ == '__main__':
             continue
         # Se os dados não existirem, realiza o download
         print(f"Baixando dados de {a}")
-        df = dados.cotacao_ativo_dia(a, d_in, d_fim)
+        try:
+            df = dados.cotacao_ativo_dia(a, d_in, d_fim)
+        except:
+            print("Problemas baixando dados")
+            continue
         # Calcula o retorno
         print(f"Calculado retornos de {a}")
         df['Return'] = rt.r_log(df['Adj Close'], df['Adj Close'].shift(1))
@@ -33,7 +45,11 @@ if __name__ == '__main__':
 
     for a in ativos:
         # Abre o arquivo de dados
-        df = pd.read_csv(f"dados/{a}.csv")
+        try:
+            df = pd.read_csv(f"dados/{a}.csv")
+        except:
+            print(f"Dados para {a} não encontrados")
+            continue
         retorno_total = df['Return'].sum()
         retorno_medio = df['Return'].mean()
         risco = df['Return'].std()

@@ -37,7 +37,11 @@ def coef_var(risco, ret_medio):
 def correlacao(ativos):
     new_df = pd.DataFrame()
     for a in ativos:
-        df1 = pd.read_csv(f"dados/{a}.csv")
+        try:
+            df1 = pd.read_csv(f"dados/{a}.csv")
+        except:
+            print(f"Dados de {a} não encontrados")
+            continue
         df1.rename({"Return": f"{a}"}, axis=1, inplace=True)
         ret_a = df1[f"{a}"]
         new_df[f"{a}"] = ret_a.copy()
