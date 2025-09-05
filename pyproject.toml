@@ -1,0 +1,22 @@
+[tool.poetry]
+name = "analise-financeira-b3"
+version = "0.1.0"
+description = "coleta de dados B3"
+authors = ["phbrgnomo <phbrcc@gmail.com>"]
+readme = "README.md"
+packages = [{ include = "src" }]
+
+
+[tool.poetry.dependencies]
+python = "^3.11"
+numpy = "^2.3.2"
+pandas = "^2.3.2"
+pandas-datareader = "^0.10.0"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.scripts]
+main = "src.main:main"

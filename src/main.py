@@ -8,7 +8,7 @@ import numpy as np
 
 d_atual = date.today()
 
-if __name__ == '__main__':
+def main():
     # ativos_entrada = input("Lista de Ativos, separados por vírgula (exemplo: PETR4,BBDC3): ")
     # ativos = ativos_entrada.split(',')
     # data_in = input("Data de inicio (MM-DD-AAAA): ")
