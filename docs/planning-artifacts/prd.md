@@ -121,12 +121,19 @@ Escopo do documento: define requisitos funcionais e não‑funcionais, jornadas 
 - Snapshot CSVs gerados e verificados (formato CSV + checksum SHA256), salvos em `snapshots/<ticker>-YYYYMMDD.csv`.
 - Streamlit POC e notebooks leem do SQLite e exibem resultados para o ticker fornecido.
 - Convenção de 252 dias usada para anualizações onde aplicável.
-- Documentação completa da implementação: descrição do funcionamento, lógica, decisões de design e conceitos por trás de cada módulo (coleta, ETL, cálculo de retornos, persistência, geração de portfólios, visualização). Deve permitir que outro desenvolvedor entenda e estenda as implementações.
+- Documentação completa de cada etapa de implementação: descrição do funcionamento, lógica, decisões de design e conceitos por trás de cada módulo (coleta, ETL, cálculo de retornos, persistência, geração de portfólios, visualização). Deve permitir que outro desenvolvedor entenda e estenda as implementações.
 
 ### Measuráveis
 - Ingestão e persistência bem-sucedidas para um ticker fornecido pelo usuário; snapshot CSV criado com checksum válido.
 - `poetry run main` / `python -m src.main` realiza quickstart sem erro.
 - Documentação: README + `docs/` explicando arquitetura, data-model e como estender módulos.
+- Documentação para cada etapa de implementação, guardadas em `docs/implantacao/<numeração sequencial>-<o que foi implementado>.md`, contendo:
+  - Descrição do objetivo da implementação
+  - Soluções consideradas durante a implantação
+  - Motivos para escolha da decisão implantada
+  - Explicação de pontos principais da implementação com as respectivas referencias
+  - Conclusões quando ao processo de implementação e descobertas relevantes
+- Criação de uma carteira recomendada utilizando ativos selecionados pelo usuário (Markowitz, Black Litterman ou CAPM)
 
 ## Product Scope
 
@@ -137,6 +144,7 @@ Escopo do documento: define requisitos funcionais e não‑funcionais, jornadas 
 - Notebooks de exemplo e quickstart (comando `poetry run main --ticker ...`)
 - Streamlit POC para visualização local
 - Scripts e playbooks de operação (backup, restore, healthcheck)
+- Ao menos uma implementação de modelagem de portifólio (a ser definido baseado em complexidade de implementação)
 
 ### Out‑Of‑Scope (para MVP)
 - APIs públicas e autenticação de usuários
@@ -190,10 +198,6 @@ Escopo do documento: define requisitos funcionais e não‑funcionais, jornadas 
 - `docs/playbooks/quickstart-ticker.md` — quickstart passo-a-passo para reproduzir um experimento com um ticker.
 - `docs/playbooks/runbook-ops.md` — runbook de operações (backup, restore, troubleshooting de ingest).
 
----
-
-> Salvo: requisitos de domínio adicionados. Vou abrir o Passo 6 (Innovation Focus) em seguida.
-
 ## Project-Type Deep Dive (Step 07)
 
 ### Overview
@@ -204,6 +208,7 @@ Escopo do documento: define requisitos funcionais e não‑funcionais, jornadas 
 - Linguagem: Python 3.14
 - Gerenciador de pacotes/build: poetry
 - IDE preferida: VSCode
+- Banco de dados: SQLite
 
 ### Formato de documentação
 - Formato escolhido: Markdown (todos os documentos e playbooks serão escritos em Markdown em `docs/`).
@@ -215,17 +220,9 @@ Escopo do documento: define requisitos funcionais e não‑funcionais, jornadas 
 - `Data model`: `docs/data-model.md` descrevendo tabelas `prices`, `returns`, `snapshots`, `ingest_logs`, `metadata` com exemplos de queries.
 - `Architecture`: `docs/architecture.md` descrevendo fluxo ingest→ETL→persistência→consumo (notebooks/Streamlit/portfólio).
 - `Testing`: testes unitários para adaptadores de fonte; integração end-to-end que executa ingest→snapshot→notebook; recomenda-se `pytest` com fixture de SQLite temporário.
-- `Packaging`: instruções para publicar pacote localmente (`poetry build`, `poetry publish --repository`), e guidelines para empacotar como biblioteca consumível por outros projetos.
+- `Packaging`: instruções para publicar pacote localmente (`poetry build`, `poetry install`, `poetry run`).
 - `CI`: pipeline mínimo para `push`/`merge` que roda `poetry install`, `pytest`, linter (opcional) e checa formatação Markdown/links.
 
-### Deliverables (próximo checkpoint)
-- Update `docs/` com Markdown placeholders: `docs/architecture.md`, `docs/data-model.md`, `docs/playbooks/quickstart-ticker.md`, `docs/playbooks/runbook-ops.md` (conteúdo inicial mínimo).
-- Criar checklist de tarefas no `docs/planning-artifacts/backlog.md` para gerar exemplos de repositório (notebooks, Streamlit POC, exemplos de uso das APIs).
-
-### Next steps
-1. Gerar conteúdo inicial das páginas Markdown listadas acima (placeholders + instruções quickstart).  
-2. Adicionar exemplos e notebooks ao repositório (fará o usuário depois).  
-3. Atualizar `stepsCompleted` para refletir conclusão do Step 07 quando validar e salvar os artefatos gerados.
 
 ### API Contracts (exemplos)
 - `db.write_prices(df: pandas.DataFrame, ticker: str) -> None` — grava/atualiza registros na tabela `prices` (idempotente por (ticker,date)).
@@ -243,8 +240,6 @@ poetry run main --ticker PETR4.SA --force-refresh
 - Testes unitários: usar `pytest` com fixtures que criam um SQLite em memória/temporário para testar `db.*` e adaptadores de fonte.
 - Teste de integração (end-to-end): rotina que executa `pipeline.ingest` para um `ticker` de exemplo (mockando chamadas à API em CI) e verifica que o snapshot CSV existe e checksum SHA256 confere com o gerado.
 - CI pipeline mínimo: 1) `poetry install --no-dev` 2) `poetry run pytest -q` 3) checagem de links/formatos Markdown (opcional: `markdown-link-check`) 4) (opcional) linter/formatador (`ruff`/`black`).
-
-<!-- Resumo NFR removido: detalhes abaixo na seção "Non-Functional Requirements (Detalhado)" -->
 
 ## Non-Functional Requirements (Detalhado)
 
@@ -290,17 +285,7 @@ poetry run main --ticker PETR4.SA --force-refresh
 - `db_contracts` (unit): testes unitários para `db.read_prices`/`db.write_prices` que validam esquema e idempotência.
 - `portfolio_poc` (integration): gera portfólio com métricas retornadas e grava resultado em formato CSV/JSON conforme contrato.
 
-### Próximo checkpoint
-- Marcar Step 07 como validado após revisão do PRD e confirmação do formato Markdown e das decisões de implementação. Em seguida avançar para Step 08 (Scoping) para estimativas e entregas iniciais.
-
-### Validation Record
-- Step 07 validated by: Phbr
-- Validation date: 2026-02-15
-- Notes: Documentation format confirmed as Markdown; implementation choices recorded (Python 3.14, poetry, VSCode). Ready to proceed to Step 08 (Scoping).
-
-## Functional Requirements (Draft)
-
-Nota: esta é uma versão rascunho de Requisitos Funcionais (FRs) sintetizada a partir do PRD, Scoping e validações do Party Mode. Revisar e aprovar para avançar ao Step 10.
+## Functional Requirements
 
 ### Ingestão de Dados
 - FR1: [Usuário/CLI] pode iniciar ingest de preços para um ticker específico.
@@ -349,7 +334,7 @@ Nota: esta é uma versão rascunho de Requisitos Funcionais (FRs) sintetizada a 
 - FR27: [Desenvolvedor] pode rodar suíte de testes localmente e obter resultados pass/fail claros.
 
 ### Documentação e Relatórios
-- FR28: [Tech Writer] pode adicionar `docs/phase-N-report.md` com checklist, comandos reproducíveis e amostras de CSV para cada fase.
+- FR28: [Tech Writer] pode adicionar `docs/phase-N-report.md` com checklist, comandos reproducíveis e amostras de CSV para cada fase. Pode adicionar `docs/implantacao/<numeração sequencial>-<o que foi implementado>.md` como referencia implatação das soluções em projetos futuros.
 - FR29: [Usuário/Dev] encontra no `README` instruções quickstart reproduzíveis para executar o fluxo end‑to‑end.
 
 ### Observabilidade e Logs
@@ -380,14 +365,8 @@ Nota: esta é uma versão rascunho de Requisitos Funcionais (FRs) sintetizada a 
 - FR16 (Quickstart): `poetry run main --ticker <sample> --force-refresh` completa sem erro e gera snapshot CSV em `snapshots/`.
 - FR40 (Backups): `backup --run` gera arquivo `backups/data-YYYYMMDD.db` e `restore --last` recupera DB em ambiente de teste (passa teste de integridade).
 - FR41 (Migrations): `migrations status` mostra versão e `migrations apply`/`migrations rollback` funcionam em ambiente de teste.
-
-
-Estas FRs foram atualizadas com base na revisão colaborativa do Party Mode. Revise e me diga se quer: [A] Advanced Elicitation, [P] Party Mode, [C] Continue (anexar e avançar para Step-10).
-
  
-## Scoping (Draft — Party Mode applied)
-
-Nota: este é um rascunho de scoping gerado com base no escopo definido pelo usuário e nas recomendações coletadas durante a execução do Party Mode. Não marca o Step 08 como concluído — aguarda revisão e confirmação (escolha A/P/C no final).
+## Scoping
 
 ### Escopo por Fase (consolidado)
 
@@ -435,9 +414,9 @@ Nota: este é um rascunho de scoping gerado com base no escopo definido pelo usu
 ### Aceitação (por fase — resumo)
 
 - Fase 1: duas integrações válidas + CSVs com checksum gerados via CLI; `docs/phase-1-report.md` anexado.
-- Fase 2: ingest persistido no SQLite e notebooks reproduzíveis; testes que validam upsert e integridade.
-- Fase 3: Streamlit startável em container e exibindo dados de um ticker.
-- Fase 4: portfólio POC gerado e relatórios exportáveis.
+- Fase 2: ingest persistido no SQLite e notebooks reproduzíveis; testes que validam upsert e integridade; `docs/phase-2-report.md` anexado.
+- Fase 3: Streamlit startável em container e exibindo dados de um ticker `docs/phase-3-report.md` anexado.
+- Fase 4: portfólio POC gerado e relatórios exportáveis; `docs/phase-4-report.md` anexado.
 
 ### Estimativa de alto nível
 
@@ -447,10 +426,3 @@ Nota: este é um rascunho de scoping gerado com base no escopo definido pelo usu
 - Fase 4: 1–3 semanas dependendo profundidade da modelagem.
 
 ---
-
-Estas alterações refletem a entrada colaborativa do Party Mode (agentes: `architect`, `dev`, `qa`, `tech-writer`, `quick-flow-solo-dev`, `bmad-master`, etc.).
-
-Por favor escolha a próxima ação: **[A] Advanced Elicitation**  **[P] Party Mode**  **[C] Continue (anexar oficialmente e carregar Step-09)**
-
-*** FIM DO RASCUNHO DE SCOPING ***
-

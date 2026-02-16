@@ -1,3 +1,4 @@
+---
 stepsCompleted: [1, 2, 3, 4, 5, 6, 7, 8]
 inputDocuments:
   - docs/planning-artifacts/prd.md
@@ -14,8 +15,6 @@ completedAt: 2026-02-16
 ---
 
 # Architecture Decision Document
-
-_Este documento será construído colaborativamente por etapas. Começamos pela inicialização e registro dos documentos de entrada._
 
 ## Project Context Analysis
 
@@ -76,7 +75,6 @@ _Este documento será construído colaborativamente por etapas. Começamos pela 
 
 - Na pipeline CI inicial, **mockar provedores** e executar um quickstart integrado (mocked) que valide ingest→persistência→snapshot→checksum. Testes que fazem chamadas reais a provedores externos devem ser movidos para **Phase 3** (integração opcional/manual) para evitar instabilidade e rate‑limit flakiness em CI.
 
-
 ### Cross-Cutting Concerns Identified
 - Data integrity and provenance (store `source`, `fetched_at`, `raw_response`).
 - Idempotency and upsert semantics.
@@ -99,18 +97,12 @@ _Este documento será construído colaborativamente por etapas. Começamos pela 
 - Para a fase inicial (MVP) evite introduzir `alembic`/migrações completas sobre SQLite — isso tende a acrescentar complexidade operacional sem necessidade imediata. Em vez disso, comece com pequenos scripts de versionamento/binários SQL (ex.: `migrations/simple/0001_init.sql`, `migrations/apply.sh`) que aplicam mudanças incrementais e registram a versão atual em uma tabela `schema_version`.
 - Marque a avaliação de necessidade de `alembic` e migrações avançadas como **Phase 3: Enable when needed** — só adotar `alembic` se o projeto passar para multi‑usuário ou exigir migrações complexas que justifiquem a sobrecarga.
 
-
 ### Developer Next Steps (sugestão imediata)
 
 - Criar esqueleto de adaptador em `src/dados_b3.py` com interface `Adapter.fetch(ticker) -> pd.DataFrame(raw)` e `Adapter.normalize(df) -> pd.DataFrame(canonical)`.
 - Implementar `src/db.py` com `write_prices(df, ticker)` garantindo upsert por `(ticker, date)`.
 - Adicionar testes: `tests/test_ingest.py` (mock adapters) e `tests/test_db_upsert.py` (fixture SQLite temporário) para validar idempotência e integridade dos snapshots.
 - Adicionar `docs/planning-artifacts/adapter-mappings.md` com exemplos de mapeamento por provedor.
-
----
-
-_Fim da análise de contexto (Step 02)._ 
-
 
 ## Starter Template Evaluation (Step 03)
 
@@ -157,14 +149,15 @@ mkdir -p src tests notebooks docs dados snapshots
 - Confirmar versões dos pacotes via pesquisa web antes de fixar no `pyproject.toml`.
 - Incluir no `docs/` uma rota de migração leve para PostgreSQL caso o projeto evolua para multi-usuário.
 
----
-
-_Fim da avaliação de starter (Step 03)._ 
-
-
 ## Core Architectural Decisions — Data Architecture (Step 04)
 
----
+- Banco: SQLite local (single‑user); migrar para PostgreSQL se necessário.
+- Modelo: Adapter → Canonical Mapper; adaptadores entregam raw + DataFrame; mapper normaliza e adiciona source, fetched_at, raw_checksum.
+- Persistência: tabelas canônicas (prices, ingest_logs, snapshots); upsert por (ticker, date) (INSERT OR REPLACE / ON CONFLICT).
+- Provenance: salvar raw_response em raw/<provider>/ e registrar checksum SHA256.
+- Validação: pandera para DataFrames; pydantic para configs/DTOs.
+- Migrations: scripts simples para MVP; avaliar alembic em fase de escala.
+- Observabilidade: logs JSON estruturados + metadados de snapshot (checksum, created_at).
 
 ## Implementation Patterns — Party Mode Consolidated (Step 05)
 
@@ -213,10 +206,6 @@ Resumo das convenções e padrões acordados pela revisão colaborativa:
   - Violação de padrão: registrar no PR checklist e bloquear merge até correção.
   - Incluir templates de PR/checklist e exemplos de mapeamento em `docs/planning-artifacts/adapter-mappings.md`.
 
----
-
-_Fim da revisão colaborativa Party Mode (Step 05)._ 
-
 ## Project Structure & Boundaries (Step 06)
 
 ### Complete Project Directory Structure
@@ -235,7 +224,8 @@ analise-financeira-b3/
 │   ├── planning-artifacts/
 │   │   ├── architecture.md
 │   │   └── adapter-mappings.md
-│   └── playbooks/
+│   |── playbooks/
+|   └── implantacao/
 ├── dados/                # persistência e artefatos de dados (mounted volume)
 ├── raw/                  # raw responses salvos por provider
 ├── snapshots/            # snapshot CSVs com checksum
@@ -286,10 +276,6 @@ analise-financeira-b3/
 - Arquivos Python: snake_case.py; classes PascalCase.  
 - Tables & columns: snake_case, tables plural (`prices`, `returns`).  
 - Tests: `test_*.py` em `tests/` e fixtures em `conftest.py`.
-
----
-
-_Fim da definição de estrutura do projeto (Step 06)._ 
 
 ## Architecture Validation Results (Step 07)
 
@@ -356,10 +342,6 @@ poetry add --dev pytest black ruff pre-commit alembic
 mkdir -p src/adapters src/ingest src/etl src/db src/apps tests dados raw snapshots notebooks
 ```
 
----
-
-_Fim da Validação de Arquitetura (Step 07)._ 
-
 **Decisões escolhidas pelo usuário:**
 - **Banco:** SQLite (local)  
 - **Modelagem:** Adapter → Canonical Mapper  
@@ -378,9 +360,6 @@ _Fim da Validação de Arquitetura (Step 07)._
 - `pydantic` é excelente para validação de modelos Python, parsing de JSON/inputs e validação de registros individuais (DTOs, configurações). Não é tão conveniente para validação de DataFrames inteiros.
 - Recomendação prática: usar **`pandera`** para validação de DataFrames e pipelines ETL; usar **`pydantic`** para validação de configurações, inputs de API e contratos de adaptador (objetos/records).
 
-
-
----
 
 ## Step 8 — Conclusão & Handoff (FINAL)
 
