@@ -1,5 +1,7 @@
 # Backlog Inicial — Analise-financeira-B3
 
+> Nota: este arquivo é um **backlog inicial de referência** criado na ideação. Ele será usado apenas como base quando convertermos itens em epics/stories formais. Não execute diretamente a lista sem antes decompor itens em epics, stories e Acceptance Criteria (ver seção `Acceptance Criteria / Definition of Done` abaixo).
+
 Descrição: backlog inicial organizado por módulo, com etiquetas e estimativas para orientar implementação e criação de issues.
 
 ## Módulos e Tarefas Prioritárias
@@ -47,3 +49,34 @@ Se desejar, gero as issues automaticamente (requer acesso ao GitHub CLI/autentic
 
 - Priorizar sprint inicial incluindo: Definir esquema DB, Implementar ingestão idempotente, Teste quickstart e Documentação quickstart (soma estimada ~6 SP).
 - Após implementação inicial, criar testes de integração adicionais e pipelines de CI para validação automática do quickstart.
+
+## Acceptance Criteria / Definition of Done (REQ)
+
+Cada epic/story derivado deste backlog deve incluir **obrigatoriamente**:
+
+- **Acceptance Criteria (Given / When / Then)**: pelo menos 1 AC mensurável que descreva o comportamento esperado.
+- **Definition of Done (DoD)**: lista mínima que inclui: código com testes unitários relevantes, teste de integração quickstart (mocked) quando aplicável, documentação README/usage snippet, e verificação de lint/format via `pre-commit`.
+- **Traceability**: referência a FR(s) do PRD (ex.: FR1, FR10) para manter rastreabilidade.
+- **Estimate**: story points ou tempo estimado.
+
+Exemplo de template rápido para uma story:
+
+```
+Title: Implement ingest quickstart for TICKER
+
+FRs: FR1, FR10
+
+Acceptance Criteria:
+- Given a valid TICKER, When running `poetry run main --ticker PETR4.SA --force-refresh`, Then a snapshot CSV is created in `snapshots/` and checksum matches.
+
+Definition of Done:
+- Unit tests cover core functions (>=80% for module)
+- Integration quickstart test (mocked provider) passes in CI
+- README quickstart updated with example command
+- Lint & format checks pass via pre-commit
+
+Estimate: 3 SP
+```
+
+Use this template ao criar epics/stories e transforme itens do backlog em arquivos `epics/` e `stories/` ou em issues com o mesmo formato.
+
