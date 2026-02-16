@@ -77,7 +77,7 @@ Type `/bmad-` in Copilot Chat to see all available BMAD workflows and agent acti
 
 ## Convenções chave do repositório
 
-- Formato de data usado em main: MM-DD-YYYY
+- Formato de data usado em main: YYYY-MM-DD (ex.: 2020-01-01)
 - Ao coletar via Yahoo, ativos B3 usam sufixo .SA (ex.: PETR4 -> PETR4.SA)
 - Retorno diário calculado e salvo na coluna 'Return' dos CSVs em dados/
 - Cálculos anuais usam 252 períodos (dias úteis) em conv_retorno/conv_risco
