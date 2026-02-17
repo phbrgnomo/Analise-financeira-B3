@@ -82,4 +82,4 @@ GPT-5 mini
 - tests/adapters/test_alphavantage_contract.py (suggested)
 - docs/planning-artifacts/adapter-mappings.md (updated)
 
-Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/
+Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/143

@@ -55,4 +55,4 @@ GPT-5 mini
 - `tests/` (skeleton and fixtures)
 
 
-Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/19
+Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/104

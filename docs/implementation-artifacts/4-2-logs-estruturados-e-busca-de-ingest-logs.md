@@ -72,4 +72,4 @@ GPT-5 mini
 - `src/db/migrations/` (suggested)
 - `docs/operations/runbook.md` (update suggested)
 
-Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/
+Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/136

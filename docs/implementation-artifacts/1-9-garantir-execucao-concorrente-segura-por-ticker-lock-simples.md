@@ -92,4 +92,4 @@ GPT-5-mini (simulated assistant note: generated story content and checklist)
 
 ```
 
-Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/
+Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/122

@@ -73,4 +73,4 @@ GPT-5 mini (automated story generator)
 
 - docs/implementation-artifacts/4-4-monitoramento-de-integridade-de-snapshots-ci.md
 
-Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/
+Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/138

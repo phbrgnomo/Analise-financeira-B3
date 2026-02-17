@@ -89,4 +89,4 @@ automated-create-story-runner
 ### File List
 - docs/implementation-artifacts/7-5-migration-rollback-tests-and-restore-verification.md
 
-Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/
+Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/159

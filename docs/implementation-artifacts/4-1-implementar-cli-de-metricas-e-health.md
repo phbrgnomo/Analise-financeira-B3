@@ -77,4 +77,4 @@ GPT-5 mini
 
 - docs/implementation-artifacts/4-1-implementar-cli-de-metricas-e-health.md
 
-Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/
+Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/135

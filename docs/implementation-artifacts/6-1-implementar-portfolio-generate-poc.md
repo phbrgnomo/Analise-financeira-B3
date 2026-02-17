@@ -80,4 +80,4 @@ GPT-5 mini
 - results/portfolio-<run_id>.csv
 
 
-Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/
+Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/149

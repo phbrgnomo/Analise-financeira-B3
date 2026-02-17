@@ -68,4 +68,4 @@ GPT-5 mini
 
 - docs/implementation-artifacts/3-6-documentar-expected-outputs-e-paths-no-readme-e-notebooks.md
 
-Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/
+Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/134

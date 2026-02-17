@@ -81,4 +81,4 @@ GPT-5 mini
 - .gitignore (ensure `.env` present)
 - docs/implementation-artifacts/8-2-env-example-e-gerenciamento-seguro-de-segredos-locais.md (this file)
 
-Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/
+Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/163

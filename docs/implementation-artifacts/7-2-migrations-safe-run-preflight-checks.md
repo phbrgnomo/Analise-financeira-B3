@@ -77,4 +77,4 @@ status: ready-for-dev
 
  <!-- story_completion_status: ready-for-dev; ultimate context analysis completed -->
 
-Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/
+Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/156

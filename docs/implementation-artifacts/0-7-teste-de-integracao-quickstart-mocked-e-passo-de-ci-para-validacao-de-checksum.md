@@ -64,4 +64,4 @@
  - docs/planning-artifacts/prd.md
  - docs/planning-artifacts/architecture.md
 
-Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/25
+Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/110

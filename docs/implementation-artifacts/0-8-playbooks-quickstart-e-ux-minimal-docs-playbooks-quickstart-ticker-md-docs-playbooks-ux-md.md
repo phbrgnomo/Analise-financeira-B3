@@ -59,4 +59,4 @@ GPT-5 mini
 - docs/playbooks/quickstart-ticker.md
 - docs/playbooks/ux.md
 
-Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/
+Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/111

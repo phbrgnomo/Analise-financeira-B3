@@ -84,4 +84,4 @@ GPT-5 mini
 
 - docs/implementation-artifacts/7-3-ci-gates-for-migrations-and-schema-compatibility.md
 
-Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/
+Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/157

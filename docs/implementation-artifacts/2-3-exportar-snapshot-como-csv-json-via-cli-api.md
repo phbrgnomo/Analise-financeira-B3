@@ -80,4 +80,4 @@ automation-agent (LLM-assisted)
 
 ---
 
-Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/
+Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/125

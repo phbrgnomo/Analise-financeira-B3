@@ -67,4 +67,4 @@ GPT-5 mini
 
 - docs/implementation-artifacts/1-3-implementar-comando-pipeline-ingest-orquestrador-basico.md
 
-Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/
+Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/116

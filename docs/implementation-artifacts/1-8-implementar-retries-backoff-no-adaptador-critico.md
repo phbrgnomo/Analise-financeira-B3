@@ -66,4 +66,4 @@
  - docs/implementation-artifacts/1-8-implementar-retries-backoff-no-adaptador-critico.md
 
 
-Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/
+Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/121

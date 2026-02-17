@@ -63,4 +63,4 @@ so that o projeto mantenha `schema_version`, aplique migrações versionadas e s
 
 - docs/implementation-artifacts/7-1-escolher-e-integrar-ferramenta-de-migracoes-ou-script-simples.md
 
-Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/
+Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/155

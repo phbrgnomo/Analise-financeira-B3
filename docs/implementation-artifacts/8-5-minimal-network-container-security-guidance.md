@@ -69,4 +69,4 @@ GPT-5 mini (modo YOLO - execução automatizada)
 
 - docs/implementation-artifacts/8-5-minimal-network-container-security-guidance.md
 
-Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/
+Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/165

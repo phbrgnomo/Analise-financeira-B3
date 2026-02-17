@@ -66,4 +66,4 @@ GPT-5 mini
 
 <!-- end file -->
 
-Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/
+Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/113

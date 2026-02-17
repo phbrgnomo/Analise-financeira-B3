@@ -68,4 +68,4 @@ GPT-5 mini
 
 - docs/implementation-artifacts/1-2-implementar-canonical-mapper-provider-schema-canonico.md
 
-Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/
+Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/115

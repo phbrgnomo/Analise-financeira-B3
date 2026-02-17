@@ -111,4 +111,4 @@ GPT-5 mini
 - pyproject.toml (may be updated)
 - README.md (updated with instructions)
 
-Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/21
+Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/106

@@ -91,4 +91,4 @@ automation-agent
 
 - docs/implementation-artifacts/0-2-criar-readme-md-quickstart.md
 
-Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/20
+Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/105

@@ -77,4 +77,4 @@ GPT-5 mini (assistant-generated)
 
 - docs/implementation-artifacts/4-5-integracao-simples-de-alerting-e-thresholds-operacionais.md
 
-Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/
+Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/139

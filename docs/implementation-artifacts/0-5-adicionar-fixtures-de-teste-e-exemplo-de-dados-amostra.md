@@ -65,4 +65,4 @@ GPT-5 mini
 - tests/conftest.py
 
 
-Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/23
+Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/108

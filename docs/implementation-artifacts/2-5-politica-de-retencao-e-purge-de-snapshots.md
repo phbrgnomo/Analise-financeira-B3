@@ -106,4 +106,4 @@ GPT-5 mini
 
 - docs/implementation-artifacts/2-5-politica-de-retencao-e-purge-de-snapshots.md
 
-Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/
+Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/127

@@ -74,4 +74,4 @@ GPT-5 mini
 - src/db/db.py (use existing contract)
 - tests/test_streamlit_poc.py (suggested smoke test)
 
-Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/
+Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/131

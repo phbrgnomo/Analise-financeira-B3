@@ -72,4 +72,4 @@ status: ready-for-dev
  - docs/implementation-artifacts/8-4-secret-scanning-pre-commit-enforcement.md
 
 
-Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/
+Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/164

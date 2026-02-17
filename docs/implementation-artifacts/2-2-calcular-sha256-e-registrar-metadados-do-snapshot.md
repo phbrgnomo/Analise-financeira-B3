@@ -99,4 +99,4 @@ automated-agent
 
 - snapshots/ (target directory for generated artifacts)
 
-Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/
+Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/124

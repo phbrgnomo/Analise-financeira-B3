@@ -65,4 +65,4 @@ GPT-5 mini
 
 - docs/implementation-artifacts/4-3-backup-restore-operacional.md
 
-Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/
+Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/137
