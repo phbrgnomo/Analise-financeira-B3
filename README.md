@@ -15,3 +15,19 @@ Esse projeto tem a finalidade apenas de aprendizado. Use pelo seu próprio risco
 
 ## Possíveis implementações futuras
 - `[]`Adicionar mercados de criptos
+
+## Configuração local (env)
+
+Para configurar variáveis de ambiente locais, copie o arquivo de exemplo:
+
+```
+cp .env.example .env
+```
+
+Preencha os valores em `.env`. Variáveis importantes:
+- `YF_API_KEY` (opcional) — chave para provedores quando necessário
+- `DATA_DIR` — diretório de dados local (padrão `./dados`)
+- `SNAPSHOT_DIR` — onde snapshots CSV são gravados (padrão `./snapshots`)
+- `LOG_LEVEL` — `INFO` por padrão
+
+Nunca comite seu arquivo `.env` com segredos reais.
