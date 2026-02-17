@@ -35,7 +35,6 @@ htmlcov/
 # PyCharm, VSCode, JetBrains
 .idea/
 .vscode/
-.vscode/settings.json
 
 # Local env files
 .env

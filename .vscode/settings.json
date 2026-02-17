@@ -1,6 +1,0 @@
-{
-    "snyk.advanced.autoSelectOrganization": false,
-    "chat.tools.terminal.autoApprove": {
-        "mkdir": true
-    }
-}
