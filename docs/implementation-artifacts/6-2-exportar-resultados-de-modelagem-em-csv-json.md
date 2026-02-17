@@ -87,3 +87,5 @@ automated-agent
 - docs/implementation-artifacts/6-2-exportar-resultados-de-modelagem-em-csv-json.md
 
 ---
+
+Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/

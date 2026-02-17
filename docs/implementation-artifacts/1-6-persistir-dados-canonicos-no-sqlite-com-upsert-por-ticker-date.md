@@ -70,3 +70,5 @@ GPT-5 mini
 
 - docs/planning-artifacts/epics.md (source)
 - docs/planning-artifacts/prd.md (source)
+
+Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/

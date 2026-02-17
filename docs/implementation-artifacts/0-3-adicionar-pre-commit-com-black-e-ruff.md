@@ -110,3 +110,5 @@ GPT-5 mini
 - .pre-commit-config.yaml (to be added)
 - pyproject.toml (may be updated)
 - README.md (updated with instructions)
+
+Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/21

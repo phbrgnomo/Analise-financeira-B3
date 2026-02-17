@@ -63,3 +63,5 @@
  - docs/planning-artifacts/epics.md
  - docs/planning-artifacts/prd.md
  - docs/planning-artifacts/architecture.md
+
+Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/25

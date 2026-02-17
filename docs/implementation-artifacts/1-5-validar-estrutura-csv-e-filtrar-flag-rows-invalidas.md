@@ -65,3 +65,5 @@ GPT-5 mini
 ### File List
 
 - docs/implementation-artifacts/1-5-validar-estrutura-csv-e-filtrar-flag-rows-invalidas.md
+
+Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/27

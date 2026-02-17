@@ -68,3 +68,5 @@ GPT-5 mini
 ### File List
 
 ````
+
+Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/

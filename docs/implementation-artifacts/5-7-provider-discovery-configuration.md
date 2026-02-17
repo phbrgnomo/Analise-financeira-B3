@@ -66,3 +66,5 @@
  ### File List
 
  - docs/implementation-artifacts/5-7-provider-discovery-configuration.md
+
+Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/

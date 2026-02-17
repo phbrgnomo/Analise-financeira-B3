@@ -84,3 +84,5 @@ GPT-5 mini
 - tests/test_cli_test_conn.py (new)
 - tests/test_cli_health_metrics.py (new)
 
+
+Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/

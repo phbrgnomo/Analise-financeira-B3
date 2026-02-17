@@ -85,3 +85,5 @@ GPT-5 mini
 ### File List
 
 - docs/implementation-artifacts/4-6-health-checks-and-readiness-probes-for-local-deployments.md
+
+Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/

@@ -64,3 +64,5 @@ BMAD automation agent (processo local)
 
 - (Este story) `docs/implementation-artifacts/6-4-notebook-de-exemplo-de-modelagem-parametrizavel.md`
 
+
+Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/

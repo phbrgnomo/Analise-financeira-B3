@@ -71,3 +71,5 @@ GPT-5 mini
 - `src/cli/logs.py` (suggested)
 - `src/db/migrations/` (suggested)
 - `docs/operations/runbook.md` (update suggested)
+
+Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/

@@ -79,3 +79,5 @@ N/A
 ### File List
 
 - docs/implementation-artifacts/1-10-cache-de-snapshots-e-ingestao-incremental.md
+
+Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/

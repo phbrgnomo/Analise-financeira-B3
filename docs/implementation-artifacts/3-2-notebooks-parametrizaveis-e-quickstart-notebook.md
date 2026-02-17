@@ -72,3 +72,5 @@ GPT-5 mini
 ---
 
 Completion: Ultimate context engine analysis (YOLO) produced an actionable story file for devs.
+
+Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/

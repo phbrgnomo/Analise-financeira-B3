@@ -75,3 +75,5 @@ GPT-5 mini
 - scripts/migrations/rollback_test.sh (new - draft)
 
 """
+
+Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/

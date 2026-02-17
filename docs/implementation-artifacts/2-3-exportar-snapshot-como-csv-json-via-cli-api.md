@@ -79,3 +79,5 @@ automation-agent (LLM-assisted)
 - tests/test_snapshots.py (proposto)
 
 ---
+
+Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/

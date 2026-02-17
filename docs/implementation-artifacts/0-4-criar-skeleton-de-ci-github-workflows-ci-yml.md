@@ -72,3 +72,5 @@ TBD
 - .github/workflows/ci.yml (to be created by implementer)
 
 ```
+
+Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/22

@@ -78,3 +78,5 @@ Automated BMad agent (agent execution record)
 ### File List
 
 - docs/implementation-artifacts/6-6-documentacao-e-exemplos-de-uso-para-modelagem.md
+
+Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/

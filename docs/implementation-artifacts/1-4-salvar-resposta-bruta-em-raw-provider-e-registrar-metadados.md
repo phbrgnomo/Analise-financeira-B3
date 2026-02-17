@@ -76,3 +76,5 @@ GPT-5 mini
 ### File List
 
 - docs/implementation-artifacts/1-4-salvar-resposta-bruta-em-raw-provider-e-registrar-metadados.md
+
+Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/

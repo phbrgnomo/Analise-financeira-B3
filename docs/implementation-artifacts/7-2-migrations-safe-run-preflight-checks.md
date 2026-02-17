@@ -76,3 +76,5 @@ status: ready-for-dev
  - docs/implementation-artifacts/7-2-migrations-safe-run-preflight-checks.md
 
  <!-- story_completion_status: ready-for-dev; ultimate context analysis completed -->
+
+Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/

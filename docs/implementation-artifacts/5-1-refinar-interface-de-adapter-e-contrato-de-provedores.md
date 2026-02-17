@@ -77,3 +77,5 @@ GPT-5 mini
 ### File List
 
 - docs/implementation-artifacts/5-1-refinar-interface-de-adapter-e-contrato-de-provedores.md
+
+Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/

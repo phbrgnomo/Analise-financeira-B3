@@ -78,3 +78,5 @@ GPT-generated content (agent integrated into BMad flow)
 ### File List
 
 - docs/implementation-artifacts/5-4-tratar-rate-limits-e-log-de-rate-limit-por-provider.md
+
+Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/

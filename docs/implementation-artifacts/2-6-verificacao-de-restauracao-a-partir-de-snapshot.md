@@ -62,3 +62,5 @@ GPT-5 mini
 
 - Created story file from epic context and PRD/architecture artifacts.
 - Updated `sprint-status.yaml` to mark story as `ready-for-dev`.
+
+Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/

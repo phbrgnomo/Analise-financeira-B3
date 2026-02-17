@@ -94,3 +94,5 @@ GPT-generated artifact (assistant automation)
 
 - examples/run_quickstart_example.sh (new, executable)
 - docs/implementation-artifacts/3-5-quickstart-examples-and-reproducible-scripts.md (this file)
+
+Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/

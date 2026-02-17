@@ -91,3 +91,5 @@ GPT-5-mini (simulated assistant note: generated story content and checklist)
 - docs/planning-artifacts/epics.md (source)
 
 ```
+
+Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/

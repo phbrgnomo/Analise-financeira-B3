@@ -86,3 +86,5 @@ internal-assistant
 
 - docs/planning-artifacts/epics.md
 - docs/implementation-artifacts/2-4-ci-validation-job-para-checar-checksums-de-snapshots.md
+
+Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/

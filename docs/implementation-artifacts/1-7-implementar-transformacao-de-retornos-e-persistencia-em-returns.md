@@ -76,3 +76,5 @@ GPT-5 mini
 
 - docs/planning-artifacts/epics.md (source)
 - docs/implementation-artifacts/sprint-status.yaml (updated)
+
+Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/

@@ -67,3 +67,5 @@ GPT-5 mini
 
 - tests/fixtures/modeling/ (sugerido)
 - tests/modeling/test_portfolio.py (sugerido)
+
+Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/

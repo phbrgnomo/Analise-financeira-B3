@@ -76,3 +76,5 @@ Nenhum log de execução adicional foi gravado neste passo além do arquivo de s
 ### File List
 
 - docs/implementation-artifacts/5-3-documentar-mappings-provider-canonico-em-adapter-mappings-md.md
+
+Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/

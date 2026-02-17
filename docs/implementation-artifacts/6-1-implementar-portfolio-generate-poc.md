@@ -79,3 +79,5 @@ GPT-5 mini
 - src/cli.py (extensão proposta)
 - results/portfolio-<run_id>.csv
 
+
+Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/

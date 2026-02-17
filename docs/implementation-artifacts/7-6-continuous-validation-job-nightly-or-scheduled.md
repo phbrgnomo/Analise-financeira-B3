@@ -68,3 +68,5 @@ GPT-5 mini
 ### File List
 
 - docs/implementation-artifacts/7-6-continuous-validation-job-nightly-or-scheduled.md
+
+Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/

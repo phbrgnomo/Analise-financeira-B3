@@ -98,3 +98,5 @@ automated-agent
 ### File List
 
 - snapshots/ (target directory for generated artifacts)
+
+Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/

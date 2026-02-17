@@ -64,3 +64,5 @@ GPT-5 mini
 - tests/fixtures/README.md
 - tests/conftest.py
 
+
+Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/23

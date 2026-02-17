@@ -96,3 +96,5 @@ GPT-5 mini (automated BMad run)
 ### File List
 
 - docs/implementation-artifacts/3-1-implementar-quickstart-cli-endtoend.md
+
+Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/

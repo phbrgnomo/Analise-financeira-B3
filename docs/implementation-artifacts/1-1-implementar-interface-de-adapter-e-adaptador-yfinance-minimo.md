@@ -79,3 +79,5 @@ GPT-5 mini
 - `tests/test_adapters.py` (novo)
 
 <!-- end file -->
+
+Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/

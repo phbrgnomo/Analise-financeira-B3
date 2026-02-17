@@ -65,3 +65,5 @@ GPT-5 mini
 - `dados/examples/ticker_example.csv` (novo)
 
 <!-- end file -->
+
+Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/

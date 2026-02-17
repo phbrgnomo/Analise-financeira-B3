@@ -100,3 +100,5 @@ GPT-agent (internal) – follow repo conventions
 - `src/modeling/telemetry.py` (recomendada)
 - `src/main.py` (atualizar flags/CLI)
 - `tests/modeling/test_metrics.py`
+
+Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/

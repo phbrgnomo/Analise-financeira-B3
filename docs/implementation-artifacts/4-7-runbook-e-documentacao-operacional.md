@@ -167,3 +167,5 @@ Este documento entrega um runbook operacional conciso e acionável para as taref
 ---
 
 *Fim do runbook inicial.*
+
+Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/

@@ -59,3 +59,5 @@ GPT-5 mini
 - `docs/implementation-artifacts/0-6-criar-env-example-e-instrucoes-de-configuracao-local.md`
 
 ```
+
+Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/24

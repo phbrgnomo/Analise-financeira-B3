@@ -78,3 +78,5 @@ GPT-5 mini
 ### Lista de Arquivos (referência)
 
 - docs/implementation-artifacts/8-6-incident-response-runbook-and-secret-rotation-checklist.md
+
+Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/

@@ -81,3 +81,5 @@ internal-analysis-agent
 ### File List
 
 - docs/implementation-artifacts/8-1-garantir-permissoes-minimas-para-artefatos-sensiveis.md
+
+Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/
