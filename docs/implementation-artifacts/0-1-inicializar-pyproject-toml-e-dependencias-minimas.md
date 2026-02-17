@@ -1,12 +1,3 @@
----
-generated_by: bmad/create-story
-epic: 0
-story: 1
-story_key: 0-1-inicializar-pyproject-toml-e-dependencias-minimas
-status: ready-for-dev
-generated: 2026-02-17T00:00:00Z
----
-
 # Story 0.1: Inicializar pyproject.toml e dependências mínimas
 
 Status: ready-for-dev

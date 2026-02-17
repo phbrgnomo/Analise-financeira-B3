@@ -1,12 +1,3 @@
----
-story_key: 0-2-criar-readme-md-quickstart
-epic: 0
-story_num: 2
-status: ready-for-dev
-created_by: Phbr
-created_at: 2026-02-17T00:00:00Z
----
-
 # Story 0.2: Criar README.md Quickstart
 
 Status: ready-for-dev

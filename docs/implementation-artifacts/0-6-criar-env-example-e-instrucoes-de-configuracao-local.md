@@ -1,4 +1,3 @@
-```markdown
 # Story 0.6: Criar .env.example e instruções de configuração local
 
 Status: ready-for-dev

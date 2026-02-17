@@ -1,12 +1,3 @@
----
-generated: 2026-02-17T00:00:00Z
-story_key: 0-8-playbooks-quickstart-e-ux-minimal-docs-playbooks-quickstart-ticker-md-docs-playbooks-ux-md
-epic: 0
-story_id: 0.8
-owner: Phbr
-status: ready-for-dev
----
-
 # Story 0.8: playbooks-quickstart-e-ux-minimal-docs-playbooks-quickstart-ticker-md-docs-playbooks-ux-md
 
 Status: ready-for-dev

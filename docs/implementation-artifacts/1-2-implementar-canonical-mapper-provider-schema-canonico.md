@@ -1,11 +1,3 @@
----
-title: "Story 1.2: Implementar Canonical Mapper (Provider -> Schema canônico)"
-author: Phbr
-status: ready-for-dev
-story_key: 1-2-implementar-canonical-mapper-provider-schema-canonico
-created: 2026-02-17T00:00:00Z
----
-
 # Story 1.2: Implementar Canonical Mapper (Provider -> Schema canônico)
 
 Status: ready-for-dev

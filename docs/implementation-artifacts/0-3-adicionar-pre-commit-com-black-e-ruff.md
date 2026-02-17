@@ -1,11 +1,3 @@
----
-story_key: 0-3-adicionar-pre-commit-com-black-e-ruff
-epic: 0
-story_num: 3
-status: ready-for-dev
-generated_by: create-story
----
-
 # Story 0.3: Adicionar pre-commit com black e ruff
 
 Status: ready-for-dev

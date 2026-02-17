@@ -40,7 +40,7 @@ Ao final, agrega as respostas dos subagentes e gera um relatório resumido lista
                - `prompt`: Instructions below (read workflow and run it)
                - `description`: "create-story-subagent"
             6. Collect responses from all subagents and build a short report listing for each story: story id/name, subagent result summary, and any generated file paths reported by the subagent.
-            7. Update {project-root}/docs/implementation-artifacts/sprint-status.yml based on each subagent response
+            7. Update {project-root}/docs/implementation-artifacts/sprint-status.yml based on each subagent response. DO NOT CHANGE ANY OTHER FILE.
             8. Return the report to the user.
           </handler>
 
@@ -51,7 +51,7 @@ Ao final, agrega as respostas dos subagentes e gera um relatório resumido lista
             3. For each backlog story, create a todo item using the `manage_todo_list` tool.
             4. For each backlog story, invoke a subagent using the Copilot `runSubagent` tool with the same payload described above.
             5. Collect responses from all subagents and build a short report listing for each story: story id/name, subagent result summary, and any generated file paths reported by the subagent.
-            6. Update {project-root}/docs/implementation-artifacts/sprint-status.yml based on each subagent response
+            6. Update {project-root}/docs/implementation-artifacts/sprint-status.yml based on each subagent response. DO NOT CHANGE ANY OTHER FILE.
             7. Return the report to the user.
           </handler>
       </handlers>
