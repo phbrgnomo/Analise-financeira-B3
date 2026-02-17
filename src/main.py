@@ -47,8 +47,8 @@ def run_quickstart(tickers: List[str] | None = None) -> None:
         print(f"Baixando dados de {a}")
         try:
             df = dados.cotacao_ativo_dia(a, d_in, d_fim)
-        except Exception:
-            print("Problemas baixando dados")
+        except Exception as exc:
+            print(f"Problemas baixando dados: {exc}")
             continue
 
         print(f"Calculado retornos de {a}")
@@ -58,8 +58,8 @@ def run_quickstart(tickers: List[str] | None = None) -> None:
     for a in tickers:
         try:
             df = pd.read_csv(f"dados/{a}.csv")
-        except Exception:
-            print(f"Dados para {a} não encontrados")
+        except (FileNotFoundError, pd.errors.EmptyDataError, pd.errors.ParserError) as exc:
+            print(f"Dados para {a} não encontrados ou inválidos: {exc}")
             continue
 
         retorno_medio = df["Return"].mean()

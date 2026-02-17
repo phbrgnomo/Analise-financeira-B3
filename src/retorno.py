@@ -45,10 +45,13 @@ def correlacao(ativos):
     for a in ativos:
         try:
             df1 = pd.read_csv(f"dados/{a}.csv")
-        except Exception:
-            print(f"Dados de {a} não encontrados")
+        except (FileNotFoundError, pd.errors.EmptyDataError, pd.errors.ParserError) as exc:
+            print(f"Dados de {a} não encontrados ou inválidos: {exc}")
             continue
         df1.rename({"Return": f"{a}"}, axis=1, inplace=True)
         ret_a = df1[f"{a}"]
         new_df[f"{a}"] = ret_a.copy()
+    if new_df.empty:
+        raise ValueError(f"Nenhum dado válido carregado para cálculo de correlação para ativos: {ativos}")
+
     return new_df.corr(method="pearson")
