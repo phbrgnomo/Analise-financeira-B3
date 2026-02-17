@@ -24,7 +24,7 @@ so that I can install and run the project and tests consistently using `poetry`.
 ## Dev Notes
 
 - Keep versions conservative and explicitly pinned for reproducibility in early phases.
-- Follow existing project layout: `src/` package, `docs/` for planning and implementation artifacts.
+- Follow existing project layout as decribed in `docs/architecture.md` in the ## Project Structure & Boundaries section
 - Ensure compatibility with Python 3.14 as noted in planning artifacts.
 
 ### Project Structure Notes
@@ -35,6 +35,7 @@ so that I can install and run the project and tests consistently using `poetry`.
 ### References
 
 - Source: [docs/planning-artifacts/epics.md](docs/planning-artifacts/epics.md)
+- Architecture: [docs/planning-artifacs/architecture.md](docs/planning-artifacts/epics.md)
 - Sprint status: [docs/implementation-artifacts/sprint-status.yaml](docs/implementation-artifacts/sprint-status.yaml)
 
 ## Dev Agent Record

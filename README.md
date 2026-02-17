@@ -31,3 +31,25 @@ Preencha os valores em `.env`. Variáveis importantes:
 - `LOG_LEVEL` — `INFO` por padrão
 
 Nunca comite seu arquivo `.env` com segredos reais.
+
+## Quickstart
+
+Instalação (usando `poetry`):
+
+```bash
+poetry install
+```
+
+Executar CLI help:
+
+```bash
+poetry run main --help
+# ou
+python -m src.main --help
+```
+
+Rodar testes:
+
+```bash
+pytest -q
+```

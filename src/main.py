@@ -1,3 +1,27 @@
+"""Entry point CLI for the project.
+
+Provides a minimal CLI that supports `--help` so acceptance criteria can be validated
+without requiring external dependencies to be installed in the environment.
+"""
+import argparse
+
+
+def build_parser():
+    parser = argparse.ArgumentParser(prog="main", description="Analise financeira B3 CLI")
+    parser.add_argument("--version", action="store_true", help="Show version")
+    return parser
+
+
+def main():
+    parser = build_parser()
+    args = parser.parse_args()
+
+    if args.version:
+        print("analise-financeira-b3 0.1.0")
+
+
+if __name__ == "__main__":
+    main()
 import src.dados_b3 as dados
 import src.retorno as rt
 

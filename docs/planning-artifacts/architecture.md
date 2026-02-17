@@ -206,7 +206,7 @@ Resumo das convenções e padrões acordados pela revisão colaborativa:
   - Violação de padrão: registrar no PR checklist e bloquear merge até correção.
   - Incluir templates de PR/checklist e exemplos de mapeamento em `docs/planning-artifacts/adapter-mappings.md`.
 
-## Project Structure & Boundaries (Step 06)
+## Project Structure & Boundaries
 
 ### Complete Project Directory Structure
 
