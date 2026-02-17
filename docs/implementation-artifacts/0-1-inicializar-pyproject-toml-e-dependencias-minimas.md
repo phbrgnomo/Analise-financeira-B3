@@ -1,6 +1,6 @@
 # Story 0.1: Inicializar pyproject.toml e dependências mínimas
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -16,10 +16,10 @@ so that I can install and run the project and tests consistently using `poetry`.
 
 ## Tasks / Subtasks
 
-- [ ] Add `pyproject.toml` with runtime dependencies: `pandas`, `sqlalchemy`, `typer`, `python-dotenv`.
-- [ ] Add dev-dependencies: `pytest`, `black`, `ruff`, `pre-commit` and configure basic pre-commit hooks.
-- [ ] Add entrypoint script `main` in `src/main.py` and verify `poetry run main --help`.
-- [ ] Document quickstart commands in README.md (install, run, test).
+- [x] Add `pyproject.toml` with runtime dependencies: `pandas`, `sqlalchemy`, `typer`, `python-dotenv`.
+- [x] Add dev-dependencies: `pytest`, `black`, `ruff`, `pre-commit` and configure basic pre-commit hooks.
+- [x] Add entrypoint script `main` in `src/main.py` and verify `poetry run main --help`.
+- [x] Document quickstart commands in README.md (install, run, test).
 
 ## Dev Notes
 
@@ -46,14 +46,21 @@ GPT-5 mini
 
 ### Completion Notes List
 
-- Ultimate context engine analysis completed for story foundation.
+- Implementado `pyproject.toml` com dependências runtime e dev-dependencies mínimas.
+- Adicionado `src/main.py` com entrypoint CLI mínimo suportando `--help` e `--version`.
+- Adicionado teste `tests/test_cli.py` que valida `python -m src.main --help`.
+- Adicionado `.pre-commit-config.yaml` e seção `Quickstart` no `README.md`.
+
+Testes: criei testes unitários e executei-os localmente dentro de um virtualenv `.venv`; `1 passed`.
 
 ### File List
 
-- `pyproject.toml` (create)
-- `src/main.py` (verify entrypoint)
-- `README.md` (update quickstart)
-- `tests/` (skeleton and fixtures)
+- `pyproject.toml` (modified)
+- `src/main.py` (added)
+- `README.md` (modified)
+- `tests/test_cli.py` (added)
+- `.pre-commit-config.yaml` (added)
+
 
 
 Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/104
