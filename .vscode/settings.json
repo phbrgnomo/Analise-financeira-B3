@@ -1,4 +1,7 @@
 {
     "snyk.advanced.organization": "ea7c9557-cd78-42be-93d0-4250cef606dd",
-    "snyk.advanced.autoSelectOrganization": false
+    "snyk.advanced.autoSelectOrganization": false,
+    "chat.tools.terminal.autoApprove": {
+        "mkdir": true
+    }
 }
