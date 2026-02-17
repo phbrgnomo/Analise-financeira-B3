@@ -40,7 +40,8 @@ Ao final, agrega as respostas dos subagentes e gera um relatório resumido lista
                - `prompt`: Instructions below (read workflow and run it)
                - `description`: "create-story-subagent"
             6. Collect responses from all subagents and build a short report listing for each story: story id/name, subagent result summary, and any generated file paths reported by the subagent.
-            7. Return the report to the user.
+            7. Update {project-root}/docs/implementation-artifacts/sprint-status.yml based on each subagent response
+            8. Return the report to the user.
           </handler>
 
           <handler type="process-all">
@@ -50,7 +51,8 @@ Ao final, agrega as respostas dos subagentes e gera um relatório resumido lista
             3. For each backlog story, create a todo item using the `manage_todo_list` tool.
             4. For each backlog story, invoke a subagent using the Copilot `runSubagent` tool with the same payload described above.
             5. Collect responses from all subagents and build a short report listing for each story: story id/name, subagent result summary, and any generated file paths reported by the subagent.
-            6. Return the report to the user.
+            6. Update {project-root}/docs/implementation-artifacts/sprint-status.yml based on each subagent response
+            7. Return the report to the user.
           </handler>
       </handlers>
   </menu-handlers>
@@ -78,8 +80,9 @@ Ao final, agrega as respostas dos subagentes e gera um relatório resumido lista
 When invoking `runSubagent`, provide the following `prompt` (pass the whole text):
 
 1) Read completely the file {project-root}/_bmad/bmm/workflows/4-implementation/create-story/workflow.yaml and execute it following workflow rules in {project-root}/_bmad/core/tasks/workflow.xml.
-2) Create the story artifacts described by the workflow and persist any files under the repository.
-3) When finished, respond with a short JSON-like summary containing:
+2) Create the story artifacts described by the workflow and persist any files under the repository. Run in yolo mode.
+3) MANDATORY: Only create the story details file. Do not create any additional file.
+4) When finished, respond with a short JSON-like summary containing:
    - `story`: story id or name
    - `status`: success|failed
    - `files`: list of generated file paths (relative to project root)

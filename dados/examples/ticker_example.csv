@@ -1,0 +1,2 @@
+ticker,date,open,high,low,close,adj_close,volume,source,fetched_at,raw_checksum
+PETR4.SA,2026-02-15,25.30,25.80,25.10,25.50,25.50,123456,yfinance,2026-02-15T10:00:00Z,
