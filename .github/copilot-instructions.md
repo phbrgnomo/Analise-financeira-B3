@@ -56,6 +56,10 @@
 
 Type `/bmad-` in Copilot Chat to see all available BMAD workflows and agent activators. Agents are also available in the agents dropdown.
 
+## IMPORTANTE
+
+Agentes trabalhando nesse projeto devem sempre utilizar `poetry` para execução de comandos, instalação de dependências e gerenciamento do ambiente virtual. O entrypoint definido é `main` em `src/main.py`, e deve ser invocado via `poetry run main` ou `python -m src.main` para garantir que o ambiente virtual seja ativado corretamente.
+
 ## Projeto — comandos úteis
 
 - Instalar dependências: poetry install
