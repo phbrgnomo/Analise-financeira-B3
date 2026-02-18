@@ -3,6 +3,7 @@ import importlib
 import os
 import sys
 import types
+from pathlib import Path
 
 import pandas as pd
 
@@ -25,7 +26,14 @@ dados_b3 = importlib.import_module("src.dados_b3")
 
 def _write_snapshot(df: pd.DataFrame, path: str) -> str:
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    df.to_csv(path, index=True)
+    # Ensure CSV matches fixture format: 'date' as first column (not index)
+    df_out = df.copy()
+    try:
+        df_out.index.name = "date"
+    except Exception:
+        pass
+    df_out = df_out.reset_index()
+    df_out.to_csv(path, index=False)
     # compute sha256 checksum
     h = hashlib.sha256()
     with open(path, "rb") as f:
@@ -75,6 +83,13 @@ def test_cotacao_ativo_dia_returns_mocked_dataframe(snapshot_dir, monkeypatch):
     assert os.path.exists(snap_path)
     assert os.path.exists(snap_path + ".checksum")
     assert len(checksum) == 64
+
+    # If an expected checksum fixture exists, compare to it to guard regression
+    repo_root = Path(__file__).resolve().parents[2]
+    expected_file = repo_root / "tests" / "fixtures" / "expected_snapshot.checksum"
+    if expected_file.exists():
+        expected = expected_file.read_text(encoding="utf-8").strip()
+        assert checksum == expected
 
 
 def test_snapshot_dir_is_temp(snapshot_dir):
