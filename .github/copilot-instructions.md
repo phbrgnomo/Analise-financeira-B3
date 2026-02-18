@@ -92,8 +92,8 @@ Agentes trabalhando nesse projeto devem sempre utilizar `poetry` para execução
 - Existem agentes e prompts BMAD em .github/agents/ e .github/prompts/ — utilize esses templates quando gerar tarefas/fluxos automatizados
 - Caso ache necessário, inicie um subagente para tarefas específicas, utilizando os prompts e fluxos pré-definidos como base, e adapte conforme o contexto da tarefa
 
-## Documentação de referencia
+## Documentação de referência
 
-- o MCP `docs-mcp-server` contém documentação sobre modulos utilizados no projeto. Consulte-o para buscar a documentação mais atualizada das bicliotecas do projeto.
+- O MCP `docs-mcp-server` contém documentação sobre módulos utilizados no projeto. Consulte-o para buscar a documentação mais atualizada das bibliotecas do projeto.
 
 <!-- BMAD:END -->

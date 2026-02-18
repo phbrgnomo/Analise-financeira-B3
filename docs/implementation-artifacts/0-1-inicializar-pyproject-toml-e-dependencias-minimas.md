@@ -33,7 +33,7 @@ para que eu possa instalar e executar o projeto e os testes de forma consistente
 ### References
 
 - Source: [docs/planning-artifacts/epics.md](docs/planning-artifacts/epics.md)
-- Architecture: [docs/planning-artifacs/architecture.md](docs/planning-artifacts/architecture.md)
+- Architecture: [docs/planning-artifacts/architecture.md](docs/planning-artifacts/architecture.md)
 - Sprint status: [docs/implementation-artifacts/sprint-status.yaml](docs/implementation-artifacts/sprint-status.yaml)
 
 ## Dev Agent Record

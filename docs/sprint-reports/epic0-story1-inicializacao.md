@@ -1,5 +1,5 @@
 ---
-title: Epic 0 Story 1 Report — Quickstart e Infração Inicial
+title: Epic 0 Story 1 Report — Quickstart e Inicialização
 date: 2026-02-17
 author: Phbr / Dev Agent
 tags: [epic-0, story-1 quickstart, implementation]
@@ -34,7 +34,7 @@ Resumo: este relatório documenta as alterações e artefatos entregues na prime
 - Documentação
   - `README.md` atualizado com seção `Quickstart` (instalação via `poetry`, execução CLI, rodar testes, habilitar pre-commit).
   - `docs/implementation-artifacts/0-1-inicializar-pyproject-toml-e-dependencias-minimas.md` atualizado para marcar subtasks concluídas e registrar File List.
-  - `docs/phase-1-report.md` (este arquivo) adicionado como relatório FR28.
+  - `docs/sprint-reports/epic0-story1-inicializacao.md` (este arquivo) adicionado como relatório FR28.
 
 - Sprint status
   - `docs/implementation-artifacts/sprint-status.yaml` atualizado para marcar a story como `in-progress`.
@@ -79,7 +79,7 @@ poetry run pre-commit run --all-files
 - README.md
 - docs/implementation-artifacts/0-1-inicializar-pyproject-toml-e-dependencias-minimas.md
 - docs/implementation-artifacts/sprint-status.yaml
-- docs/phase-1-report.md
+ - docs/sprint-reports/epic0-story1-inicializacao.md
 
 ## Decisões e justificativas
 

@@ -45,7 +45,7 @@ def correlacao(ativos):
     for a in ativos:
         try:
             df1 = pd.read_csv(f"dados/{a}.csv")
-        except Exception as e:
+        except (FileNotFoundError, OSError) as e:
             print(f"Dados de {a} não encontrados: {e}")
             continue
         df1.rename({"Return": f"{a}"}, axis=1, inplace=True)

@@ -333,8 +333,8 @@ poetry run main --ticker PETR4.SA --force-refresh
 - FR26: [CI] executa testes unitários e integração mockada que validam ingest→CSV→checksum fluxo.
 - FR27: [Desenvolvedor] pode rodar suíte de testes localmente e obter resultados pass/fail claros.
 
-### Documentação e Relatórios
-- FR28: [Tech Writer] pode adicionar `docs/phase-N-report.md` com checklist, comandos reproducíveis e amostras de CSV para cada fase. Pode adicionar `docs/sprint-reports/<epic>-<story>-<o que foi implementado>.md` como referencia implatação das soluções em projetos futuros.
+- ### Documentação e Relatórios
+- FR28: [Tech Writer] pode adicionar `docs/phase-N-report.md` com checklist, comandos reproducíveis e amostras de CSV para cada fase. Pode adicionar `docs/sprint-reports/<epic>-<story>-<o que foi implementado>.md` como referência de implantação das soluções em projetos futuros.
 - FR29: [Usuário/Dev] encontra no `README` instruções quickstart reproduzíveis para executar o fluxo end‑to‑end.
 
 ### Observabilidade e Logs
