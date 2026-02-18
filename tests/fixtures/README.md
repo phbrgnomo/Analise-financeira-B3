@@ -16,3 +16,14 @@ Notes
 
 - Keep the sample CSV small (<100 rows) for fast CI.
 - Do not include any secrets or provider API keys in fixtures.
+
+Usage example
+
+```python
+def test_example(sample_db):
+	"""Exemplo de uso do fixture `sample_db` presente em `tests/conftest.py`."""
+	cur = sample_db.cursor()
+	cur.execute("SELECT COUNT(*) FROM prices")
+	assert cur.fetchone()[0] == 5
+
+```

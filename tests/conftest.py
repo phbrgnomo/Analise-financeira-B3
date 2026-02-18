@@ -1,64 +1,31 @@
-import csv
-import os
-import sqlite3
-
 import pytest
 
-
-def _get_fixture_path(filename: str) -> str:
-    base = os.path.join(os.path.dirname(__file__), "fixtures")
-    return os.path.join(base, filename)
+from tests.fixture_utils import create_prices_db_from_csv
 
 
-@pytest.fixture
+@pytest.fixture(scope="function")
 def sample_db():
     """Creates an in-memory SQLite DB seeded with tests/fixtures/sample_ticker.csv
 
     Yields a `sqlite3.Connection` object that tests can use.
     """
-    db = sqlite3.connect(":memory:")
-    cur = db.cursor()
-    cur.execute(
-        """
-        CREATE TABLE prices (
-            ticker TEXT,
-            date TEXT,
-            open REAL,
-            high REAL,
-            low REAL,
-            close REAL,
-            adj_close REAL,
-            volume INTEGER,
-            source TEXT
-        )
-        """
-    )
+    db = create_prices_db_from_csv("sample_ticker.csv")
 
-    csv_path = _get_fixture_path("sample_ticker.csv")
-    with open(csv_path, newline="") as f:
-        reader = csv.DictReader(f)
-        rows = []
-        for r in reader:
-            rows.append(
-                (
-                    r.get("ticker"),
-                    r.get("date"),
-                    float(r.get("open") or 0),
-                    float(r.get("high") or 0),
-                    float(r.get("low") or 0),
-                    float(r.get("close") or 0),
-                    float(r.get("adj_close") or 0),
-                    int(r.get("volume") or 0),
-                    r.get("source"),
-                )
-            )
-    sql = (
-        "INSERT INTO prices (ticker,date,open,high,low,close,adj_close,volume,source)"
-        " VALUES (?,?,?,?,?,?,?,?,?)"
-    )
-    cur.executemany(sql, rows)
-    db.commit()
+    try:
+        yield db
+    finally:
+        # Ensure the connection is always closed after each test
+        db.close()
 
-    yield db
 
-    db.close()
+@pytest.fixture(scope="function")
+def sample_db_multi():
+    """Creates an in-memory SQLite DB seeded with tests/fixtures/sample_ticker_multi.csv
+
+    Yields a `sqlite3.Connection` object that tests can use.
+    """
+    db = create_prices_db_from_csv("sample_ticker_multi.csv")
+    try:
+        yield db
+    finally:
+        db.close()

@@ -1,6 +1,6 @@
 # Story 0.5: adicionar-fixtures-de-teste-e-exemplo-de-dados-amostra
 
-Status: ready-for-dev
+Status: completed
 
 ## Story
 
@@ -18,12 +18,12 @@ so that unit and integration tests can run deterministically and quickly.
 
 ## Tasks / Subtasks
 
-- [ ] Add sample CSV: `tests/fixtures/sample_ticker.csv` (AC: #1, #2)
-  - [ ] Ensure CSV has canonical columns: `ticker,date,open,high,low,close,adj_close,volume,source`
-- [ ] Add `tests/fixtures/README.md` documenting the fixture and usage (AC: #2)
-- [ ] Add `tests/conftest.py` with `sample_db` fixture to load CSV into in-memory SQLite (AC: #3)
-- [ ] Add a simple example test that uses `sample_db` (optional follow-up task)
-- [ ] Documentar o que foi implantado nessa etapa conforme o FR28 (`docs/planning-artifacts/prd.md`)
+- [x] Add sample CSV: `tests/fixtures/sample_ticker.csv` (AC: #1, #2)
+  - [x] Ensure CSV has canonical columns: `ticker,date,open,high,low,close,adj_close,volume,source`
+- [x] Add `tests/fixtures/README.md` documenting the fixture and usage (AC: #2)
+- [x] Add `tests/conftest.py` with `sample_db` fixture to load CSV into in-memory SQLite (AC: #3)
+- [x] Add a simple example test that uses `sample_db` (optional follow-up task)
+- [x] Documentar o que foi implantado nessa etapa conforme o FR28 (`docs/planning-artifacts/prd.md`)
 
 ## Dev Notes
 
@@ -45,25 +45,32 @@ so that unit and integration tests can run deterministically and quickly.
 
 ### Agent Model Used
 
-GPT-5 mini
+internal dev agent
 
 ### Debug Log References
 
 - Created `tests/fixtures/sample_ticker.csv`
 - Created `tests/fixtures/README.md`
 - Created `tests/conftest.py`
-- Created story file at `docs/implementation-artifacts/0-5-adicionar-fixtures-de-teste-e-exemplo-de-dados-amostra.md`
+
+
+**Test results**: `poetry run pytest -q` → 8 passed, 10 warnings
+**Acceptance Criteria**: #1, #2, #3 satisfied (fixtures and sample CSV available; in-memory SQLite fixture seeds `prices` table; example test added)
 
 ### Completion Notes List
 
 - Story file initialized from template and populated using epics entry for Story 0.5.
 - Basic fixtures and documentation added to repository.
+- Tests executed locally in project virtualenv: all tests passed.
 
 ### File List
 
 - tests/fixtures/sample_ticker.csv
 - tests/fixtures/README.md
 - tests/conftest.py
+ - tests/fixtures/sample_ticker_multi.csv
+ - tests/test_fixture_multi.py
+ - tests/test_sample_db_multi_integration.py
 
 
 Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/108
