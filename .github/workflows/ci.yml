@@ -26,7 +26,7 @@ jobs:
 
       - name: Run pre-commit (all files)
         run: |
-          poetry run pre-commit run --all-files
+          poetry run pre-commit run --all-files --show-diff-on-failure
 
       - name: Black check
         run: |
@@ -34,4 +34,4 @@ jobs:
 
       - name: Ruff check
         run: |
-          poetry run ruff check .
+          poetry run ruff check . --show-source --show-diff
