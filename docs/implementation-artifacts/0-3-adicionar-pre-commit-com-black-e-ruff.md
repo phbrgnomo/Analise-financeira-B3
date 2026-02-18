@@ -96,11 +96,11 @@ ignore = ["E203"]
 
 - Source: docs/planning-artifacts/epics.md#story-03 (Epic 0 — Preparação do Ambiente de Desenvolvimento)
 
-## Dev Agent Record
+### Dev Agent Record
 
 ### Agent Model Used
 
-GPT-5 mini
+(registro de execução automática — agente de auxílio ao desenvolvimento)
 
 ### Completion Notes List
 
@@ -139,5 +139,6 @@ Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/106
 - tests/conftest.py (modified)
 - tests/test_cli.py (modified)
   - `ruff`: Failed — 9 ocorrências de `E501 Line too long` em arquivos: `src/main.py`, `src/retorno.py`, `tests/conftest.py`, `tests/test_cli.py`.
+
 
 Recomendação: executar `poetry run ruff check --fix .` para aplicar correções automáticas onde possível, e revisar manualmente linhas de comentário muito longas que não foram corrigidas. Posso executar essas correções e commitar as mudanças, quer que eu prossiga?

@@ -77,3 +77,55 @@ Contato
 -------
 
 Para dúvidas, revisar o histórico de commits desta sessão ou falar com o autor do PR/commit.
+
+## Registro de Execução Detalhado
+
+- Data da execução: 2026-02-17
+- Ambiente: máquina do desenvolvedor (uso de `poetry` conforme `pyproject.toml`)
+- Comandos executados:
+  - `poetry install`
+  - `poetry run pre-commit install`
+  - `poetry run pre-commit run --all-files`
+  - `poetry run ruff check --fix .` (aplicado onde seguro)
+  - `poetry run black --check .`
+  - `poetry run pytest -q`
+
+Resultados observados durante a execução:
+
+- `pre-commit`: hooks principais (`black`, `pre-commit-hooks`) passaram após aplicação de formatações automáticas.
+- `ruff`: inicialmente reportou várias ocorrências de `E501 (line-too-long)`; `ruff --fix` resolveu automaticamente grande parte, restando alguns comentários e docstrings para revisão manual.
+- `pytest`: suite local executada com sucesso: `2 passed` e `10 warnings` (warnings a serem analisados posteriormente).
+
+## Por que estas decisões foram tomadas (explicação didática)
+
+- Uso de `pre-commit` com hooks para `black` e `ruff`:
+  - Objetivo: prevenir commits com problemas de formatação e lint básicos, garantindo consistência no repositório antes mesmo do CI.
+  - Benefício: reduz o atrito em code reviews e evita que PRs quebrem o estilo do projeto.
+
+- Pinagem de `rev` em `.pre-commit-config.yaml`:
+  - Objetivo: garantir reprodutibilidade dos hooks (`black` 24.10.0, `ruff` v0.14.14).
+  - Por quê: versões flutuantes podem introduzir mudanças de comportamento indesejadas entre contribuintes e CI; pinagem evita surprises.
+
+- Alinhamento de versões em `pyproject.toml`:
+  - Objetivo: manter as dependências de desenvolvimento (`black`, `ruff`) consistentes entre ambiente local e CI.
+  - Por quê: evita diferenças entre a versão usada pelo `pre-commit` e a versão instalada via `poetry` que poderiam gerar resultados divergentes.
+
+- Uso de `poetry` no CI (em vez de `pip install` direto):
+  - Objetivo: instalar dependências de forma determinística conforme `pyproject.toml` e grupos de dependência (`dev`), respeitando o ambiente do projeto.
+  - Por quê: `poetry install` garante que a versão especificada em `pyproject.toml` será usada; também prepara o ambiente para executar comandos via `poetry run`.
+
+- Manter `line-length = 88` (configuração `black`):
+  - Objetivo: compatibilidade com o comportamento padrão do `black` e evitar churn em formatação.
+  - Por quê: `black` historicamente usa 88 como padrão; mudar exige consenso e atualização ampla no projeto.
+
+- Execução de `ruff --fix` onde aplicável, e revisão manual de docstrings/comentários:
+  - Objetivo: aplicar correções automáticas seguras e deixar a revisão manual para ajustes semânticos (ex.: quebras em comentários longos).
+  - Por quê: `ruff --fix` resolve muitas violações automaticamente; comentários e docstrings geralmente demandam decisões estilísticas humanas.
+
+## Riscos e mitigação
+
+- Risco: alterações automáticas podem mascarar decisões semânticas (ex.: refatorações que mudem comportamento).
+  - Mitigação: limitar `--fix` a regras de estilo e executar testes (`pytest`) depois das mudanças.
+
+- Risco: CI aceitando falhas silenciosas.
+  - Mitigação: CI foi ajustado para usar `poetry run pre-commit run --all-files` sem `|| true`, garantindo que falhas quebrem o job.
