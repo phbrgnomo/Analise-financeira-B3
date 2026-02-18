@@ -52,7 +52,7 @@ jobs:
 
       - name: Ruff check
         run: |
-          poetry run ruff check . --show-source --show-diff
+          poetry run ruff check .
 
   test:
     runs-on: ubuntu-latest
