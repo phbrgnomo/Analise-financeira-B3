@@ -1,6 +1,6 @@
 # Story 0.1: Inicializar pyproject.toml e dependências mínimas
 
-Status: ready-for-dev
+Status: completed
 
 ## Story
 Como Desenvolvedor(a),
@@ -44,7 +44,7 @@ para que eu possa instalar e executar o projeto e os testes de forma consistente
 	- `tests/test_cli.py` adicionado e `pytest` executado com sucesso (2 passed).
 	- `.pre-commit-config.yaml` adicionado; hooks instalados e executados, correções aplicadas.
 	- `README.md` atualizado com seção Quickstart (instalação, execução, testes, pre-commit).
-	- `docs/implementation-artifacts/sprint-status.yaml` atualizado para `in-progress`.
+ 	- `docs/implementation-artifacts/sprint-status.yaml` atualizado para `completed`.
 
 Arquivos alterados nesta sessão:
     - `pyproject.toml`

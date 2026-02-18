@@ -1,4 +1,4 @@
-generated: 2026-02-17T15:30:00Z
+generated: 2026-02-17T17:41:00Z
 project: Analise-financeira-B3
 project_key: NOKEY
 tracking_system: file-system
@@ -6,7 +6,7 @@ story_location: /home/phbr/Projects/01-owned/Analise-financeira-B3/docs/implemen
 
 development_status:
   epic-0: in-progress
-  0-1-inicializar-pyproject-toml-e-dependencias-minimas: in-progress
+  0-1-inicializar-pyproject-toml-e-dependencias-minimas: completed
   0-2-criar-readme-md-quickstart: ready-for-dev
   0-3-adicionar-pre-commit-com-black-e-ruff: ready-for-dev
   0-4-criar-skeleton-de-ci-github-workflows-ci-yml: ready-for-dev
