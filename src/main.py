@@ -1,11 +1,12 @@
-import typer
 import os
 from datetime import date, timedelta
 
-# The line `app = typer.Typer()` is creating an instance of the `Typer` class from the Typer library
-# in Python. This instance is used to define and organize command-line interfaces (CLIs) for your
-# Python application. By using `Typer`, you can easily create CLI commands and options for your
-# program, making it more user-friendly and interactive.
+import typer
+
+# The line `app = typer.Typer()` creates an instance of `Typer` from the Typer
+# library. This instance is used to define and organize command-line interfaces
+# (CLIs) for the application. By using `Typer` you can define CLI commands and
+# options in a simple and type-safe way.
 app = typer.Typer()
 
 d_atual = date.today()
@@ -14,11 +15,14 @@ d_atual = date.today()
 @app.command()
 def main():
     # importações locais para evitar exigir dependências apenas para `--help`
-    import src.dados_b3 as dados
-    import src.retorno as rt
     import pandas as pd
 
-    # ativos_entrada = input("Lista de Ativos, separados por vírgula (exemplo: PETR4,BBDC3): ")
+    import src.dados_b3 as dados
+    import src.retorno as rt
+
+    # ativos_entrada = input(
+    #     "Lista de Ativos, separados por vírgula (exemplo: PETR4,BBDC3): "
+    # )
     # ativos = ativos_entrada.split(',')
     # data_in = input("Data de inicio (MM-DD-AAAA): ")
     # data_fim = input("Data de fim (MM-DD-AAAA): ")

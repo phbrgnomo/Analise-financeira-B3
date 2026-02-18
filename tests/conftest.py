@@ -1,6 +1,7 @@
-import os
 import csv
+import os
 import sqlite3
+
 import pytest
 
 
@@ -51,10 +52,11 @@ def sample_db():
                     r.get("source"),
                 )
             )
-    cur.executemany(
-        "INSERT INTO prices (ticker,date,open,high,low,close,adj_close,volume,source) VALUES (?,?,?,?,?,?,?,?,?)",
-        rows,
+    sql = (
+        "INSERT INTO prices (ticker,date,open,high,low,close,adj_close,volume,source)"
+        " VALUES (?,?,?,?,?,?,?,?,?)"
     )
+    cur.executemany(sql, rows)
     db.commit()
 
     yield db

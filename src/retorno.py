@@ -1,5 +1,6 @@
-import numpy as np
 import math
+
+import numpy as np
 
 # Cálculo de retorno linear
 import pandas as pd
@@ -14,8 +15,8 @@ def r_log(p_fin, p_ini):
     return np.log(p_fin / p_ini)
 
 
-# Calcula o retorno logarítimo do período para cada ativo e retorna o retorno total e o retorno médio diário para
-# entre os dias d_ini e d_fim
+# Calcula o retorno logarítmico do período para cada ativo.
+# Retorna: (retorno total, retorno médio diário, desvio) entre os dias d_ini e d_fim.
 def retorno_periodo(_df):
     df = _df
     df["Retorno dia"] = r_log(df["Adj Close"], df["Adj Close"].shift(1))
@@ -39,7 +40,7 @@ def coef_var(risco, ret_medio):
     return risco / ret_medio
 
 
-# calcula correlacao entre dois lista de ativos usando o arquivo .csv localizado em dados
+# Calcula correlação entre uma lista de ativos usando CSVs em `dados/`.
 def correlacao(ativos):
     new_df = pd.DataFrame()
     for a in ativos:

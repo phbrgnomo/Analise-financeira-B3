@@ -197,6 +197,7 @@ Escopo do documento: define requisitos funcionais e não‑funcionais, jornadas 
 - `docs/architecture.md` — fluxos de ingest, ETL, snapshot e geração de portfólio.
 - `docs/playbooks/quickstart-ticker.md` — quickstart passo-a-passo para reproduzir um experimento com um ticker.
 - `docs/playbooks/runbook-ops.md` — runbook de operações (backup, restore, troubleshooting de ingest).
+- `docs/sprint-reports/0-3-pre-commit-implantado.md` — documento de implantação e verificação para a story 0.3 (pre-commit, black, ruff, CI).
 
 ## Project-Type Deep Dive (Step 07)
 
