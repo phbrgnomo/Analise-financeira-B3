@@ -64,5 +64,9 @@
  - docs/planning-artifacts/epics.md
  - docs/planning-artifacts/prd.md
  - docs/planning-artifacts/architecture.md
+ - tests/integration/test_quickstart_mocked.py
+ - tests/ci/conftest.py
+ - .github/workflows/ci.yml
+ - src/utils/checksums.py
 
 Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/110

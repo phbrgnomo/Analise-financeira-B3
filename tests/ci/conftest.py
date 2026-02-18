@@ -10,5 +10,13 @@ def snapshot_dir(tmp_path_factory) -> str:
     como artifacts quando necessário.
     Retorna o caminho do diretório temporário como ``str``.
     """
-    d = tmp_path_factory.mktemp("snapshots")
-    yield str(d)
+    import os
+
+    # If CI or caller provided SNAPSHOT_DIR, use it (create if not exists)
+    env_path = os.environ.get("SNAPSHOT_DIR")
+    if env_path:
+        os.makedirs(env_path, exist_ok=True)
+        yield os.path.abspath(env_path)
+    else:
+        d = tmp_path_factory.mktemp("snapshots")
+        yield str(d)

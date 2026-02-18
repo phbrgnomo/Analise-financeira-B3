@@ -163,6 +163,9 @@ jobs:
           path: tests/ci/**
 
   integration:
+    # Ensure snapshots produced by tests are saved to snapshots_test for artifact upload
+    env:
+      SNAPSHOT_DIR: snapshots_test
     runs-on: ubuntu-latest
     needs: test
     strategy:
