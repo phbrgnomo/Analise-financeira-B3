@@ -90,7 +90,7 @@ When invoking `runSubagent`, provide the following `prompt` (pass the whole text
 8) When finished, respond with a short JSON-like summary containing:
    - `story`: story id or name
    - `branch`: name of the branch created for this story
-   - `status`: success|blocked|failed
+   - `status`: ready-for-review|blocked|failed
    - `files`: list of generated file paths (relative to project root)
    - `summary`: short human readable summary of actions performed
 
