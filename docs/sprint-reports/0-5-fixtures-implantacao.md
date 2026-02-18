@@ -40,7 +40,7 @@ integração rodem de maneira determinística e rápida (in‑repo, sem dependê
 
 ## Mapeamento para critérios de aceitação
 
- - AC1: tests que dependem do fixture — SATISFEITO. Adicionamos testes de exemplo e de integração que
+ - AC1: testes que dependem do fixture — SATISFEITO. Adicionamos testes de exemplo e de integração que
    usam `sample_db` e foram executados com sucesso (local): `poetry run pytest -q` → 8 passed, 10 warnings.
 - AC2: CSV pequeno e documentado — SATISFEITO. `tests/fixtures/sample_ticker.csv` possui
   5 linhas e `tests/fixtures/README.md` documenta sua finalidade e uso (inclui snippet).
@@ -83,16 +83,11 @@ $ poetry run pytest -q
 
 ## Checklist de entrega (FR28)
 
-- [x] Arquivos de fixtures adicionados ao repositório.
-- [x] Documentação da fixture adicionada em `tests/fixtures/README.md`.
-- [x] Fixture `sample_db` implementada em `tests/conftest.py`.
-- [x] Testes de exemplo adicionados e executados com sucesso em CI local.
-- [x] Relatório de implantação criado (`docs/sprint-reports/0-5-fixtures-implantacao.md`).
- - [x] Arquivos de fixtures adicionados ao repositório (incluindo `sample_ticker_multi.csv`).
- - [x] Documentação da fixture atualizada em `tests/fixtures/README.md`.
- - [x] Fixture `sample_db` atualizada para `scope="function"` e teardown seguro.
- - [x] Testes de exemplo e integração adicionados e executados com sucesso localmente (`8 passed`).
- - [x] Relatório de implantação atualizado (`docs/sprint-reports/0-5-fixtures-implantacao.md`).
+- [x] Arquivos de fixtures adicionados ao repositório (incluindo `sample_ticker_multi.csv`).
+- [x] Documentação da fixture atualizada em `tests/fixtures/README.md`.
+- [x] Fixture `sample_db` implementada/atualizada em `tests/conftest.py` (agora `scope="function"` com teardown seguro).
+- [x] Testes de exemplo e integração adicionados e executados com sucesso localmente (`8 passed, 10 warnings`).
+- [x] Relatório de implantação criado/atualizado (`docs/sprint-reports/0-5-fixtures-implantacao.md`).
 
 ## Próximos passos sugeridos
 

@@ -1,41 +1,6 @@
-import os
-import sqlite3
-
-from tests.fixture_utils import parse_fixture_csv
-
-
-def _fixture_path(filename: str) -> str:
-    return os.path.join(os.path.dirname(__file__), "fixtures", filename)
-
-
-def test_sample_db_multi_integration():
-    # Create in-memory DB and populate from sample_ticker_multi.csv
-    db = sqlite3.connect(":memory:")
+def test_sample_db_multi_integration(sample_db_multi):
+    db = sample_db_multi
     cur = db.cursor()
-    cur.execute(
-        """
-        CREATE TABLE prices (
-            ticker TEXT,
-            date TEXT,
-            open REAL,
-            high REAL,
-            low REAL,
-            close REAL,
-            adj_close REAL,
-            volume INTEGER,
-            source TEXT
-        )
-        """
-    )
-
-    rows = parse_fixture_csv("sample_ticker_multi.csv")
-
-    sql = (
-        "INSERT INTO prices (ticker,date,open,high,low,close,adj_close,volume,source)"
-        " VALUES (?,?,?,?,?,?,?,?,?)"
-    )
-    cur.executemany(sql, rows)
-    db.commit()
 
     # Basic assertions
     cur.execute("SELECT COUNT(*) FROM prices")
@@ -57,5 +22,3 @@ def test_sample_db_multi_integration():
     val = cur.fetchone()
     assert val is not None
     assert abs(val[0] - 66.0) < 1e-9
-
-    db.close()

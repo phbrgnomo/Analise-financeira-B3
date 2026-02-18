@@ -54,7 +54,7 @@ internal dev agent
 - Created `tests/conftest.py`
 
 
-**Test results**: `poetry run pytest -q` → 6 passed, 10 warnings
+**Test results**: `poetry run pytest -q` → 8 passed, 10 warnings
 **Acceptance Criteria**: #1, #2, #3 satisfied (fixtures and sample CSV available; in-memory SQLite fixture seeds `prices` table; example test added)
 
 ### Completion Notes List
@@ -68,6 +68,9 @@ internal dev agent
 - tests/fixtures/sample_ticker.csv
 - tests/fixtures/README.md
 - tests/conftest.py
+ - tests/fixtures/sample_ticker_multi.csv
+ - tests/test_fixture_multi.py
+ - tests/test_sample_db_multi_integration.py
 
 
 Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/108
