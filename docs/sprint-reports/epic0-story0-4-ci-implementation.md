@@ -37,7 +37,7 @@ poetry run pytest tests/ci -q
 
 Snapshots e verificações
 
-- Testes CI geram snapshots em `snapshots_test/` durante execução local (a mesma pasta será coletada como artifact no CI se configurado).
+- Testes CI geram snapshots em diretório temporário via fixture `snapshot_dir` durante a execução (esse diretório pode ser coletado como artifact no CI se configurado).
 - Cada snapshot inclui um arquivo `.checksum` com SHA256.
 
 Segurança e segredos

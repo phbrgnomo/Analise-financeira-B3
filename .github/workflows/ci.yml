@@ -23,7 +23,7 @@ jobs:
         with:
           path: |
             .ruff_cache
-          key: ${{ runner.os }}-ruff-${{ hashFiles('**/pyproject.toml','**/pyproject.toml') }}
+          key: ${{ runner.os }}-ruff-${{ hashFiles('**/pyproject.toml') }}
 
       - name: Cache poetry for lint
         uses: actions/cache@v4
@@ -139,7 +139,7 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install poetry
           poetry config virtualenvs.in-project true
-          poetry install --no-dev --no-interaction
+          poetry install --only main --no-interaction
 
       - name: Run smoke tests
         run: |

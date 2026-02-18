@@ -37,7 +37,7 @@ def _write_snapshot(df: pd.DataFrame, path: str) -> str:
     return checksum
 
 
-def test_cotacao_ativo_dia_mock(snapshot_dir, monkeypatch):
+def test_cotacao_ativo_dia_returns_mocked_dataframe(snapshot_dir, monkeypatch):
     # Arrange: create deterministic dataframe to be returned by the provider
     df = pd.DataFrame(
         {
@@ -52,12 +52,12 @@ def test_cotacao_ativo_dia_mock(snapshot_dir, monkeypatch):
     )
 
     # Monkeypatch the pandas_datareader DataReader used in src.dados_b3
-    class DummyWeb:
+    class MockWebDataProvider:
         @staticmethod
         def DataReader(*args, **kwargs):
             return df
 
-    monkeypatch.setattr(dados_b3, "web", DummyWeb)
+    monkeypatch.setattr(dados_b3, "web", MockWebDataProvider)
 
     # Act
     result = dados_b3.cotacao_ativo_dia("PETR4", "2024-01-01", "2024-01-02")
