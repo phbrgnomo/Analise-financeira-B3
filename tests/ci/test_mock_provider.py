@@ -73,3 +73,15 @@ def test_cotacao_ativo_dia_mock(snapshot_dir, monkeypatch):
     assert os.path.exists(snap_path)
     assert os.path.exists(snap_path + ".checksum")
     assert len(checksum) == 64
+
+
+def test_snapshot_dir_is_temp(snapshot_dir):
+    """Garante que `snapshot_dir` aponta para um diretório temporário.
+
+    O diretório não deve estar dentro do repositório de trabalho
+    para evitar commits acidentais.
+    """
+    import tempfile
+
+    td = tempfile.gettempdir()
+    assert td in snapshot_dir

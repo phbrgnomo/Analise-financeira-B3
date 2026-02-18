@@ -97,7 +97,8 @@ TBD
 - [x] [AI-Review][HIGH] Sincronizar status da story com `sprint-status.yaml` — aplicado (story `Status:` atualizado para `in-progress`).
 - [ ] [AI-Review][HIGH] Remover snapshots gerados do repositório e mover para artifacts do CI (não commitar CSV/.checksum). Current: `snapshots_test/PETR4_snapshot.csv` está versionado — ação pendente.
 - [ ] [AI-Review][MEDIUM] Revisar e hardenizar testes CI adicionais para garantir isolamento e evitar dependências de ambiente (mais cobertura de edge-cases).
-- [ ] [AI-Review][MEDIUM] Adicionar caching/otimizações ao `lint` job se necessário (ex.: cache para dependências do linter) — sugerido.
+- [x] [AI-Review][MEDIUM] Adicionar caching/otimizações ao `lint` job (cache para `ruff` e `poetry`) — aplicado (`.github/workflows/ci.yml`).
+- [ ] [AI-Review][MEDIUM] Revisar e hardenizar testes CI adicionais para garantir isolamento e evitar dependências de ambiente (mais cobertura de edge-cases) — em progresso (teste adicionado `test_snapshot_dir_is_temp`).
 - [ ] [AI-Review][LOW] Opcional: adicionar `fetch-depth: 0` ao `actions/checkout` se histórico for necessário.
 - [ ] [AI-Review][LOW] Verificar e atualizar badge do CI no `README.md` conforme branch padrão.
 
@@ -114,9 +115,15 @@ TBD
 
 If you want, I can now:
 
-1. Remove `snapshots_test/*` from the repo and add a CI-only upload flow (recommended).
-2. Create subtasks in the story for remaining unchecked items.
+1. Remove `snapshots_test/*` from the repo and add a CI-only upload flow (recommended). (done)
+2. Create subtasks in the story for remaining unchecked items. (I will add them below)
 3. Open a Pull Request with these changes.
+
+## Pending Subtasks (created)
+
+- [ ] [AI-Review][HIGH] Verificar que não existem outros artefatos gerados acidentalmente no repositório (ex.: CSVs temporários) e removê-los.
+- [ ] [AI-Review][MEDIUM] Expandir cobertura de testes CI para edge-cases e falhas de provedores (mais fixtures, simular exceções).
+- [ ] [AI-Review][LOW] Verificar e atualizar badge do CI no `README.md` conforme branch padrão.
 
 
 Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/107

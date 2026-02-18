@@ -25,6 +25,17 @@ jobs:
             .ruff_cache
           key: ${{ runner.os }}-ruff-${{ hashFiles('**/pyproject.toml','**/pyproject.toml') }}
 
+      - name: Cache poetry for lint
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/pypoetry
+            ~/.cache/pip
+            .venv
+          key: ${{ runner.os }}-poetry-lint-${{ hashFiles('**/poetry.lock', '**/pyproject.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-poetry-lint-
+
       - name: Install Poetry and project dependencies
         run: |
           python -m pip install --upgrade pip
