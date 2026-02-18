@@ -10,11 +10,20 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.14'
+
+      - name: Cache ruff
+        uses: actions/cache@v4
+        with:
+          path: |
+            .ruff_cache
+          key: ${{ runner.os }}-ruff-${{ hashFiles('**/pyproject.toml','**/pyproject.toml') }}
 
       - name: Install Poetry and project dependencies
         run: |
@@ -42,6 +51,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -78,6 +89,13 @@ jobs:
           name: pytest-reports
           path: reports/**
 
+      - name: Upload snapshots on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: snapshots
+          path: snapshots_test/**
+
   smoke:
     runs-on: ubuntu-latest
     strategy:
@@ -86,6 +104,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v4
