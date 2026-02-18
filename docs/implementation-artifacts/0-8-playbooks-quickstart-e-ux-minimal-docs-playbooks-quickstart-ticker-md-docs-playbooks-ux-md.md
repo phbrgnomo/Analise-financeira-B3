@@ -25,6 +25,7 @@ so that contributors and users can reproduce experiments and understand expected
   - [ ] Document Streamlit minimal screens and expected interactions
 - [ ] Link both playbooks from README quickstart (if present)
 - [ ] Add small sample command outputs and example snapshot checksum example
+- [ ] Documentar o que foi implantado nessa etapa conforme o FR28 (`docs/planning-artifacts/prd.md`)
 
 ## Dev Notes
 

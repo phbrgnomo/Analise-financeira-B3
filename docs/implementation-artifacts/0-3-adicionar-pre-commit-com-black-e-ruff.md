@@ -1,6 +1,6 @@
 # Story 0.3: Adicionar pre-commit com black e ruff
 
-Status: in-progress
+Status: completed
 
 ## Story
 
@@ -22,9 +22,9 @@ so that commits enforce consistent formatting and basic lint rules.
   - [x] Configure `ruff` with a project `pyproject.toml` section or `.ruff.toml` for rule set
 - [x] Add `pre-commit` install instructions to `README.md` (local setup and CI usage) (already present)
 - [x] Add a CI job step (GitHub Actions) to run `pre-commit` checks (`pre-commit run --all-files`) as part of `ci.yml` (added as `.github/workflows/ci.yml`)
-- [ ] Run `pre-commit run --all-files` locally to generate auto-format changes, commit them
+- [x] Run `pre-commit run --all-files` locally to generate auto-format changes, commit them
 - [x] Add a small tests/verification step: `black --check .` and `ruff check .` in CI
-- [ ] Documentar o que foi implantado nessa etapa conforme o FR28 (`docs/planning-artifacts/prd.md`)
+- [x] Documentar o que foi implantado nessa etapa conforme o FR28 (`docs/planning-artifacts/prd.md`)
 
 ## Dev Notes
 

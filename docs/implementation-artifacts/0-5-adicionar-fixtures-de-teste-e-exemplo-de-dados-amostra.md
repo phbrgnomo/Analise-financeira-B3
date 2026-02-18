@@ -23,6 +23,7 @@ so that unit and integration tests can run deterministically and quickly.
 - [ ] Add `tests/fixtures/README.md` documenting the fixture and usage (AC: #2)
 - [ ] Add `tests/conftest.py` with `sample_db` fixture to load CSV into in-memory SQLite (AC: #3)
 - [ ] Add a simple example test that uses `sample_db` (optional follow-up task)
+- [ ] Documentar o que foi implantado nessa etapa conforme o FR28 (`docs/planning-artifacts/prd.md`)
 
 ## Dev Notes
 

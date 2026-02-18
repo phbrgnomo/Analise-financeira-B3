@@ -22,6 +22,7 @@ so that I can configure API keys and local paths without committing secrets.
 - [ ] Add instructions section to `README.md` showing copying `.env.example` → `.env` and example usage via `poetry run main` (AC 2,4)
 - [ ] Ensure codebase optionally loads `.env` using `python-dotenv` when present (dev note) (AC 1)
 - [ ] Document security reminder and recommended `.gitignore` entry (AC 4)
+- [ ] Documentar o que foi implantado nessa etapa conforme o FR28 (`docs/planning-artifacts/prd.md`)
 
 ## Dev Notes
 

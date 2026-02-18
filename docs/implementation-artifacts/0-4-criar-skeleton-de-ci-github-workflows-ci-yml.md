@@ -34,6 +34,7 @@ so that pull requests verify project health automatically.
 - [ ] Add `tests/ci` helper steps to run mocked integration (fixtures) and produce deterministic snapshot
 - [ ] Document CI run steps and expected outputs in README (quick reference section)
 - [ ] Add `ci.yml` job badges to `README.md` (optional)
+- [ ] Documentar o que foi implantado nessa etapa conforme o FR28 (`docs/planning-artifacts/prd.md`)
 
 ## Dev Notes
 

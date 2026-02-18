@@ -25,6 +25,7 @@
  - [ ] Atualizar `.github/workflows/ci.yml` para incluir etapa de integração mockada, cálculo de checksum e publicação de artefatos
  - [ ] Adicionar arquivo de referência `tests/fixtures/expected_snapshot.checksum` com valor esperado para o teste
  - [ ] Documentar passo-a-passo em `docs/implantacao/0-7-teste-de-integracao.md`
+ - [ ] Documentar o que foi implantado nessa etapa conforme o FR28 (`docs/planning-artifacts/prd.md`)
 
  ## Dev Notes
 
