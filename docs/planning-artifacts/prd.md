@@ -336,6 +336,42 @@ poetry run main --ticker PETR4.SA --force-refresh
 
 - ### Documentação e Relatórios
 - FR28: [Tech Writer] pode adicionar `docs/phase-N-report.md` com checklist, comandos reproducíveis e amostras de CSV para cada fase. Pode adicionar `docs/sprint-reports/<epic>-<story>-<o que foi implementado>.md` como referência de implantação das soluções em projetos futuros.
+ - FR28: [Tech Writer] pode adicionar `docs/phase-N-report.md` com checklist, comandos reproducíveis e amostras de CSV para cada fase. Pode adicionar `docs/sprint-reports/<epic>-<story>-<o que foi implementado>.md` como referência de implantação das soluções em projetos futuros.
+
+### Implantação: Story 0.7 — Teste de integração quickstart (mocked) e validação de checksum (registro de implementação)
+
+Resumo: Implementado um teste de integração mockado que executa o quickstart em isolamento (sem rede) e grava um snapshot CSV com arquivo `.checksum` SHA256. O job de CI foi ajustado para executar o teste de integração e publicar os artefatos de snapshot para inspeção manual.
+
+O que foi implementado (artefatos e localizações):
+- Testes de integração: `tests/integration/test_quickstart_mocked.py` (2 testes: geração de snapshot + verificação de diretório temporário)
+- Fixtures: `tests/fixtures/sample_ticker.csv`, `tests/fixtures/expected_snapshot.checksum` (arquivo de referência já presente)
+- Fixture global `snapshot_dir` disponível em `tests/conftest.py` e compatível com a variável de ambiente `SNAPSHOT_DIR`.
+- Utilitário de checksum: `src/utils/checksums.py` (funções `sha256_file` e `sha256_bytes`).
+- CI: `.github/workflows/ci.yml` — job `integration` define `SNAPSHOT_DIR=snapshots_test` e publica `snapshots_test/**` como artefato.
+- Documentação passo-a-passo: `docs/implantacao/0-7-teste-de-integracao.md` (instruções de execução local e política de checksum).
+
+Como verificar localmente (passos reproduzíveis):
+1. Instalar dependências e ambiente: `poetry install`.
+2. Rodar a suíte de integração isolada (usa fixtures e monkeypatch):
+```
+poetry run pytest -q tests/integration -k quickstart_mocked
+```
+3. Alternativamente, rodar toda a suíte de testes:
+```
+poetry run pytest -q
+```
+4. Ao rodar em CI, o job `integration` define `SNAPSHOT_DIR=snapshots_test`; se os testes gerarem o CSV, o workflow publica `snapshots_test/**` como artefato para inspeção.
+
+Critérios de aceitação verificados:
+- Geração do snapshot CSV e do arquivo `.checksum` SHA256 (verificado pelo teste).
+- Reutilização do utilitário `src/utils/checksums.py` para cálculo de checksum, reduzindo duplicação.
+- CI tem etapa de integração configurada e coleta artefatos de snapshot.
+
+Notas adicionais e próximos passos recomendados:
+- Confirmar em CI remoto que o artefato `snapshots_test/**` é publicado e que a comparação de checksum (se parte do job) falha em caso de mismatch.
+- Atualizar o PRD/relatório de fase com amostra do CSV gerado e o hash esperado (p. ex. em `docs/sprint-reports/0-7-integration.md`).
+- Opcional: padronizar `SNAPSHOT_DIR` em `.env.example` e documentar convenção de where snapshots are stored.
+
 - FR29: [Usuário/Dev] encontra no `README` instruções quickstart reproduzíveis para executar o fluxo end‑to‑end.
 
 ### Observabilidade e Logs
