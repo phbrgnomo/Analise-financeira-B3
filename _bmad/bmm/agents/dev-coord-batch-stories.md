@@ -3,18 +3,18 @@ name: "coordinator-dev"
 description: "Coordenador de criação de stories em paralelo"
 ---
 
-Este agente coordena a execução paralela do desenvolvimento e implantação das stories definidas como `ready-for-development` em `docs/implementation-artifacts/sprint-status.yml`.
+Este agente coordena a execução paralela do desenvolvimento e implantação das stories definidas como `ready-for-dev` em `docs/implementation-artifacts/sprint-status.yaml`.
 
 Ao ser ativado, apresenta ao usuário duas opções:
 
 - 1 - Processar desenvolvimento de stories de um epic específico
 - 2 - Processar a desenvolvimento de stories de todos os epics
 
-O agente lê `sprint-status.yml`, seleciona as stories com `status: reaady-for-development` e conforme a opção escolhida, cria um TODO para cada story e invoca um subagente por story usando a ferramenta `runSubagent`.
+O agente lê `sprint-status.yaml`, seleciona as stories com `status: ready-for-dev` e conforme a opção escolhida, cria um TODO para cada story e invoca um subagente por story usando a ferramenta `runSubagent`.
 
 Ao final, agrega as respostas dos subagentes e gera um relatório resumido listando o que cada subagente executou (incluindo nome e caminho dos arquivos gerados).
 
-Com o feedback dos subagentes, o coordenador atualiza o status das stories no arquivo `sprint-status.yml`
+Com o feedback dos subagentes, o coordenador atualiza o status das stories no arquivo `sprint-status.yaml`
 
 ```xml
 <agent id="coordinator-stories.agent.yaml" name="Coordinator" title="Coordenador de Stories" icon="🧭" capabilities="orquestração, paralelismo, coordenação de subagentes">
@@ -34,26 +34,26 @@ Com o feedback dos subagentes, o coordenador atualiza o status das stories no ar
       <handlers>
           <handler type="process-epic">
             When invoked with: data="epic:<epic-name>"
-            1. Load and parse {project-root}/docs/implementation-artifacts/sprint-status.yml as YAML
+            1. Load and parse {project-root}/docs/implementation-artifacts/sprint-status.yaml as YAML
             2. Find the epic with name matching `<epic-name>` (exact match). If not found, inform user and abort this action.
-            3. Collect stories under that epic where `status: backlog`.
-            4. For each backlog story, create a todo item using the `manage_todo_list` tool (see TODO format below) to track execution.
-            5. For each backlog story, invoke a subagent using the Copilot `runSubagent` tool with the following payload:
+            3. Collect stories under that epic where `status: ready-for-dev`.
+            4. For each ready-for-dev story, create a todo item using the `manage_todo_list` tool (see TODO format below) to track execution.
+            5. For each ready-for-dev story, invoke a subagent using the Copilot `runSubagent` tool with the following payload:
                - `prompt`: Instructions below (read workflow and run it)
-               - `description`: "create-story-subagent"
+               - `description`: "create-dev-subagent"
             6. Collect responses from all subagents and build a short report listing for each story: story id/name, subagent result summary, and any generated file paths reported by the subagent.
-            7. Update {project-root}/docs/implementation-artifacts/sprint-status.yml based on each subagent response. DO NOT CHANGE ANY OTHER FILE.
+            7. Update {project-root}/docs/implementation-artifacts/sprint-status.yaml based on each subagent response. DO NOT CHANGE ANY OTHER FILE.
             8. Return the report to the user.
           </handler>
 
           <handler type="process-all">
             When invoked with: data="all"
-            1. Load and parse {project-root}/docs/implementation-artifacts/sprint-status.yml as YAML
-            2. Collect all stories across all epics where `status: backlog`.
-            3. For each backlog story, create a todo item using the `manage_todo_list` tool.
-            4. For each backlog story, invoke a subagent using the Copilot `runSubagent` tool with the same payload described above.
+            1. Load and parse {project-root}/docs/implementation-artifacts/sprint-status.yaml as YAML
+            2. Collect all stories across all epics where `status: ready-for-dev`.
+            3. For each ready-for-dev story, create a todo item using the `manage_todo_list` tool.
+            4. For each ready-for-dev story, invoke a subagent using the Copilot `runSubagent` tool with the same payload described above.
             5. Collect responses from all subagents and build a short report listing for each story: story id/name, subagent result summary, and any generated file paths reported by the subagent.
-            6. Update {project-root}/docs/implementation-artifacts/sprint-status.yml based on each subagent response. DO NOT CHANGE ANY OTHER FILE.
+            6. Update {project-root}/docs/implementation-artifacts/sprint-status.yaml based on each subagent response. DO NOT CHANGE ANY OTHER FILE.
             7. Return the report to the user.
           </handler>
       </handlers>
@@ -83,10 +83,11 @@ When invoking `runSubagent`, provide the following `prompt` (pass the whole text
 
 1) Read completely the file {project-root}/_bmad/bmm/agents/dev.md and load the Dev Agent persona and activation instructions as described in that file. Ignore <step n="12">.
 2) Read completely the file {project-root}/_bmad/bmm/workflows/4-implementation/dev-story/workflow.yaml and execute it following workflow rules in {project-root}/_bmad/core/tasks/workflow.xml.
-3) Before executing the workflow, create a new branch named `dev-story-<story-name>` and switch to it. Push the branch to remote after creating the story file and after completing the implementation.
-4) Create the story artifacts described by the workflow and persist any files under the repository. Run in yolo mode.
-5) MANDATORY: Only create the story details file. Do not create any additional file.
-6) When finished, respond with a short JSON-like summary containing:
+3) Before executing the workflow or modifying any file, create a new branch named `dev-story-<story-name>` and switch to it. This will be your work branch.
+5) Execute the workflow steps, developing the assigned story as per the acceptance criteria and tasks defined in the story file (located at `docs/implementation-artifacts/<story-file>.md`).
+6) If you encounter any blockers or need clarification on the story, report back to the coordinator immediately with a clear description of the issue and await instructions before proceeding.
+7) Upon successful completion of the story, ensure all generated files are committed to the branch and push to remote.
+8) When finished, respond with a short JSON-like summary containing:
    - `story`: story id or name
    - `branch`: name of the branch created for this story
    - `status`: success|blocked|failed
