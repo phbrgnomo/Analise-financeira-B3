@@ -89,5 +89,34 @@ TBD
 
 - .github/workflows/ci.yml (to be created by implementer)
 
+## Review Follow-ups (AI)
+
+- [x] [AI-Review][HIGH] Ajustar gatilhos do CI para rodar em qualquer branch (`push` / `pull_request`) — aplicado (`.github/workflows/ci.yml`).
+- [x] [AI-Review][HIGH] Adicionar verificação/guard no `smoke` job para garantir que `tests/ci/smoke.sh` exista antes de executar — aplicado (`.github/workflows/ci.yml`).
+- [x] [AI-Review][MEDIUM] Adicionar helpers e testes determinísticos em `tests/ci/` (fixtures, `conftest.py`, `test_mock_provider.py`) — aplicado (`tests/ci/*`).
+- [x] [AI-Review][HIGH] Sincronizar status da story com `sprint-status.yaml` — aplicado (story `Status:` atualizado para `in-progress`).
+- [ ] [AI-Review][HIGH] Remover snapshots gerados do repositório e mover para artifacts do CI (não commitar CSV/.checksum). Current: `snapshots_test/PETR4_snapshot.csv` está versionado — ação pendente.
+- [ ] [AI-Review][MEDIUM] Revisar e hardenizar testes CI adicionais para garantir isolamento e evitar dependências de ambiente (mais cobertura de edge-cases).
+- [ ] [AI-Review][MEDIUM] Adicionar caching/otimizações ao `lint` job se necessário (ex.: cache para dependências do linter) — sugerido.
+- [ ] [AI-Review][LOW] Opcional: adicionar `fetch-depth: 0` ao `actions/checkout` se histórico for necessário.
+- [ ] [AI-Review][LOW] Verificar e atualizar badge do CI no `README.md` conforme branch padrão.
+
+### Review Actions Taken
+
+- Files changed and committed in this review:
+  - `.github/workflows/ci.yml`
+  - `tests/ci/smoke.sh`
+  - `tests/ci/conftest.py`
+  - `tests/ci/test_mock_provider.py`
+  - `tests/ci/README.md`
+  - `docs/sprint-reports/epic0-story0-4-ci-implementation.md`
+  - `docs/implementation-artifacts/0-4-criar-skeleton-de-ci-github-workflows-ci-yml.md` (this file updated)
+
+If you want, I can now:
+
+1. Remove `snapshots_test/*` from the repo and add a CI-only upload flow (recommended).
+2. Create subtasks in the story for remaining unchecked items.
+3. Open a Pull Request with these changes.
+
 
 Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/107
