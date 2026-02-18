@@ -4,6 +4,9 @@ Este projeto visa utilizar dados da B3 para análise financeira
 
 Esse projeto tem a finalidade apenas de aprendizado. Use pelo seu próprio risco.
 
+<!-- CI badge -->
+![CI](https://github.com/phbrgnomo/Analise-financeira-B3/actions/workflows/ci.yml/badge.svg)
+
 ## Plano de implementação
 
 - `[]`Coleta de preços
@@ -53,6 +56,16 @@ Rodar testes:
 ```bash
 poetry run pytest -q
 ```
+
+CI Quick Reference
+
+- O workflow CI roda em pushes e PRs nas branches `main`/`master`.
+- Jobs principais: `lint`, `test`, `smoke`.
+- `test` executa `poetry install` e `pytest` gerando `reports/junit.xml`.
+- `smoke` executa uma instalação rápida (`poetry install --no-dev`) e roda `tests/ci/smoke.sh`.
+- Em caso de falha o CI faz upload dos artifacts (relatórios e logs) para auxiliar debugging.
+
+Para mais detalhes, veja `.github/workflows/ci.yml` e `tests/ci/README.md`.
 
 Habilitar `pre-commit` hooks (já configurado no projeto):
 
