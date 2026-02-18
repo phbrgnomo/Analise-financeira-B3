@@ -28,6 +28,7 @@ pip-delete-this-directory.txt
 .coverage.*
 coverage.xml
 htmlcov/
+.ruff_cache/
 
 # MyPy cache
 .mypy_cache/

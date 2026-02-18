@@ -29,3 +29,11 @@ pytest = "^7.4.0"
 black = "^24.9.0"
 ruff = "^0.14.0"
 pre-commit = "^3.3.0"
+
+[tool.black]
+line-length = 88
+
+[tool.ruff]
+line-length = 88
+select = ["E", "F", "W", "C", "B", "I"]
+ignore = ["E203"]

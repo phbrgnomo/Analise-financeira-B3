@@ -7,8 +7,9 @@ from src.main import app
 
 
 def test_cli_help():
-    """
-    The `test_cli_help` function tests if the CLI help command for the `app` displays options correctly.
+    """The `test_cli_help` function verifies the CLI help output.
+
+    Ensures that invoking `--help` for the `app` displays the expected options.
     """
     runner = CliRunner()
     result = runner.invoke(app, ["--help"])
@@ -26,4 +27,5 @@ def test_main_help_exit_code_and_output():
     )
     assert completed.returncode == 0
     assert "usage" in completed.stdout.lower() or "usage" in completed.stderr.lower()
-    # Help may emit deprecation warnings to stderr in some environments; ignore stderr content.
+    # Help may emit deprecation warnings to stderr in some environments.
+    # Ignore stderr content in the assertion.
