@@ -52,7 +52,7 @@ internal dev agent
 - Created `tests/fixtures/sample_ticker.csv`
 - Created `tests/fixtures/README.md`
 - Created `tests/conftest.py`
-- Created `tests/conftest.py`
+
 
 **Test results**: `poetry run pytest -q` → 6 passed, 10 warnings
 **Acceptance Criteria**: #1, #2, #3 satisfied (fixtures and sample CSV available; in-memory SQLite fixture seeds `prices` table; example test added)

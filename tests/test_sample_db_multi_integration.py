@@ -1,6 +1,7 @@
-import csv
 import os
 import sqlite3
+
+from tests.fixture_utils import parse_fixture_csv
 
 
 def _fixture_path(filename: str) -> str:
@@ -27,24 +28,7 @@ def test_sample_db_multi_integration():
         """
     )
 
-    path = _fixture_path("sample_ticker_multi.csv")
-    with open(path, newline="") as f:
-        reader = csv.DictReader(f)
-        rows = []
-        for r in reader:
-            rows.append(
-                (
-                    r.get("ticker"),
-                    r.get("date"),
-                    float(r.get("open") or 0),
-                    float(r.get("high") or 0),
-                    float(r.get("low") or 0),
-                    float(r.get("close") or 0),
-                    float(r.get("adj_close") or 0),
-                    int(r.get("volume") or 0),
-                    r.get("source"),
-                )
-            )
+    rows = parse_fixture_csv("sample_ticker_multi.csv")
 
     sql = (
         "INSERT INTO prices (ticker,date,open,high,low,close,adj_close,volume,source)"
