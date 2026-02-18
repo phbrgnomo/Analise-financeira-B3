@@ -10,7 +10,7 @@ Ao ser ativado, apresenta ao usuário duas opções:
 - 1 - Processar desenvolvimento de stories de um epic específico
 - 2 - Processar a desenvolvimento de stories de todos os epics
 
-O agente lê `sprint-status.yaml`, seleciona as stories com `status: ready-for-dev` e conforme a opção escolhida, cria um TODO para cada story e invoca um subagente por story usando a ferramenta `runSubagent`.
+O agente lê `sprint-status.yaml`, seleciona as stories com `status: ready-for-dev` e conforme a opção escolhida, cria um TODO para cada story e invoca um subagente atraves do comando de prompt `copilot` (copilot CLI).
 
 Para cada story marcada com `ready-for-dev`, o subagente designado deve ser instruído a criar um worktree separado a partir do branch atual. O subagente então segue as instruções detalhadas para desenvolver a story, garantindo que cada uma seja tratada de forma isolada e paralela.
 
@@ -41,11 +41,12 @@ Com o feedback dos subagentes, o coordenador atualiza o status das stories no ar
             2. Find the epic with name matching `<epic-name>` (exact match). If not found, inform user and abort this action.
             3. Collect stories under that epic where `status: ready-for-dev`.
             4. For each ready-for-dev story, create a todo item using the `manage_todo_list` tool (see TODO format below) to track execution.
-            5. For each ready-for-dev story, invoke a subagent using the Copilot `runSubagent` tool with the following payload:
-                - `original_branch`: pass the branch name stored as {original_branch} at activation step 7
-                - `worktree`: `dev-story-<story-name>` (create a separate worktree for each story)
-                - `prompt`: Instructions below (read workflow and run it)
-                - `description`: "dev-subagent-<story-name>"
+            5. For each ready-for-dev story, execute the Copilot CLI (`copilot`) to start an agentic session that runs the story workflow. Recommended flow:
+               - Create a prompt file `./tmp/prompt-dev-story-<story-name>.txt` containing a payload with these fields: `original_branch` (use {original_branch}), `worktree` (dev-story-<story-name>), `prompt` (the full instructions block defined in `<subagent-instructions>` below), and `description` (e.g. "dev-subagent-<story-name>").
+               - Invoke the CLI (example, adjust flags/perms as needed):
+                 `copilot --prompt-file ./tmp/prompt-dev-story-<story-name>.txt --session dev-story-<story-name> --silent --no-ask-user --allow-tool runSubagent --allow-tool git --allow-all-paths`
+               - Aguarde a conclusão da execução do `copilot` para a story atual antes de iniciar a próxima (execução sequencial). Use `--silent` em automações para saída mínima.
+               - Observação: adaptar flags de permissão (`--allow-tool`, `--add-dir`, `--allow-url`, etc.) conforme políticas do repositório e `docs-mcp-server`.
             6. Collect responses from all subagents and build a short report listing for each story: story id/name, subagent result summary, and any generated file paths reported by the subagent.
             7. Update {project-root}/docs/implementation-artifacts/sprint-status.yaml based on each subagent response. DO NOT CHANGE ANY OTHER FILE.
             8. Return the report to the user.
@@ -56,11 +57,12 @@ Com o feedback dos subagentes, o coordenador atualiza o status das stories no ar
             1. Load and parse {project-root}/docs/implementation-artifacts/sprint-status.yaml as YAML
             2. Collect all stories across all epics where `status: ready-for-dev`.
             3. For each ready-for-dev story, create a todo item using the `manage_todo_list` tool.
-            4. For each ready-for-dev story, invoke a subagent using the Copilot `runSubagent` tool with the following payload:
-                - `original_branch`: pass the branch name stored as {original_branch} at activation step 7
-                - `worktree`: `dev-story-<story-name>` (create a separate worktree for each story)
-                - `prompt`: Instructions below (read workflow and run it)
-                - `description`: "dev-subagent-<story-name>"
+            4. For each ready-for-dev story, execute the Copilot CLI (`copilot`) to run an agentic session for that story. Recommended flow:
+               - Create `./tmp/prompt-dev-story-<story-name>.txt` with a payload containing `original_branch` (use {original_branch}), `worktree` (dev-story-<story-name>), `prompt` (the full `<subagent-instructions>` block), and `description` ("dev-subagent-<story-name>").
+               - Run (example):
+                 `copilot --prompt-file ./tmp/prompt-dev-story-<story-name>.txt --session dev-story-<story-name> --silent --no-ask-user --allow-tool runSubagent --allow-tool git --allow-all-paths`
+               - Aguarde o término da execução do `copilot` antes de prosseguir para a próxima story (execução em sequência).
+               - Adapte flags de permissão segundo `docs-mcp-server` e políticas locais.
             5. Collect responses from all subagents and build a short report listing for each story: story id/name, subagent result summary, and any generated file paths reported by the subagent.
             6. Update {project-root}/docs/implementation-artifacts/sprint-status.yaml based on each subagent response. DO NOT CHANGE ANY OTHER FILE.
             7. Return the report to the user.
@@ -88,7 +90,7 @@ Com o feedback dos subagentes, o coordenador atualiza o status das stories no ar
 </menu>
 
 <subagent-instructions>
-When invoking `runSubagent`, provide the following `prompt` (pass the whole text):
+When invoking via the Copilot CLI (`copilot`) or `runSubagent`, provide the following `prompt` (pass the whole text):
 
 1) Read completely the file {project-root}/_bmad/bmm/agents/dev.md and load the Dev Agent persona and activation instructions as described in that file. Ignore <step n="12">.
 2) Read completely the file {project-root}/_bmad/bmm/workflows/4-implementation/dev-story/workflow.yaml and execute it following workflow rules in {project-root}/_bmad/core/tasks/workflow.xml.
