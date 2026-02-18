@@ -140,8 +140,8 @@ jobs:
           python -m pip install poetry
           poetry config virtualenvs.in-project true
           poetry install --only main --no-interaction
-          # pytest is required for smoke script; install it into the runner
-          python -m pip install pytest
+          # Install pytest into the poetry-managed venv so `poetry run` can use it
+          poetry run pip install pytest
 
       - name: Run smoke tests
         run: |
@@ -149,8 +149,8 @@ jobs:
             echo "ERROR: tests/ci/smoke.sh not found. Ensure CI helpers are committed." >&2
             exit 1
           fi
-          chmod +x tests/ci/smoke.sh || true
-          ./tests/ci/smoke.sh
+          # Run smoke script inside poetry venv so installed deps are visible
+          poetry run bash tests/ci/smoke.sh
 
       - name: Upload smoke artifacts on failure
         if: failure()
