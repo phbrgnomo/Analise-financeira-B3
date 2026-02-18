@@ -64,3 +64,20 @@ def create_prices_db_from_rows(rows):
 def create_prices_db_from_csv(filename: str):
     rows = parse_fixture_csv(filename)
     return create_prices_db_from_rows(rows)
+
+
+def get_or_make_snapshot_dir(env_path: str | None, tmp_path_factory) -> str:
+    """Retorna um diretório absoluto para armazenar snapshots.
+
+    - Se ``env_path`` for uma string não-None, garante que o diretório exista e
+        retorna o caminho absoluto.
+    - Caso contrário, usa ``tmp_path_factory`` para criar um diretório temporário
+        e retorna seu caminho como string.
+    """
+    import os
+
+    if env_path:
+        os.makedirs(env_path, exist_ok=True)
+        return os.path.abspath(env_path)
+    d = tmp_path_factory.mktemp("snapshots")
+    return str(d)

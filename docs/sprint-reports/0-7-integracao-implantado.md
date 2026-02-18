@@ -1,6 +1,6 @@
 # FR28 — Documentação do que foi implantado (Story 0.7)
 
-Resumo das implementações realizadas para atender o FR28 relacionadas à Story 0.7
+Resumo das implementações realizadas para atender ao FR28, relacionadas à Story 0.7.
 
 Status geral: in-review
 

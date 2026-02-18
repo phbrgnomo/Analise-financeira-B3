@@ -42,9 +42,7 @@ def snapshot_dir(tmp_path_factory) -> str:
     """
     import os
 
+    from tests.fixture_utils import get_or_make_snapshot_dir
+
     env_path = os.environ.get("SNAPSHOT_DIR")
-    if env_path:
-        os.makedirs(env_path, exist_ok=True)
-        return os.path.abspath(env_path)
-    d = tmp_path_factory.mktemp("snapshots")
-    return str(d)
+    return get_or_make_snapshot_dir(env_path, tmp_path_factory)
