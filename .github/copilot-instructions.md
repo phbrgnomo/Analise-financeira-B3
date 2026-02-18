@@ -58,7 +58,8 @@ Type `/bmad-` in Copilot Chat to see all available BMAD workflows and agent acti
 
 ## IMPORTANTE
 
-Agentes trabalhando nesse projeto devem sempre utilizar `poetry` para execução de comandos, instalação de dependências e gerenciamento do ambiente virtual. O entrypoint definido é `main` em `src/main.py`, e deve ser invocado via `poetry run main` ou `python -m src.main` para garantir que o ambiente virtual seja ativado corretamente.
+- Agentes trabalhando nesse projeto devem sempre utilizar `poetry` para execução de comandos, instalação de dependências e gerenciamento do ambiente virtual. O entrypoint definido é `main` em `src/main.py`, e deve ser invocado via `poetry run main` ou `python -m src.main` para garantir que o ambiente virtual seja ativado corretamente.
+- A cada novo inicio de trabalho, o agente deve verificar a existencia dos arquivos que serão modificados ou criados, para garantir que alterações no codigo não sejam duplicadas e consistentes com o que já está presente.
 
 ## Projeto — comandos úteis
 
