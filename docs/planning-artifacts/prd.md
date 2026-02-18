@@ -275,7 +275,7 @@ poetry run main --ticker PETR4.SA --force-refresh
 - Não aplicável para escopo MVP (aplicação de uso técnico/educacional local); considerar para versões públicas.
 
 ### Acceptance Curta (NFRs críticos)
-- NFR-P1: quickstart completa ≤ 30 minutos (teste manual/CI spike). 
+- NFR-P1: quickstart completa ≤ 30 minutos (teste manual/CI spike).
 - NFR-R2 / NFR-M1: backup e restore testados em ambiente de staging.
 - NFR-O2: `main --metrics` exibe métricas recentes e erros agregados.
 
@@ -333,8 +333,8 @@ poetry run main --ticker PETR4.SA --force-refresh
 - FR26: [CI] executa testes unitários e integração mockada que validam ingest→CSV→checksum fluxo.
 - FR27: [Desenvolvedor] pode rodar suíte de testes localmente e obter resultados pass/fail claros.
 
-### Documentação e Relatórios
-- FR28: [Tech Writer] pode adicionar `docs/phase-N-report.md` com checklist, comandos reproducíveis e amostras de CSV para cada fase. Pode adicionar `docs/implantacao/<numeração sequencial>-<o que foi implementado>.md` como referencia implatação das soluções em projetos futuros.
+- ### Documentação e Relatórios
+- FR28: [Tech Writer] pode adicionar `docs/phase-N-report.md` com checklist, comandos reproducíveis e amostras de CSV para cada fase. Pode adicionar `docs/sprint-reports/<epic>-<story>-<o que foi implementado>.md` como referência de implantação das soluções em projetos futuros.
 - FR29: [Usuário/Dev] encontra no `README` instruções quickstart reproduzíveis para executar o fluxo end‑to‑end.
 
 ### Observabilidade e Logs
@@ -365,7 +365,7 @@ poetry run main --ticker PETR4.SA --force-refresh
 - FR16 (Quickstart): `poetry run main --ticker <sample> --force-refresh` completa sem erro e gera snapshot CSV em `snapshots/`.
 - FR40 (Backups): `backup --run` gera arquivo `backups/data-YYYYMMDD.db` e `restore --last` recupera DB em ambiente de teste (passa teste de integridade).
 - FR41 (Migrations): `migrations status` mostra versão e `migrations apply`/`migrations rollback` funcionam em ambiente de teste.
- 
+
 ## Scoping
 
 ### Escopo por Fase (consolidado)
@@ -420,9 +420,9 @@ poetry run main --ticker PETR4.SA --force-refresh
 
 ### Estimativa de alto nível
 
-- Fase 1 (MVP de integração): Spike 5–7 dias + entrega 1–2 semanas (1 dev full-time).  
-- Fase 2: 1–2 semanas adicionais para DB, validação e notebooks.  
-- Fase 3: 1 semana para Docker + Streamlit POC.  
+- Fase 1 (MVP de integração): Spike 5–7 dias + entrega 1–2 semanas (1 dev full-time).
+- Fase 2: 1–2 semanas adicionais para DB, validação e notebooks.
+- Fase 3: 1 semana para Docker + Streamlit POC.
 - Fase 4: 1–3 semanas dependendo profundidade da modelagem.
 
 ---

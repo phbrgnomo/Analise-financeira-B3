@@ -62,7 +62,7 @@ completedAt: 2026-02-16
 
 **Frameworks & Validation choices (pragmatic):**
 
-- Streamlit é aceitável como POC — não introduza dashboards complexos de produção nesta fase. 
+- Streamlit é aceitável como POC — não introduza dashboards complexos de produção nesta fase.
 - Para validação de DataFrames use `pandera`. `pydantic` permanece recomendado para configurações/DTOs, mas não é indicado para validação de DataFrames (não substituir `pandera`).
 
 
@@ -257,24 +257,24 @@ analise-financeira-b3/
 
 ### Mapping de Requisitos → Localizações
 
-- Ingestão idempotente / adaptadores → `src/adapters/`, `src/ingest/pipeline.py`  
-- Persistência (prices/returns/ingest_logs/snapshots/metadata) → `src/db/db.py`, `migrations/`  
-- Canonical mapping / ETL → `src/etl/mapper.py`  
-- Snapshot export + checksum → `src/etl/mapper.py` / `src/utils/checksums.py` / `snapshots/`  
-- Notebooks e POC Streamlit → `notebooks/`, `src/apps/streamlit_poc.py`  
-- Tests / fixtures → `tests/` (unit + integration mockado)  
+- Ingestão idempotente / adaptadores → `src/adapters/`, `src/ingest/pipeline.py`
+- Persistência (prices/returns/ingest_logs/snapshots/metadata) → `src/db/db.py`, `migrations/`
+- Canonical mapping / ETL → `src/etl/mapper.py`
+- Snapshot export + checksum → `src/etl/mapper.py` / `src/utils/checksums.py` / `snapshots/`
+- Notebooks e POC Streamlit → `notebooks/`, `src/apps/streamlit_poc.py`
+- Tests / fixtures → `tests/` (unit + integration mockado)
 - Docs / adapter mappings → `docs/planning-artifacts/adapter-mappings.md`
 
 ### Integration & Boundaries
 
-- API/CLI boundary: `src/cli.py` exposes commands; internal modules must not read env directly (use config loader).  
-- DB boundary: `src/db/db.py` is única interface para leitura/gravação; adaptadores/etl chamam helpers expostos por essa camada.  
+- API/CLI boundary: `src/cli.py` exposes commands; internal modules must not read env directly (use config loader).
+- DB boundary: `src/db/db.py` is única interface para leitura/gravação; adaptadores/etl chamam helpers expostos por essa camada.
 - Raw storage boundary: adaptadores escrevem em `raw/<provider>/` e registram metadados em `ingest_logs`/`metadata`.
 
 ### File & Naming Rules (enforced)
 
-- Arquivos Python: snake_case.py; classes PascalCase.  
-- Tables & columns: snake_case, tables plural (`prices`, `returns`).  
+- Arquivos Python: snake_case.py; classes PascalCase.
+- Tables & columns: snake_case, tables plural (`prices`, `returns`).
 - Tests: `test_*.py` em `tests/` e fixtures em `conftest.py`.
 
 ## Architecture Validation Results (Step 07)
@@ -313,25 +313,25 @@ analise-financeira-b3/
 - **Confidence Level:** high — a arquitetura cobre requisitos funcionais e não-funcionais essenciais; pequenas ações práticas (fixar versões, criar CI skeleton, adicionar fixtures) deixarão o projeto imediatamente implementável.
 
 **Key Strengths:**
-- Simplicidade e alinhamento com escopo local (SQLite).  
-- Clareza na separação Adapter→Mapper→DB, facilitando novos provedores.  
+- Simplicidade e alinhamento com escopo local (SQLite).
+- Clareza na separação Adapter→Mapper→DB, facilitando novos provedores.
 - Padrões e enforcement definidos (naming, logging, tests).
 
 **Areas para melhoria posterior (não-blocking):**
-- Fixar versões de dependências no `pyproject.toml`.  
-- adicionar exemplos de fixtures e dados de amostra para testes de integração.  
+- Fixar versões de dependências no `pyproject.toml`.
+- adicionar exemplos de fixtures e dados de amostra para testes de integração.
 - criar templates de PR/checklist e CI job de integração mockada.
 
 ### Implementation Handoff
 
 **AI Agent Guidelines:**
-- Implementar exatamente as convenções e patterns deste documento.  
-- Cobrir novos adaptadores com testes de contrato e incluir mapping em `docs/planning-artifacts/adapter-mappings.md`.  
+- Implementar exatamente as convenções e patterns deste documento.
+- Cobrir novos adaptadores com testes de contrato e incluir mapping em `docs/planning-artifacts/adapter-mappings.md`.
 - Registrar quaisquer desvios no PR e anexar justificativa.
 
 **First Implementation Priority (primeiros passos):**
-1. Inicializar projeto (`poetry init -n`) e adicionar dependências iniciais (veja exemplo do Step 03).  
-2. Criar esqueleto: `src/adapters/`, `src/ingest/pipeline.py`, `src/etl/mapper.py`, `src/db/db.py`, `tests/conftest.py`.  
+1. Inicializar projeto (`poetry init -n`) e adicionar dependências iniciais (veja exemplo do Step 03).
+2. Criar esqueleto: `src/adapters/`, `src/ingest/pipeline.py`, `src/etl/mapper.py`, `src/db/db.py`, `tests/conftest.py`.
 3. Adicionar `pre-commit` e CI `ci.yml` básico com `pytest` e lint.
 
 **Comando inicial sugerido:**
@@ -343,11 +343,11 @@ mkdir -p src/adapters src/ingest src/etl src/db src/apps tests dados raw snapsho
 ```
 
 **Decisões escolhidas pelo usuário:**
-- **Banco:** SQLite (local)  
-- **Modelagem:** Adapter → Canonical Mapper  
-- **Upsert / Idempotência:** `INSERT OR REPLACE` / `ON CONFLICT` (implementado via helper SQLAlchemy)  
-- **Validação:** Validação leve no adaptador + testes de contrato (opção leve)  
-- **Migrações:** `alembic` para versionamento de esquema  
+- **Banco:** SQLite (local)
+- **Modelagem:** Adapter → Canonical Mapper
+- **Upsert / Idempotência:** `INSERT OR REPLACE` / `ON CONFLICT` (implementado via helper SQLAlchemy)
+- **Validação:** Validação leve no adaptador + testes de contrato (opção leve)
+- **Migrações:** `alembic` para versionamento de esquema
 - **Caching / Raw storage:** salvar `raw_response` em `raw/<provider>/` e usar TTL cache local (reduz chamadas)
 
 **Ações operacionais aplicadas:**
@@ -381,5 +381,3 @@ Para referência operacional e ajuda automática do workflow, consulte o helper 
 Se houver dúvidas ou quiser que eu gere os artefatos operacionais agora, diga “Sim — gerar esqueleto” ou peça modificações específicas.
 
 ---
-
-

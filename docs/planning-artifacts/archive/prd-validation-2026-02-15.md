@@ -107,7 +107,7 @@ Os principais recursos do brief (ingestão idempotente, esquema SQLite, snapshot
 Os `Success Criteria` do PRD traduzem os objetivos mensuráveis apontados no brief (ingestão persistida, snapshots, quickstart reproduzível, Streamlit POC).
 
 **Differentiators:** Partially Covered
-O brief lista diferenciais (laboratório pessoal, foco em comparação de pipelines, documentação PT‑BR). O PRD incorpora parte desses pontos (foco em reprodutibilidade, comparação entre pipelines), mas não há um bloco explícito rotulado como "Key Differentiators".  
+O brief lista diferenciais (laboratório pessoal, foco em comparação de pipelines, documentação PT‑BR). O PRD incorpora parte desses pontos (foco em reprodutibilidade, comparação entre pipelines), mas não há um bloco explícito rotulado como "Key Differentiators".
 Severity: Moderate — útil para posicionamento e priorização; recomenda-se explicitar no PRD se for estratégico.
 
 **Constraints:** Fully Covered
@@ -515,8 +515,3 @@ PRD is usable for planning and initial implementation; address NFR measurability
 - **[X] Exit** — Save and finish; I will not make further changes.
 
 Reply with the letter for the action you want to take next.
-
-
-
-
-

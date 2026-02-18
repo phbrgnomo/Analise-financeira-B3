@@ -56,14 +56,18 @@
 
 Type `/bmad-` in Copilot Chat to see all available BMAD workflows and agent activators. Agents are also available in the agents dropdown.
 
+## IMPORTANTE
+
+Agentes trabalhando nesse projeto devem sempre utilizar `poetry` para execução de comandos, instalação de dependências e gerenciamento do ambiente virtual. O entrypoint definido é `main` em `src/main.py`, e deve ser invocado via `poetry run main` ou `python -m src.main` para garantir que o ambiente virtual seja ativado corretamente.
+
 ## Projeto — comandos úteis
 
 - Instalar dependências: poetry install
 - Executar o entrypoint: poetry run main
 - Alternativa (sem poetry): python -m src.main
 - Build: poetry build
-- Testes: não existe suíte de testes incluída neste repositório. Para verificar um comportamento isolado rode um módulo diretamente (ex.: python -m src.main) ou adicione testes em tests/ e use pytest tests/test_arquivo.py para rodar um único teste.
-- Lint/Format: nenhuma ferramenta de lint/format está configurada; recomenda-se adicionar black/flake8/ruff e configurar em pyproject.toml
+- Testes: poetry run pytest
+- Lint/Format: ruff, black, pre-commit hooks
 
 ## Arquitetura (visão geral)
 
@@ -72,7 +76,7 @@ Type `/bmad-` in Copilot Chat to see all available BMAD workflows and agent acti
   - src.dados_b3 — coleta dados (pandas_datareader -> Yahoo) e retorna DataFrames OHLCV/Adj Close
   - src.retorno — funções para cálculo de retornos, risco, conversões e correlações; lê/espera CSVs em dados/
 - Dados persistidos: pasta dados/ contendo arquivos CSV por ativo com coluna 'Return'
-- Dependências principais (pyproject.toml): pandas, numpy, pandas-datareader
+- Dependências principais definidas em pyproject.toml
 - Entrypoint de console definido em [tool.poetry.scripts] como `main = "src.main:main"`
 
 ## Convenções chave do repositório
@@ -86,5 +90,10 @@ Type `/bmad-` in Copilot Chat to see all available BMAD workflows and agent acti
 ## Arquivos de assistente e prompts
 
 - Existem agentes e prompts BMAD em .github/agents/ e .github/prompts/ — utilize esses templates quando gerar tarefas/fluxos automatizados
+- Caso ache necessário, inicie um subagente para tarefas específicas, utilizando os prompts e fluxos pré-definidos como base, e adapte conforme o contexto da tarefa
+
+## Documentação de referência
+
+- O MCP `docs-mcp-server` contém documentação sobre módulos utilizados no projeto. Consulte-o para buscar a documentação mais atualizada das bibliotecas do projeto.
 
 <!-- BMAD:END -->
