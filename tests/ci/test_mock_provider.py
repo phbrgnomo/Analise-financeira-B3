@@ -65,6 +65,8 @@ def test_cotacao_ativo_dia_returns_mocked_dataframe(snapshot_dir, monkeypatch):
     # Assert
     assert isinstance(result, pd.DataFrame)
     assert not result.empty
+    # Ensure the returned DataFrame matches exactly the mocked data
+    pd.testing.assert_frame_equal(result, df)
 
     # Save snapshot and checksum for CI artifact upload
     snap_path = os.path.join(snapshot_dir, "PETR4_snapshot.csv")
@@ -81,7 +83,14 @@ def test_snapshot_dir_is_temp(snapshot_dir):
     O diretório não deve estar dentro do repositório de trabalho
     para evitar commits acidentais.
     """
+    import os
     import tempfile
 
-    td = tempfile.gettempdir()
-    assert td in snapshot_dir
+    td = os.path.abspath(tempfile.gettempdir())
+    sd = os.path.abspath(snapshot_dir)
+    # Prefer a path-aware check for temp dir containment
+    try:
+        assert os.path.commonpath([td, sd]) == td
+    except ValueError:
+        # Fallback: compare prefix (robust on platforms where commonpath may raise)
+        assert sd.startswith(td)

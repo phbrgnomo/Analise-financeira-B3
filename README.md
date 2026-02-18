@@ -59,7 +59,7 @@ poetry run pytest -q
 
 CI Quick Reference
 
-- O workflow CI roda em pushes e PRs nas branches `main`/`master`.
+- O workflow CI roda em pushes e pull requests em qualquer branch (gatilhos `push` e `pull_request`).
 - Jobs principais: `lint`, `test`, `smoke`.
 - `test` executa `poetry install` e `pytest` gerando `reports/junit.xml`.
 - `smoke` executa uma instalação rápida (`poetry install --no-dev`) e roda `tests/ci/smoke.sh`.

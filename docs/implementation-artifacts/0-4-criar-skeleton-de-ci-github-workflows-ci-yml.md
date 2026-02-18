@@ -1,6 +1,6 @@
 # Story 0.4: criar-skeleton-de-ci-github-workflows-ci-yml
 
-Status: in-progress
+Status: completed
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -76,7 +76,7 @@ TBD
 - tests/ci/smoke.sh (created)
 - tests/ci/README.md (created)
 - README.md (modified - CI Quick Reference added)
-- docs/implementation-artifacts/sprint-status.yaml (modified - story marked in-progress)
+- docs/implementation-artifacts/sprint-status.yaml (modified - story marked completed)
 
 ### Next Steps Suggested
 
@@ -85,9 +85,7 @@ TBD
 - Update story `Status:` to `in-progress` (if you want file-level sync) — currently left as `ready-for-dev` per your request.
 - Open PR for these changes and run CI in GitHub to validate workflow behavior in runner environment.
 
-### File List
 
-- .github/workflows/ci.yml (to be created by implementer)
 
 ## Review Follow-ups (AI)
 
