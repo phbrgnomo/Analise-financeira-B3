@@ -1,13 +1,16 @@
-import hashlib
 import importlib
 import os
 import sys
-import types
-
-import pandas as pd
 
 # Provide a lightweight fake 'pandas_datareader' package to avoid heavy
 # imports during test collection
+import types
+from pathlib import Path
+
+import pandas as pd
+
+import src.utils.checksums as checksums
+
 pdreader = types.ModuleType("pandas_datareader")
 pdreader.data = types.ModuleType("pandas_datareader.data")
 
@@ -25,13 +28,14 @@ dados_b3 = importlib.import_module("src.dados_b3")
 
 def _write_snapshot(df: pd.DataFrame, path: str) -> str:
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    df.to_csv(path, index=True)
-    # compute sha256 checksum
-    h = hashlib.sha256()
-    with open(path, "rb") as f:
-        for chunk in iter(lambda: f.read(8192), b""):
-            h.update(chunk)
-    checksum = h.hexdigest()
+    df_out = df.copy()
+    try:
+        df_out.index.name = "date"
+    except (AttributeError, TypeError):
+        pass
+    df_out = df_out.reset_index()
+    df_out.to_csv(path, index=False)
+    checksum = checksums.sha256_file(path)
     with open(path + ".checksum", "w") as cf:
         cf.write(checksum)
     return checksum
@@ -65,7 +69,6 @@ def test_cotacao_ativo_dia_returns_mocked_dataframe(snapshot_dir, monkeypatch):
     # Assert
     assert isinstance(result, pd.DataFrame)
     assert not result.empty
-    # Ensure the returned DataFrame matches exactly the mocked data
     pd.testing.assert_frame_equal(result, df)
 
     # Save snapshot and checksum for CI artifact upload
@@ -76,6 +79,20 @@ def test_cotacao_ativo_dia_returns_mocked_dataframe(snapshot_dir, monkeypatch):
     assert os.path.exists(snap_path + ".checksum")
     assert len(checksum) == 64
 
+    # If an expected checksum fixture exists, compare to it to guard regression
+    def _find_repo_root(start: Path) -> Path:
+        current = start
+        for parent in [current] + list(current.parents):
+            if (parent / "pyproject.toml").is_file():
+                return parent
+        return current.parent
+
+    repo_root = _find_repo_root(Path(__file__).resolve())
+    expected_file = repo_root / "tests" / "fixtures" / "expected_snapshot.checksum"
+    if expected_file.exists():
+        expected = expected_file.read_text(encoding="utf-8").strip()
+        assert checksum == expected
+
 
 def test_snapshot_dir_is_temp(snapshot_dir):
     """Garante que `snapshot_dir` aponta para um diretório temporário.
@@ -83,14 +100,11 @@ def test_snapshot_dir_is_temp(snapshot_dir):
     O diretório não deve estar dentro do repositório de trabalho
     para evitar commits acidentais.
     """
-    import os
     import tempfile
 
     td = os.path.abspath(tempfile.gettempdir())
     sd = os.path.abspath(snapshot_dir)
-    # Prefer a path-aware check for temp dir containment
     try:
         assert os.path.commonpath([td, sd]) == td
     except ValueError:
-        # Fallback: compare prefix (robust on platforms where commonpath may raise)
         assert sd.startswith(td)

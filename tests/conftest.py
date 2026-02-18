@@ -29,3 +29,20 @@ def sample_db_multi():
         yield db
     finally:
         db.close()
+
+
+@pytest.fixture(scope="session")
+def snapshot_dir(tmp_path_factory) -> str:
+    """Diretório temporário (ou `SNAPSHOT_DIR` quando definido) para salvar
+    snapshots gerados nos testes.
+
+    Se a variável de ambiente `SNAPSHOT_DIR` estiver definida (ex.: em CI), usamos
+    esse caminho e garantimos que ele exista; caso contrário, criamos um
+    diretório temporário isolado.
+    """
+    import os
+
+    from tests.fixture_utils import get_or_make_snapshot_dir
+
+    env_path = os.environ.get("SNAPSHOT_DIR")
+    return get_or_make_snapshot_dir(env_path, tmp_path_factory)
