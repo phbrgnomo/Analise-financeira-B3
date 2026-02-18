@@ -52,7 +52,7 @@ jobs:
 
       - name: Ruff check
         run: |
-          poetry run ruff check .
+          poetry run ruff check . --show-files
 
   test:
     runs-on: ubuntu-latest
@@ -140,6 +140,8 @@ jobs:
           python -m pip install poetry
           poetry config virtualenvs.in-project true
           poetry install --only main --no-interaction
+          # pytest is required for smoke script; install it into the runner
+          python -m pip install pytest
 
       - name: Run smoke tests
         run: |
