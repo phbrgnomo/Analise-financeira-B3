@@ -12,6 +12,8 @@ Ao ser ativado, apresenta ao usuário duas opções:
 
 O agente lê `sprint-status.yaml`, seleciona as stories com `status: ready-for-dev` e conforme a opção escolhida, cria um TODO para cada story e invoca um subagente por story usando a ferramenta `runSubagent`.
 
+Para cada story marcada com `ready-for-dev`, o subagente designado deve ser instruído a criar um worktree separado a partir do branch atual. O subagente então segue as instruções detalhadas para desenvolver a story, garantindo que cada uma seja tratada de forma isolada e paralela.
+
 Ao final, agrega as respostas dos subagentes e gera um relatório resumido listando o que cada subagente executou (incluindo nome e caminho dos arquivos gerados).
 
 Com o feedback dos subagentes, o coordenador atualiza o status das stories no arquivo `sprint-status.yaml`
@@ -30,6 +32,7 @@ Com o feedback dos subagentes, o coordenador atualiza o status das stories no ar
       <step n="4">Display numbered menu with the two options described in this file and WAIT for user input (number or command)</step>
       <step n="5">On user input: Number → process menu item[n] | Text → case-insensitive substring match | Multiple matches → ask user to clarify | No match → show "Not recognized"</step>
       <step n="6">When processing an option, follow the precise flow defined in the menu-handlers below</step>
+      <step n="7">Store the current branch name as {original_branch} for later use by subagents</step>
   <menu-handlers>
       <handlers>
           <handler type="process-epic">
@@ -39,8 +42,10 @@ Com o feedback dos subagentes, o coordenador atualiza o status das stories no ar
             3. Collect stories under that epic where `status: ready-for-dev`.
             4. For each ready-for-dev story, create a todo item using the `manage_todo_list` tool (see TODO format below) to track execution.
             5. For each ready-for-dev story, invoke a subagent using the Copilot `runSubagent` tool with the following payload:
-               - `prompt`: Instructions below (read workflow and run it)
-               - `description`: "create-dev-subagent"
+                - `original_branch`: pass the branch name stored as {original_branch} at activation step 7
+                - `worktree`: `dev-story-<story-name>` (create a separate worktree for each story)
+                - `prompt`: Instructions below (read workflow and run it)
+                - `description`: "dev-subagent-<story-name>"
             6. Collect responses from all subagents and build a short report listing for each story: story id/name, subagent result summary, and any generated file paths reported by the subagent.
             7. Update {project-root}/docs/implementation-artifacts/sprint-status.yaml based on each subagent response. DO NOT CHANGE ANY OTHER FILE.
             8. Return the report to the user.
@@ -51,7 +56,11 @@ Com o feedback dos subagentes, o coordenador atualiza o status das stories no ar
             1. Load and parse {project-root}/docs/implementation-artifacts/sprint-status.yaml as YAML
             2. Collect all stories across all epics where `status: ready-for-dev`.
             3. For each ready-for-dev story, create a todo item using the `manage_todo_list` tool.
-            4. For each ready-for-dev story, invoke a subagent using the Copilot `runSubagent` tool with the same payload described above.
+            4. For each ready-for-dev story, invoke a subagent using the Copilot `runSubagent` tool with the following payload:
+                - `original_branch`: pass the branch name stored as {original_branch} at activation step 7
+                - `worktree`: `dev-story-<story-name>` (create a separate worktree for each story)
+                - `prompt`: Instructions below (read workflow and run it)
+                - `description`: "dev-subagent-<story-name>"
             5. Collect responses from all subagents and build a short report listing for each story: story id/name, subagent result summary, and any generated file paths reported by the subagent.
             6. Update {project-root}/docs/implementation-artifacts/sprint-status.yaml based on each subagent response. DO NOT CHANGE ANY OTHER FILE.
             7. Return the report to the user.
@@ -83,7 +92,7 @@ When invoking `runSubagent`, provide the following `prompt` (pass the whole text
 
 1) Read completely the file {project-root}/_bmad/bmm/agents/dev.md and load the Dev Agent persona and activation instructions as described in that file. Ignore <step n="12">.
 2) Read completely the file {project-root}/_bmad/bmm/workflows/4-implementation/dev-story/workflow.yaml and execute it following workflow rules in {project-root}/_bmad/core/tasks/workflow.xml.
-3) Before executing the workflow or modifying any file, create a new branch named `dev-story-<story-name>` and switch to it. This will be your work branch.
+3) Before executing the workflow or modifying any file, create a new worktree named `dev-story-<story-name>` based on the {original_branch} and switch to it. This will be your worktree. Make sure your work do not affect other worktrees or the original branch.
 5) Execute the workflow steps, developing the assigned story as per the acceptance criteria and tasks defined in the story file (located at `docs/implementation-artifacts/<story-file>.md`).
 6) If you encounter any blockers or need clarification on the story, report back to the coordinator immediately with a clear description of the issue and await instructions before proceeding.
 7) Upon successful completion of the story, ensure all generated files are committed to the branch and push to remote.
