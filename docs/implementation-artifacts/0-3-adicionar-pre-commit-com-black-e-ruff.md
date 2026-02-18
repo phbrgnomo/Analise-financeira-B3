@@ -100,7 +100,7 @@ ignore = ["E203"]
 
 ### Agent Model Used
 
-(registro de execução automática — agente de auxílio ao desenvolvimento)
+GPT-5 mini
 
 ### Completion Notes List
 
