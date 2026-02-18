@@ -1,0 +1,65 @@
+#!/bin/sh
+# Hook wrapper que executa pre-commit e re-stageia arquivos modificados
+# Copie este arquivo para .git/hooks/pre-commit ou use o instalador abaixo
+
+set -e
+
+MAX_RUNS=3
+COUNT=0
+
+# Detecta uma forma de invocar pre-commit: binário, poetry run, ou python -m pre_commit
+detect_pre_commit_cmd() {
+  if command -v pre-commit >/dev/null 2>&1; then
+    echo "pre-commit"
+    return 0
+  fi
+
+  if command -v poetry >/dev/null 2>&1; then
+    echo "poetry run pre-commit"
+    return 0
+  fi
+
+  if command -v python3 >/dev/null 2>&1; then
+    echo "python3 -m pre_commit"
+    return 0
+  fi
+
+  if command -v python >/dev/null 2>&1; then
+    echo "python -m pre_commit"
+    return 0
+  fi
+
+  return 1
+}
+
+PCMD=$(detect_pre_commit_cmd) || {
+  echo "pre-commit não encontrado: instale com 'poetry add --dev pre-commit' ou 'pip install pre-commit' ou 'pipx install pre-commit'" >&2
+  exit 1
+}
+
+# Execução segura: roda pre-commit, se modificar arquivos faz um `git add -A` e roda novamente apenas uma vez.
+# Isso evita loops onde a execução continua modificando/estagiando indefinidamente.
+
+# 1st run
+eval "$PCMD run --hook-stage commit"
+STATUS=$?
+
+# Se nenhum arquivo modificado, sai com o status
+if [ -z "$(git status --porcelain)" ]; then
+  exit $STATUS
+fi
+
+# Re-stage alterações geradas pelos hooks e roda **uma segunda vez**
+git add -A
+sleep 0.05
+
+eval "$PCMD run --hook-stage commit"
+STATUS2=$?
+
+if [ -z "$(git status --porcelain)" ]; then
+  exit $STATUS2
+fi
+
+git add -A
+echo "pre-commit modificou arquivos após segunda execução; alterações re-stageadas automaticamente. Commit continuará." >&2
+exit 0
