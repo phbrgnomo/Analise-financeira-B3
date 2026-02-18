@@ -396,4 +396,3 @@ API_KEY = os.getenv('TWELVEDATA_API_KEY')
 - Exemplo de comando: `pytest -q` em CI (GitHub Actions) para validar mudanças antes do merge.
 
 ---
-

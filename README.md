@@ -31,3 +31,39 @@ Preencha os valores em `.env`. Variáveis importantes:
 - `LOG_LEVEL` — `INFO` por padrão
 
 Nunca comite seu arquivo `.env` com segredos reais.
+
+## Quickstart
+
+Instalação (recomenda-se usar `poetry`):
+
+```bash
+poetry install
+```
+
+Executar a CLI de ajuda:
+
+```bash
+poetry run main --help
+# ou, sem poetry (ambiente já configurado):
+python -m src.main --help
+```
+
+Rodar testes:
+
+```bash
+poetry run pytest -q
+```
+
+Habilitar `pre-commit` hooks (já configurado no projeto):
+
+```bash
+poetry run pre-commit install
+poetry run pre-commit run --all-files
+```
+
+Local de dados e snapshots:
+
+- `dados/` — CSVs por ativo (gerados por `src.main`)
+- `snapshots/` — snapshots gerados pela pipeline
+
+Documentação adicional no diretório `docs/`.
