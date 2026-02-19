@@ -1,1 +1,72 @@
-{"schema_version": 1, "columns": [{"name": "ticker", "type": "string", "nullable": false, "semantic": "Símbolo do ativo (ex: PETR4.SA)"}, {"name": "date", "type": "date", "nullable": false, "semantic": "Data da cotação no formato YYYY-MM-DD"}, {"name": "open", "type": "float", "nullable": true, "semantic": "Preço de abertura"}, {"name": "high", "type": "float", "nullable": true, "semantic": "Preço máximo"}, {"name": "low", "type": "float", "nullable": true, "semantic": "Preço mínimo"}, {"name": "close", "type": "float", "nullable": true, "semantic": "Preço de fechamento"}, {"name": "adj_close", "type": "float", "nullable": true, "semantic": "Preço ajustado"}, {"name": "volume", "type": "int", "nullable": true, "semantic": "Volume negociado"}, {"name": "source", "type": "string", "nullable": false, "semantic": "Fonte (ex: yahoo)"}, {"name": "fetched_at", "type": "datetime", "nullable": false, "semantic": "UTC ISO8601 timestamp"}, {"name": "raw_checksum", "type": "string", "nullable": false, "semantic": "SHA256 hex of raw payload"}]}
+{
+  "schema_version": 1,
+  "columns":
+    [
+      {
+        "name": "ticker",
+        "type": "string",
+        "nullable": false,
+        "semantic": "Símbolo do ativo (ex: PETR4.SA)",
+      },
+      {
+        "name": "date",
+        "type": "date",
+        "nullable": false,
+        "semantic": "Data da cotação no formato YYYY-MM-DD",
+      },
+      {
+        "name": "open",
+        "type": "float",
+        "nullable": true,
+        "semantic": "Preço de abertura",
+      },
+      {
+        "name": "high",
+        "type": "float",
+        "nullable": true,
+        "semantic": "Preço máximo",
+      },
+      {
+        "name": "low",
+        "type": "float",
+        "nullable": true,
+        "semantic": "Preço mínimo",
+      },
+      {
+        "name": "close",
+        "type": "float",
+        "nullable": true,
+        "semantic": "Preço de fechamento",
+      },
+      {
+        "name": "adj_close",
+        "type": "float",
+        "nullable": true,
+        "semantic": "Preço ajustado",
+      },
+      {
+        "name": "volume",
+        "type": "int",
+        "nullable": true,
+        "semantic": "Volume negociado",
+      },
+      {
+        "name": "source",
+        "type": "string",
+        "nullable": false,
+        "semantic": "Fonte (ex: yahoo)",
+      },
+      {
+        "name": "fetched_at",
+        "type": "datetime",
+        "nullable": false,
+        "semantic": "UTC ISO8601 timestamp",
+      },
+      {
+        "name": "raw_checksum",
+        "type": "string",
+        "nullable": false,
+        "semantic": "SHA256 hex of raw payload",
+      },
+    ],
+}
