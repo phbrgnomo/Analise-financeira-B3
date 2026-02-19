@@ -1,0 +1,135 @@
+#!/usr/bin/env python3
+"""
+Puxa uma amostra de um ticker do Yahoo (via pandas_datareader) e mapeia para
+o esquema canônico:
+(ticker,date,open,high,low,close,adj_close,volume,source,fetched_at,raw_checksum)
+Salva um CSV em dados/examples.
+
+Uso:
+  python scripts/pull_sample.py PETR4.SA --days 5
+
+Observações:
+- Requer pandas e pandas_datareader instalados no ambiente (poetry install).
+- Se a importação falhar, a mensagem explicará como resolver.
+"""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import sys
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+
+try:
+    import pandas as pd
+    from pandas_datareader import data as web
+except Exception as exc:  # pragma: no cover - runtime dependency
+    print("Erro: pandas e pandas_datareader são necessários.", file=sys.stderr)
+    print("Instale via 'poetry install'. Detalhe:", exc, file=sys.stderr)
+    sys.exit(2)
+
+
+def fetch_yahoo(ticker: str, days: int = 5) -> pd.DataFrame:
+    """Busca dados históricos do Yahoo para o ticker nos últimos `days` dias."""
+    end = datetime.utcnow().date()
+    start = end - timedelta(days=days)
+    df = web.DataReader(ticker, "yahoo", start, end)
+    # Garantir coluna Date disponível
+    if "Date" not in df.columns:
+        df = df.reset_index()
+    return df
+
+
+def to_canonical(df: pd.DataFrame, ticker: str) -> tuple[pd.DataFrame, str]:
+    """Converte o DataFrame do provedor para o esquema canônico.
+
+    Retorna (df, raw_checksum).
+    raw_checksum é o SHA256 do CSV bruto do provedor (sem índice).
+    """
+    mapping = {
+        "Date": "date",
+        "Open": "open",
+        "High": "high",
+        "Low": "low",
+        "Close": "close",
+        "Adj Close": "adj_close",
+        "Volume": "volume",
+    }
+
+    # Preparar saída
+    out = pd.DataFrame()
+    for src, dst in mapping.items():
+        if src in df.columns:
+            out[dst] = df[src]
+        else:
+            out[dst] = None
+
+    out["ticker"] = ticker
+    out["source"] = "yahoo"
+    now_utc = datetime.utcnow().replace(tzinfo=timezone.utc)
+    fetched_at = now_utc.strftime("%Y-%m-%dT%H:%M:%SZ")
+    out["fetched_at"] = fetched_at
+
+    # Normalizar date
+    try:
+        out["date"] = pd.to_datetime(out["date"]).dt.strftime("%Y-%m-%d")
+    except Exception:
+        out["date"] = out["date"].astype(str)
+
+    # Calcular checksum do CSV bruto do provedor
+    raw_csv = df.to_csv(index=False).encode("utf-8")
+    raw_checksum = hashlib.sha256(raw_csv).hexdigest()
+    out["raw_checksum"] = raw_checksum
+
+    # Reordenar colunas para o canonical schema
+    cols = [
+        "ticker",
+        "date",
+        "open",
+        "high",
+        "low",
+        "close",
+        "adj_close",
+        "volume",
+        "source",
+        "fetched_at",
+        "raw_checksum",
+    ]
+    out = out[cols]
+    return out, raw_checksum
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Puxa amostra do Yahoo e salva CSV.")
+    parser.add_argument("ticker", help="Ticker (ex.: PETR4.SA)")
+    parser.add_argument(
+        "--days",
+        type=int,
+        default=5,
+        help="Número de dias (default: 5)",
+    )
+    parser.add_argument(
+        "--outfile",
+        type=str,
+        default=None,
+        help="Caminho do CSV de saída (padrão: dados/examples/{ticker}_sample.csv)",
+    )
+    args = parser.parse_args()
+
+    ticker = args.ticker
+    df = fetch_yahoo(ticker, days=args.days)
+
+    canonical, raw_checksum = to_canonical(df, ticker)
+    default_name = f"{ticker}_sample.csv"
+    out_dir = Path("dados") / "examples"
+    out_path = Path(args.outfile) if args.outfile else out_dir / default_name
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    canonical.to_csv(out_path, index=False)
+
+    print(f"Amostra salva em: {out_path}")
+    print(f"raw_checksum: {raw_checksum}")
+
+
+if __name__ == "__main__":
+    main()
