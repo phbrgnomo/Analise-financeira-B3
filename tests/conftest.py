@@ -1,6 +1,8 @@
+import os
+
 import pytest
 
-from tests.fixture_utils import create_prices_db_from_csv
+from tests.fixture_utils import create_prices_db_from_csv, get_or_make_snapshot_dir
 
 
 @pytest.fixture(scope="function")
@@ -40,9 +42,6 @@ def snapshot_dir(tmp_path_factory) -> str:
     esse caminho e garantimos que ele exista; caso contrário, criamos um
     diretório temporário isolado.
     """
-    import os
-
-    from tests.fixture_utils import get_or_make_snapshot_dir
 
     env_path = os.environ.get("SNAPSHOT_DIR")
     return get_or_make_snapshot_dir(env_path, tmp_path_factory)

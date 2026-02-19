@@ -169,6 +169,7 @@ jobs:
     strategy:
       matrix:
         python-version: [3.14]
+    # Do not use ${{ runner }} in job-level expressions (not available there).
 
     steps:
       - uses: actions/checkout@v4
@@ -180,9 +181,6 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Prepare SNAPSHOT_DIR
-        run: |
-          echo "SNAPSHOT_DIR=$RUNNER_TEMP/snapshots_test" >> $GITHUB_ENV
 
       - name: Install Poetry and dependencies
         run: |
@@ -193,11 +191,16 @@ jobs:
 
       - name: Run integration tests (mocked quickstart)
         run: |
-          mkdir -p "$SNAPSHOT_DIR"
+          mkdir -p "$RUNNER_TEMP/snapshots_test"
           poetry run pytest -q tests/integration -k quickstart_mocked --maxfail=1
+
+      - name: Expose snapshot dir as step output
+        id: snapshot_dir
+        run: |
+          echo "snapshot_dir=$RUNNER_TEMP/snapshots_test" >> $GITHUB_OUTPUT
 
       - name: Upload snapshots artifacts (always)
         uses: actions/upload-artifact@v4
         with:
           name: snapshots
-          path: ${{ env.SNAPSHOT_DIR }}/**
+          path: ${{ steps.snapshot_dir.outputs.snapshot_dir }}

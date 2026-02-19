@@ -3,10 +3,7 @@ from datetime import date, timedelta
 
 import typer
 
-# The line `app = typer.Typer()` creates an instance of `Typer` from the Typer
-# library. This instance is used to define and organize command-line interfaces
-# (CLIs) for the application. By using `Typer` you can define CLI commands and
-# options in a simple and type-safe way.
+# Instância principal da aplicação de linha de comando usando Typer
 app = typer.Typer()
 
 d_atual = date.today()

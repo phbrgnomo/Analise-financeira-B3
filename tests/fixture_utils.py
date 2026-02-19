@@ -4,28 +4,39 @@ import sqlite3
 
 
 def parse_fixture_csv(filename: str):
-    """Parse a fixture CSV into a list of tuples ready for DB insert.
+    """
+    The function `parse_fixture_csv` reads a fixture CSV file and returns a list of
+    tuples containing data for database insertion.
 
-    Returns tuples in the same order used by the `prices` table.
+    :param filename: The `parse_fixture_csv` function takes a `filename` parameter,
+    which is a string representing the name of the CSV file to be parsed. The function
+    reads the CSV file located in the "fixtures" directory relative to the current
+    script's location.
+    :type filename: str
+    :return: The function `parse_fixture_csv` returns a list of tuples containing data
+    parsed from a fixture CSV file. Each tuple represents a row of data in the same
+    order as the columns in the `prices` table. The tuples contain information such as
+    ticker symbol, date, open price, high price, low price, close price, adjusted close
+    price, volume, and data source for each row in the CSV.
     """
     csv_path = os.path.join(os.path.dirname(__file__), "fixtures", filename)
     rows = []
     with open(csv_path, newline="") as f:
         reader = csv.DictReader(f)
-        for r in reader:
-            rows.append(
-                (
-                    r.get("ticker"),
-                    r.get("date"),
-                    float(r.get("open") or 0),
-                    float(r.get("high") or 0),
-                    float(r.get("low") or 0),
-                    float(r.get("close") or 0),
-                    float(r.get("adj_close") or 0),
-                    int(r.get("volume") or 0),
-                    r.get("source"),
-                )
+        rows.extend(
+            (
+                r.get("ticker"),
+                r.get("date"),
+                float(r.get("open") or 0),
+                float(r.get("high") or 0),
+                float(r.get("low") or 0),
+                float(r.get("close") or 0),
+                float(r.get("adj_close") or 0),
+                int(r.get("volume") or 0),
+                r.get("source"),
             )
+            for r in reader
+        )
     return rows
 
 
@@ -74,8 +85,6 @@ def get_or_make_snapshot_dir(env_path: str | None, tmp_path_factory) -> str:
     - Caso contrário, usa ``tmp_path_factory`` para criar um diretório temporário
         e retorna seu caminho como string.
     """
-    import os
-
     if env_path:
         os.makedirs(env_path, exist_ok=True)
         return os.path.abspath(env_path)
