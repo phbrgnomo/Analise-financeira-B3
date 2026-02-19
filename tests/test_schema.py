@@ -6,7 +6,7 @@ from pathlib import Path
 
 def test_example_matches_schema():
     root = Path(__file__).resolve().parent.parent
-    schema_path = root / 'docs' / 'schema.yaml'
+    schema_path = root / 'docs' / 'schema.json'
     example_path = root / 'dados' / 'samples' / 'ticker_example.csv'
 
     schema = json.loads(schema_path.read_text())

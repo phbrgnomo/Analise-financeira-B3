@@ -20,7 +20,7 @@ so that downstream consumers (notebooks, metrics) have a stable contract.
 - [x] Create `docs/schema.yaml` with canonical column definitions and `schema_version: 1`.
 - [x] Add `docs/schema.md` describing the schema, versioning policy and migration guidance.
 - [x] Add example CSV `dados/examples/ticker_example.csv` with representative rows and header.
-- [x] Add unit test `tests/test_schema.py` to validate `dados/samples/ticker_example.csv` against `docs/schema.yaml` using `pandera` or lightweight validator.
+- [x] Add unit test `tests/test_schema.py` to validate `dados/samples/ticker_example.csv` against `docs/schema.json` using `pandera` or lightweight validator.
 - [x] Reference schema in `docs/implementation-artifacts/1-1-implementar-interface-de-adapter-e-adaptador-yfinance-minimo.md` and adapter mappings (adicionado referência em 1-1).
 - [x] Update `docs/implementation-artifacts/sprint-status.yaml` status for this story to `ready-for-dev` (persisted).
 - [x] Documentar o que foi implantado nessa etapa em `docs/sprint-reports` conforme definido no FR28 (`docs/planning-artifacts/prd.md`) (arquivo docs/sprint-reports/1-11-implantacao.md adicionado).
