@@ -70,4 +70,30 @@ GPT-5 mini
 
 <!-- end file -->
 
+### Change Log
+
+- 2026-02-19 17:32:34 -0300 — 514f81b — phbr — story 1-11: mark tasks done, add schema/docs/examples/tests (fix lint) — adiciona schema (docs/schema.yaml), docs (docs/schema.md), exemplo CSV (dados/examples/ticker_example.csv) e teste (tests/test_schema.py).
+
+### Tests Executed
+
+- Comando: poetry run pytest -q tests/test_schema.py
+- Resultado: 1 teste executado — passou ('.' [100%]).
+
+### Implementation Summary
+
+- Criado o esquema canônico em `docs/schema.yaml` com `schema_version: 1` e notas semânticas para cada coluna.
+- Adicionada documentação em `docs/schema.md` explicando campos, a política de versionamento e orientações de migração (minor vs breaking).
+- Incluído exemplo CSV em `dados/examples/ticker_example.csv` com linhas representativas e colunas de metadados (`fetched_at`, `raw_checksum`).
+- Adicionado teste unitário `tests/test_schema.py` que valida a ordem das colunas e formatos essenciais (date, fetched_at, raw_checksum).
+
+### Pendências
+
+- Referenciar o schema nos artefatos de adapter/mapping: `docs/implementation-artifacts/1-1-implementar-interface-de-adapter-e-adaptador-yfinance-minimo.md` (pendência técnica).
+- Atualizar `docs/implementation-artifacts/sprint-status.yaml` (não encontrado no repositório) e registrar o deployment em `docs/sprint-reports` conforme FR28.
+
+### Recomendações
+
+- Incluir validação de DataFrame (ex.: `pandera`) ou validador YAML-driven no pipeline e na CI para validar snapshots antes de publicação.
+- Adicionar um passo de verificação de schema na CI que falhe se snapshots de produção divergirem do `docs/schema.yaml`.
+
 Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/113
