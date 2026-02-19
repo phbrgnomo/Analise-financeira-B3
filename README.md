@@ -84,4 +84,39 @@ Local de dados e snapshots:
 - `dados/` — CSVs por ativo (gerados por `src.main`)
 - `snapshots/` — snapshots gerados pela pipeline
 
+### Validando snapshots localmente
+
+- Gerar snapshot usando a CLI em modo sample (sem rede):
+
+```bash
+export SNAPSHOT_DIR=./snapshots
+poetry run main --no-network --ticker PETR4.SA
+```
+
+- Verificar o arquivo e o checksum gerado:
+
+```bash
+ls -l snapshots
+sha256sum snapshots/PETR4_snapshot.csv
+cat snapshots/PETR4_snapshot.csv.checksum
+```
+
+- Gerar manualmente um snapshot de teste (alternativa sem depender da CLI):
+
+```bash
+python - <<'PY'
+import csv, os
+from src.utils.checksums import sha256_file
+os.makedirs('snapshots', exist_ok=True)
+p='snapshots/PETR4_snapshot.csv'
+with open(p,'w',newline='') as f:
+	writer=csv.writer(f)
+	writer.writerow(['ticker','date','open','high','low','close','adj_close','volume'])
+	writer.writerow(['PETR4','2024-01-01','10','10.2','9.8','10.1','10.1','1000'])
+ch=sha256_file(p)
+open(p+'.checksum','w').write(ch)
+print('snapshot',p,'checksum',ch)
+PY
+```
+
 Documentação adicional no diretório `docs/`.
