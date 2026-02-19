@@ -1,6 +1,6 @@
 # Story 0.2: Criar README.md Quickstart
 
-Status: backlog
+Status: completed
 
 ## Story
 

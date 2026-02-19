@@ -5,16 +5,16 @@ tracking_system: file-system
 story_location: /home/phbr/Projects/01-owned/Analise-financeira-B3/docs/implementation-artifacts
 
 development_status:
-  epic-0: in-progress
+  epic-0: completed
   0-1-inicializar-pyproject-toml-e-dependencias-minimas: completed
-  0-2-criar-readme-md-quickstart: backlog
+  0-2-criar-readme-md-quickstart: completed
   0-3-adicionar-pre-commit-com-black-e-ruff: completed
   0-4-criar-skeleton-de-ci-github-workflows-ci-yml: completed
   0-5-adicionar-fixtures-de-teste-e-exemplo-de-dados-amostra: completed
   0-6-criar-env-example-e-instrucoes-de-configuracao-local: completed
   0-7-teste-de-integracao-quickstart-mocked-e-passo-de-ci-para-validacao-de-checksum: completed
   0-8-playbooks-quickstart-e-ux-minimal-docs-playbooks-quickstart-ticker-md-docs-playbooks-ux-md: completed
-  epic-0-retrospective: optional
+  epic-0-retrospective: completed
 
   epic-1: in-progress
   1-1-implementar-interface-de-adapter-e-adaptador-yfinance-minimo: ready-for-dev

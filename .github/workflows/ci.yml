@@ -49,10 +49,6 @@ jobs:
         run: |
           poetry run pre-commit run --all-files --show-diff-on-failure
 
-      - name: Black check
-        run: |
-          poetry run black --check .
-
       - name: Ruff check
         run: |
           poetry run ruff check . --show-files
