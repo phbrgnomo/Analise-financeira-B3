@@ -1,6 +1,6 @@
 # Story 0.8: playbooks-quickstart-e-ux-minimal-docs-playbooks-quickstart-ticker-md-docs-playbooks-ux-md
 
-Status: review
+Status: completed
 
 ## Story
 

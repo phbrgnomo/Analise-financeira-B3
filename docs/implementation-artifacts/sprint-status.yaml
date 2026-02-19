@@ -13,7 +13,7 @@ development_status:
   0-5-adicionar-fixtures-de-teste-e-exemplo-de-dados-amostra: completed
   0-6-criar-env-example-e-instrucoes-de-configuracao-local: completed
   0-7-teste-de-integracao-quickstart-mocked-e-passo-de-ci-para-validacao-de-checksum: completed
-  0-8-playbooks-quickstart-e-ux-minimal-docs-playbooks-quickstart-ticker-md-docs-playbooks-ux-md: review
+  0-8-playbooks-quickstart-e-ux-minimal-docs-playbooks-quickstart-ticker-md-docs-playbooks-ux-md: completed
   epic-0-retrospective: optional
 
   epic-1: in-progress

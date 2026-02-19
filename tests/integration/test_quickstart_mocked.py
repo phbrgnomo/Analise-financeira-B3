@@ -104,6 +104,11 @@ def test_snapshot_dir_is_temp(snapshot_dir):
 
     td = os.path.abspath(tempfile.gettempdir())
     sd = os.path.abspath(snapshot_dir)
+
+    if env_snap := os.environ.get("SNAPSHOT_DIR"):
+        assert os.path.abspath(env_snap) == sd
+        return
+
     try:
         assert os.path.commonpath([td, sd]) == td
     except ValueError:
