@@ -23,18 +23,41 @@ from pathlib import Path
 
 try:
     import pandas as pd
-    from pandas_datareader import data as web
 except Exception as exc:  # pragma: no cover - runtime dependency
-    print("Erro: pandas e pandas_datareader são necessários.", file=sys.stderr)
+    print("Erro: pandas é necessário.", file=sys.stderr)
     print("Instale via 'poetry install'. Detalhe:", exc, file=sys.stderr)
     sys.exit(2)
 
 
 def fetch_yahoo(ticker: str, days: int = 5) -> pd.DataFrame:
-    """Busca dados históricos do Yahoo para o ticker nos últimos `days` dias."""
+    """Busca dados históricos do Yahoo para o ticker nos últimos `days` dias.
+
+    Tenta usar yfinance; se não disponível, faz fallback para
+    pandas_datareader.
+    """
     end = datetime.utcnow().date()
     start = end - timedelta(days=days)
-    df = web.DataReader(ticker, "yahoo", start, end)
+
+    # Tentar yfinance primeiro (import local)
+    try:
+        import yfinance as yf  # type: ignore
+
+        df = yf.download(ticker, start=start, end=end)
+    except Exception as yf_exc:
+        # Fallback para pandas_datareader
+        try:
+            from pandas_datareader import data as web  # type: ignore
+
+            df = web.DataReader(ticker, "yahoo", start, end)
+        except Exception as pdr_exc:
+            print(
+                "Erro: não foi possível obter dados via yfinance nem pandas_datareader",
+                file=sys.stderr,
+            )
+            print("yfinance erro:", yf_exc, file=sys.stderr)
+            print("pandas_datareader erro:", pdr_exc, file=sys.stderr)
+            sys.exit(2)
+
     # Garantir coluna Date disponível
     if "Date" not in df.columns:
         df = df.reset_index()
