@@ -61,6 +61,7 @@ so that a pipeline de ingest consiga obter preços para um ticker a partir de um
 
 - Fonte primária: docs/planning-artifacts/epics.md (Epic 1 — Story 1.1)
 - Requisitos arquiteturais: docs/planning-artifacts/architecture.md
+- Esquema canônico: `docs/schema.yaml` — adapters devem mapear colunas do provedor para o esquema canônico (ver `docs/schema.md`).
 
 ## Dev Agent Record
 

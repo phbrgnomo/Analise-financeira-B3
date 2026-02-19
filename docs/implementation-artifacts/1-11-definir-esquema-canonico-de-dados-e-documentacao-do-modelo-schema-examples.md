@@ -21,9 +21,9 @@ so that downstream consumers (notebooks, metrics) have a stable contract.
 - [x] Add `docs/schema.md` describing the schema, versioning policy and migration guidance.
 - [x] Add example CSV `dados/examples/ticker_example.csv` with representative rows and header.
 - [x] Add unit test `tests/test_schema.py` to validate `dados/examples/ticker_example.csv` against `docs/schema.yaml` using `pandera` or lightweight validator.
-- [ ] Reference schema in `docs/implementation-artifacts/1-1-implementar-interface-de-adapter-e-adaptador-yfinance-minimo.md` and adapter mappings.
-- [ ] Update `docs/implementation-artifacts/sprint-status.yaml` status for this story to `ready-for-dev` (persisted).
-- [ ] Documentar o que foi implantado nessa etapa em `docs/sprint-reports` conforme definido no FR28 (`docs/planning-artifacts/prd.md`)
+- [x] Reference schema in `docs/implementation-artifacts/1-1-implementar-interface-de-adapter-e-adaptador-yfinance-minimo.md` and adapter mappings (adicionado referência em 1-1).
+- [x] Update `docs/implementation-artifacts/sprint-status.yaml` status for this story to `ready-for-dev` (persisted).
+- [x] Documentar o que foi implantado nessa etapa em `docs/sprint-reports` conforme definido no FR28 (`docs/planning-artifacts/prd.md`) (arquivo docs/sprint-reports/1-11-implantacao.md adicionado).
 
 ## Dev Notes
 
@@ -59,6 +59,8 @@ GPT-5 mini
 
 - Created canonical schema and example artifacts; updated sprint status.
 - Implemented artifacts: docs/schema.yaml, docs/schema.md, dados/examples/ticker_example.csv, tests/test_schema.py; added unit test validating schema vs example CSV (tests/test_schema.py). New test executed locally and passed.
+- Adicionada referência ao schema em `docs/implementation-artifacts/1-1-implementar-interface-de-adapter-e-adaptador-yfinance-minimo.md`.
+- Criado `docs/implementation-artifacts/sprint-status.yaml` e `docs/sprint-reports/1-11-implantacao.md` documentando a implantação.
 
 
 ### File List
@@ -67,6 +69,9 @@ GPT-5 mini
 - `docs/schema.md` (novo)
 - `dados/examples/ticker_example.csv` (novo)
 - `tests/test_schema.py` (novo)
+- `docs/implementation-artifacts/sprint-status.yaml` (novo)
+- `docs/sprint-reports/1-11-implantacao.md` (novo)
+- `docs/implementation-artifacts/1-1-implementar-interface-de-adapter-e-adaptador-yfinance-minimo.md` (modificado)
 
 <!-- end file -->
 
