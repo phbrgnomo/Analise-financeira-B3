@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 """
-Puxa uma amostra de um ticker do Yahoo (via pandas_datareader) e mapeia para
+Puxa uma amostra de um ticker do Yahoo (via yfinance) e mapeia para
 o esquema canônico:
 (ticker,date,open,high,low,close,adj_close,volume,source,fetched_at,raw_checksum)
-Salva um CSV em dados/examples.
+Salva um CSV em dados/samples.
 
 Uso:
   python scripts/pull_sample.py PETR4.SA --days 5
 
 Observações:
-- Requer pandas e pandas_datareader instalados no ambiente (poetry install).
+- Requer pandas e yfinance instalados no ambiente (poetry install).
 - Se a importação falhar, a mensagem explicará como resolver.
 """
 
@@ -32,11 +32,13 @@ except Exception as exc:  # pragma: no cover - runtime dependency
 def fetch_yahoo(ticker: str, days: int = 5) -> pd.DataFrame:
     """Busca dados históricos do Yahoo para o ticker nos últimos `days` dias.
 
-    Tenta usar yfinance; se não disponível, faz fallback para
-    pandas_datareader.
+    Usa `yfinance` como provider primário. OBS: `pandas_datareader` não é
+    suportado em Python 3.12 por causa da remoção de `distutils`; por isso
+    o projeto requer `yfinance` para integração com o Yahoo Finance.
     """
     end = datetime.now(timezone.utc).date()
     start = end - timedelta(days=days)
+    print(f"start:{start}, end:{end}, days:{days}")
 
     # Tentar yfinance primeiro (import local)
     try:
@@ -113,14 +115,14 @@ def main() -> None:
     parser.add_argument(
         "--days",
         type=int,
-        default=5,
-        help="Número de dias (default: 5)",
+        default=10,
+        help="Número de dias (default: 10)",
     )
     parser.add_argument(
         "--outfile",
         type=str,
         default=None,
-        help="Caminho do CSV de saída (padrão: dados/examples/{ticker}_sample.csv)",
+        help="Caminho do CSV de saída (padrão: dados/samples/{ticker}_sample.csv)",
     )
     args = parser.parse_args()
 
@@ -132,14 +134,10 @@ def main() -> None:
         print("Erro: não foi possível obter dados brutos (df is None)", file=sys.stderr)
         sys.exit(2)
 
-    out_dir = Path("dados") / "examples"
+    out_dir = Path("dados") / "samples"
     out_dir.mkdir(parents=True, exist_ok=True)
-    raw_pickle = out_dir / f"{ticker}_raw.pkl"
     raw_csv = out_dir / f"{ticker}_raw.csv"
-    try:
-        df.to_pickle(raw_pickle)
-    except Exception as exc:
-        print(f"Warning: não foi possível salvar pickle bruto: {exc}", file=sys.stderr)
+
     try:
         df.to_csv(raw_csv, index=False)
     except Exception as exc:
@@ -152,7 +150,6 @@ def main() -> None:
     canonical.to_csv(out_path, index=False)
 
     print(f"Amostra salva em: {out_path}")
-    print(f"Raw salvo em: {raw_csv} (CSV) e {raw_pickle} (pickle)")
     print(f"raw_checksum: {raw_checksum}")
 
 
