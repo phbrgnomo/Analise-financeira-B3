@@ -57,6 +57,11 @@ Rodar testes:
 poetry run pytest -q
 ```
 
+Playbooks úteis:
+
+- [Quickstart: ingest → persist → snapshot → notebook](docs/playbooks/quickstart-ticker.md)
+- [UX Playbook (mínimo)](docs/playbooks/ux.md)
+
 - CI Quick Reference
 
 - O workflow CI roda em pull requests para qualquer branch, e em pushes apenas nas branches protegidas `main`/`master`.
