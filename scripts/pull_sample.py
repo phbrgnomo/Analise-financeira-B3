@@ -44,19 +44,7 @@ def fetch_yahoo(ticker: str, days: int = 5) -> pd.DataFrame:
 
         df = yf.download(ticker, start=start, end=end)
     except Exception as yf_exc:
-        # Fallback para pandas_datareader
-        try:
-            from pandas_datareader import data as web  # type: ignore
-
-            df = web.DataReader(ticker, "yahoo", start, end)
-        except Exception as pdr_exc:
-            print(
-                "Erro: não foi possível obter dados via yfinance nem pandas_datareader",
-                file=sys.stderr,
-            )
-            print("yfinance erro:", yf_exc, file=sys.stderr)
-            print("pandas_datareader erro:", pdr_exc, file=sys.stderr)
-            sys.exit(2)
+        print("yfinance não disponível ou falhou:", yf_exc, file=sys.stderr)
 
     # Garantir coluna Date disponível
     if "Date" not in df.columns:
@@ -83,14 +71,10 @@ def to_canonical(df: pd.DataFrame, ticker: str) -> tuple[pd.DataFrame, str]:
     # Preparar saída
     out = pd.DataFrame()
     for src, dst in mapping.items():
-        if src in df.columns:
-            out[dst] = df[src]
-        else:
-            out[dst] = None
-
+        out[dst] = df[src] if src in df.columns else None
     out["ticker"] = ticker
     out["source"] = "yahoo"
-    now_utc = datetime.utcnow().replace(tzinfo=timezone.utc)
+    now_utc = datetime.now(timezone.utc).replace(tzinfo=timezone.utc)
     fetched_at = now_utc.strftime("%Y-%m-%dT%H:%M:%SZ")
     out["fetched_at"] = fetched_at
 
