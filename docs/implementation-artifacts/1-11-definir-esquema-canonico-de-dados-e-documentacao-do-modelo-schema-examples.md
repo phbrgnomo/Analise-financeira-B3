@@ -23,6 +23,7 @@ so that downstream consumers (notebooks, metrics) have a stable contract.
 - [ ] Add unit test `tests/test_schema.py` to validate `dados/examples/ticker_example.csv` against `docs/schema.yaml` using `pandera` or lightweight validator.
 - [ ] Reference schema in `docs/implementation-artifacts/1-1-implementar-interface-de-adapter-e-adaptador-yfinance-minimo.md` and adapter mappings.
 - [ ] Update `docs/implementation-artifacts/sprint-status.yaml` status for this story to `ready-for-dev` (persisted).
+- [ ] Documentar o que foi implantado nessa etapa em `docs/sprint-reports` conforme definido no FR28 (`docs/planning-artifacts/prd.md`)
 
 ## Dev Notes
 

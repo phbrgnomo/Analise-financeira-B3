@@ -20,7 +20,7 @@ def main() -> None:
         return
 
     checksum = sha256_file(sample)
-    checksum_file = sample.with_suffix(sample.suffix + ".checksum")
+    checksum_file = sample.with_suffix(f"{sample.suffix}.checksum")
     checksum_file.write_text(checksum)
 
     print(f"Arquivo: {sample}")

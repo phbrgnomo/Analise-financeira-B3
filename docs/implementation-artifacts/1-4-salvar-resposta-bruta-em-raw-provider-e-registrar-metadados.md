@@ -37,6 +37,7 @@ para que possamos auditar e reprocesar entradas brutas quando necessário.
 - [ ] Atualizar pipeline `pipeline.ingest` para chamar `save_raw_csv` antes de seguir para canonical mapper
 - [ ] Adicionar teste unitário `tests/test_save_raw.py` (fixture in-memory filesystem or tmpdir) que valida escrita, checksum e metadados
 - [ ] Documentar o padrão de caminhos e permissões em `README.md` e em `docs/playbooks/quickstart-ticker.md`
+- [ ] Documentar o que foi implantado nessa etapa em `docs/sprint-reports` conforme definido no FR28 (`docs/planning-artifacts/prd.md`)
 
 ## Dev Notes
 

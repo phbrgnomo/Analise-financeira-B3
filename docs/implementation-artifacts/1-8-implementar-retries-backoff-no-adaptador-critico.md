@@ -29,6 +29,7 @@
  - [ ] Task 4: Adicionar logs e métricas (preferência por formato JSON/structured)
  - [ ] Task 5: Escrever testes unitários e de integração com mocks
  - [ ] Task 6: Atualizar documentação do adaptador e exemplos de uso
+ - [ ] Documentar o que foi implantado nessa etapa em `docs/sprint-reports` conforme definido no FR28 (`docs/planning-artifacts/prd.md`)
 
  ## Dev Notes
 

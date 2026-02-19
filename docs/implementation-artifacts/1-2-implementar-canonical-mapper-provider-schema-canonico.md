@@ -28,6 +28,7 @@ so that downstream modules can rely on a consistent format for persistence and p
   - [ ] `raw_checksum` correctness for example payloads.
 - [ ] Document mapping examples in `docs/planning-artifacts/adapter-mappings.md` (yfinance → canonical example).
 - [ ] Add integration smoke test (mock provider) to verify canonical output shape used by DB layer.
+- [ ] Documentar o que foi implantado nessa etapa em `docs/sprint-reports` conforme definido no FR28 (`docs/planning-artifacts/prd.md`)
 
 ## Dev Notes
 

@@ -39,6 +39,7 @@ para que o processo de ingestão seja mais rápido, idempotente e evite reproces
 - [ ] Adicionar logs estruturados e métricas básicas (contadores processados)
 - [ ] Escrever testes unitários e integração para cenários principais
 - [ ] Atualizar documentação e exemplos de uso
+- [ ] Documentar o que foi implantado nessa etapa em `docs/sprint-reports` conforme definido no FR28 (`docs/planning-artifacts/prd.md`)
 
 ## Dev Notes
 

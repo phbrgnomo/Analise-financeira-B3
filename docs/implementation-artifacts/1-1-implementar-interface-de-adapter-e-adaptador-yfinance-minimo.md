@@ -25,10 +25,11 @@ so that a pipeline de ingest consiga obter preços para um ticker a partir de um
   - [ ] Implementar logging estruturado e retries simples (3 tentativas, backoff exponencial mínimo)
 - [ ] Escrever docstring e um pequeno README de uso em `docs/implementation-artifacts/1-1-implementar-interface-de-adapter-e-adaptador-yfinance-minimo.md#references`
 - [ ] Adicionar teste unitário mínimo em `tests/test_adapters.py` que injeta uma amostra (mock) e valida esquema de saída
+- [ ] Documentar o que foi implantado nessa etapa em `docs/sprint-reports` conforme definido no FR28 (`docs/planning-artifacts/prd.md`)
 
 ## Dev Notes
 
-- Linguagem/plataforma: Python 3.14 (seguir `pyproject.toml` do projeto).
+- Linguagem/plataforma: Python 3.12 (seguir `pyproject.toml` do projeto).
 - Bibliotecas recomendadas: `pandas`, `yfinance` (ou `pandas-datareader` com Yahoo fallback), `typing`, `pytest` para testes.
 - Arquitetura: separar `adapters/` (interfaces + providers) e `mappers/` (canonical mapping) conforme `docs/planning-artifacts/epics.md`.
 - Erros: criar `src/adapters/errors.py` com `AdapterError` (mensagem, code, original_exception) para padronizar tratamento.

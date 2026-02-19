@@ -29,6 +29,7 @@ so that only valid rows enter the canonical pipeline and invalid rows are tracea
 - [ ] Add CLI flag `--validation-tolerance` to `pipeline.ingest` (optional, falls back to env var)
 - [ ] Add unit/integration tests in `tests/` exercising validator behavior and thresholds
 - [ ] Document the validator usage and configuration in `docs/playbooks/quickstart-ticker.md` and `docs/phase-1-report.md`
+- [ ] Documentar o que foi implantado nessa etapa em `docs/sprint-reports` conforme definido no FR28 (`docs/planning-artifacts/prd.md`)
 
 ## Dev Notes
 

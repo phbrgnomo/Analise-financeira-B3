@@ -23,6 +23,7 @@ so that repeated ingests do not create duplicate records and the database remain
   - [ ] Gravar/atualizar `schema_version` na tabela `metadata` a cada alteração importante do esquema
   - [ ] Adicionar permissões recomendadas (documentar `chmod 600` para `dados/data.db`)
   - [ ] Escrever testes unitários usando SQLite in-memory que validem idempotência (inserir 2x → mesma contagem)
+- [ ] Documentar o que foi implantado nessa etapa em `docs/sprint-reports` conforme definido no FR28 (`docs/planning-artifacts/prd.md`)
 
 ## Dev Notes
 
