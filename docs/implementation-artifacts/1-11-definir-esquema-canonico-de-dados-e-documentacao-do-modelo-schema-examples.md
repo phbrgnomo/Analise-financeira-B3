@@ -11,15 +11,15 @@ so that downstream consumers (notebooks, metrics) have a stable contract.
 
 ## Acceptance Criteria
 
-- A `docs/schema.yaml` defines column names, types, nullable flags and semantic notes.
-- An example CSV `dados/examples/ticker_example.csv` is included and referenced by `docs/schema.md` explaining column meanings and versioning strategy.
+- A `docs/schema.json` defines column names, types, nullable flags and semantic notes.
+- An example CSV `dados/samples/ticker_example.csv` is included and referenced by `docs/schema.md` explaining column meanings and versioning strategy.
 - Migration notes for schema changes are documented (minor vs breaking changes) and versioned using `schema_version` in snapshot metadata.
 
 ## Tasks / Subtasks
 
-- [x] Create `docs/schema.yaml` with canonical column definitions and `schema_version: 1`.
+- [x] Create `docs/schema.json` with canonical column definitions and `schema_version: 1`.
 - [x] Add `docs/schema.md` describing the schema, versioning policy and migration guidance.
-- [x] Add example CSV `dados/examples/ticker_example.csv` with representative rows and header.
+- [x] Add example CSV `dados/samples/ticker_example.csv` with representative rows and header.
 - [x] Add unit test `tests/test_schema.py` to validate `dados/samples/ticker_example.csv` against `docs/schema.json` using `pandera` or lightweight validator.
 - [x] Reference schema in `docs/implementation-artifacts/1-1-implementar-interface-de-adapter-e-adaptador-yfinance-minimo.md` and adapter mappings (adicionado referência em 1-1).
 - [x] Update `docs/implementation-artifacts/sprint-status.yaml` status for this story to `ready-for-dev` (persisted).
@@ -30,19 +30,19 @@ so that downstream consumers (notebooks, metrics) have a stable contract.
 - Canonical columns (recommended): `ticker, date, open, high, low, close, adj_close, volume, source, fetched_at, raw_checksum`.
 - `date` should be ISO date (`YYYY-MM-DD`) stored as text in SQLite; `fetched_at` as UTC ISO8601 datetime.
 - `raw_checksum` is SHA256 hex of raw provider payload or CSV for auditability.
-- Use `schema_version` in snapshot metadata and in the header of `docs/schema.yaml` for migration tracking.
-- Validation: recommend `pandera` for DataFrame validation in the mapper stage; provide a simple YAML-driven validator for CI tests.
+- Use `schema_version` in snapshot metadata and in the header of `docs/schema.json` for migration tracking.
+- Validation: recommend `pandera` for DataFrame validation in the mapper stage; provide a simple JSON-driven validator for CI tests.
 
 ### File Structure Notes
 
-- `docs/schema.yaml` — canonical schema definition and semantic notes.
+- `docs/schema.json` — canonical schema definition and semantic notes.
 - `docs/schema.md` — human-friendly explanation, migration policy and examples.
-- `dados/examples/ticker_example.csv` — example CSV referenced by docs and tests.
+- `dados/samples/ticker_example.csv` — example CSV referenced by docs and tests.
 
 ### Testing Requirements
 
-- Unit tests to assert example CSV validates against `docs/schema.yaml`.
-- CI job should include a lightweight validation step that loads `docs/schema.yaml` and validates snapshots produced in tests.
+- Unit tests to assert example CSV validates against `docs/schema.json`.
+- CI job should include a lightweight validation step that loads `docs/schema.json` and validates snapshots produced in tests.
 
 ### References
 
@@ -65,9 +65,9 @@ GPT-5 mini
 
 ### File List
 
-- `docs/schema.yaml` (novo)
+- `docs/schema.json` (novo)
 - `docs/schema.md` (novo)
-- `dados/examples/ticker_example.csv` (novo)
+- `dados/samples/ticker_example.csv` (novo)
 - `tests/test_schema.py` (novo)
 - `docs/implementation-artifacts/sprint-status.yaml` (novo)
 - `docs/sprint-reports/1-11-implantacao.md` (novo)
@@ -77,7 +77,7 @@ GPT-5 mini
 
 ### Change Log
 
-- 2026-02-19 17:32:34 -0300 — 514f81b — phbr — story 1-11: mark tasks done, add schema/docs/examples/tests (fix lint) — adiciona schema (docs/schema.yaml), docs (docs/schema.md), exemplo CSV (dados/examples/ticker_example.csv) e teste (tests/test_schema.py).
+- 2026-02-19 17:32:34 -0300 — 514f81b — phbr — story 1-11: mark tasks done, add schema/docs/examples/tests (fix lint) — adiciona schema (docs/schema.json), docs (docs/schema.md), exemplo CSV (dados/samples/ticker_example.csv) e teste (tests/test_schema.py).
 
 ### Tests Executed
 
@@ -86,9 +86,9 @@ GPT-5 mini
 
 ### Implementation Summary
 
-- Criado o esquema canônico em `docs/schema.yaml` com `schema_version: 1` e notas semânticas para cada coluna.
+- Criado o esquema canônico em `docs/schema.json` com `schema_version: 1` e notas semânticas para cada coluna.
 - Adicionada documentação em `docs/schema.md` explicando campos, a política de versionamento e orientações de migração (minor vs breaking).
-- Incluído exemplo CSV em `dados/examples/ticker_example.csv` com linhas representativas e colunas de metadados (`fetched_at`, `raw_checksum`).
+- Incluído exemplo CSV em `dados/samples/ticker_example.csv` com linhas representativas e colunas de metadados (`fetched_at`, `raw_checksum`).
 - Adicionado teste unitário `tests/test_schema.py` que valida a ordem das colunas e formatos essenciais (date, fetched_at, raw_checksum).
 
 ### Pendências
@@ -98,7 +98,7 @@ GPT-5 mini
 
 ### Recomendações
 
-- Incluir validação de DataFrame (ex.: `pandera`) ou validador YAML-driven no pipeline e na CI para validar snapshots antes de publicação.
-- Adicionar um passo de verificação de schema na CI que falhe se snapshots de produção divergirem do `docs/schema.yaml`.
+- Incluir validação de DataFrame (ex.: `pandera`) ou validador JSON-driven no pipeline e na CI para validar snapshots antes de publicação.
+- Adicionar um passo de verificação de schema na CI que falhe se snapshots de produção divergirem do `docs/schema.json`.
 
 Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/113

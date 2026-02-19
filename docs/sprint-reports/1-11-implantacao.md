@@ -1,78 +1,62 @@
 # Implantação Story 1-11 — Definir esquema canônico de dados
 
-Visão geral
+Resumo da implantação
 
-Este documento descreve o que foi entregue na story 1-11, decisões de projeto relevantes, como validar e reproduzir os artefatos e recomendações para adoção em projetos futuros. Serve como referência técnica e operacional.
+- Story: 1-11 — Definir esquema canônico de dados e documentação do modelo (schema + examples)
+- Autor das mudanças: phbr
+- Commits principais: 514f81b, 76531bb
 
-Meta da story
+Commits principais (no histórico recente):
+- f2f14dd — feat: adicionar esquema canônico em formato JSON e atualizar testes de validação
+- 1000940 — fix: corrigir caminho do arquivo de exemplo no teste de validação do esquema
+- ec1ce91 — feat: substituir pandas_datareader por yfinance e atualizar documentação
 
-- Definir e documentar o esquema canônico de dados utilizado pelo projeto (columns, tipos, semantic), adicionar exemplos e garantir testes que validem a conformidade dos arquivos de amostra.
+O que foi implementado
 
-Autores e referências
+- Criado `docs/schema.json` com `schema_version: 1` e notas semânticas por coluna.
+- Adicionada documentação em `docs/schema.md` explicando campos, versionamento e migrações.
+- Inclusão de `dados/examples/ticker_example.csv` como exemplo referenciado pela documentação.
+- Adicionado teste unitário `tests/test_schema.py` que valida ordem das colunas e formatos essenciais (date, fetched_at, raw_checksum).
+- Adicionada referência ao esquema em `docs/implementation-artifacts/1-1-implementar-interface-de-adapter-e-adaptador-yfinance-minimo.md`.
+- Atualizado `docs/implementation-artifacts/sprint-status.yaml` com o status desta story (ready-for-review).
 
-- Autor principal: phbr
-- Branch/commits relevantes: 514f81b, 76531bb, e4c27c6, 7407914, 991db12
-- Artefatos e testes estão no repositório (veja lista abaixo).
+Observação sobre caminhos reais:
+- O artefato de esquema presente no repositório está em `docs/schema.json` (não `docs/schema.yaml`).
+- O arquivo de exemplo de dados está em `dados/samples/ticker_example.csv`.
+- O teste `tests/test_schema.py` referencia `docs/schema.json` e `dados/samples/ticker_example.csv` (teste passou).
 
-O que foi entregue
+Ações tomadas para consistência:
+- Normalizada a documentação e os relatos da story para apontar para `docs/schema.json` e `dados/samples/ticker_example.csv`.
+- Atualizada a seção de File List da story para refletir os caminhos reais presentes no repositório.
 
-- docs/schema.yaml — arquivo contendo o esquema canônico (ATENÇÃO: o conteúdo é JSON serializado dentro deste arquivo para compatibilidade com json.loads() nos testes).
-- docs/schema.md — documentação legível explicando cada campo, versionamento do schema e políticas de migração.
-- dados/examples/ticker_example.csv — exemplo canônico usado pelos consumidores e pelos testes.
-- scripts/pull_sample.py — utilitário para puxar amostras do Yahoo (usa yfinance preferencialmente) e gerar CSV canônico; salva também os dados brutos do provedor em dados/examples/{TICKER}_raw.csv e {TICKER}_raw.pkl para inspeção.
-- src/adapters/ — implementação de adapter (Adapter interface, AdapterError e YFinanceAdapter) para isolar provedores.
-- tests/test_schema.py — valida que o exemplo corresponde ao esquema (ordem das colunas e formatos essenciais).
-- tests/test_adapters.py — testes unitários para o adaptador (usa fixtures e mocks para evitar rede).
+Resultados de testes
 
-Como validar localmente
+- Comando executado: `poetry run pytest -q tests/test_schema.py`
+- Resultado: 1 teste executado — passou.
 
-1. Instalar dependências e rodar testes unitários:
+Verificações adicionais executadas
+- `git status --porcelain` e `git diff --name-only` para identificar mudanças locais e commits relacionados.
+- Conferido que os arquivos existem em HEAD: `docs/schema.json`, `docs/schema.md`, `dados/samples/ticker_example.csv`, `tests/test_schema.py`, `docs/implementation-artifacts/sprint-status.yaml`, `docs/sprint-reports/1-11-implantacao.md`.
 
-   poetry install
-   poetry run pytest -q
+Recomendações pós-implantação
 
-2. Rodar apenas o teste de schema:
+- Incluir validação de DataFrame (pandera) para validar snapshots no pipeline/CI.
+- Adicionar passo de verificação de schema na CI para garantir conformidade dos snapshots.
 
-   poetry run pytest tests/test_schema.py -q
+Recomendações adicionais (curto prazo)
+- Adicionar um pequeno job de CI que valide que `docs/schema.json` e o CSV de exemplo estão consistentes (mesmos nomes e ordem de colunas).
+- Documentar no README ou em `docs/schema.md` qual arquivo é a "fonte da verdade" (atualmente `docs/schema.json`) para evitar confusão futura.
 
-3. Gerar e inspecionar uma amostra bruta (exemplo):
+Decisões e justificativas
 
-   prun scripts/pull_sample.py PETR4.SA --days 5
+- Fonte da verdade do esquema: adotamos `docs/schema.json` como artefato canônico nesta implementação. Justificativa: já havia sido criado e os testes existentes (`tests/test_schema.py`) referenciam JSON; manter JSON evita duplicação e regressões imediatas.
 
-   Depois, inspecionar os dados brutos em Python:
+- Local dos exemplos: os CSVs de exemplo foram colocados em `dados/samples/` (não `dados/examples/`). Justificativa: repositório já usa `dados/samples/` para artefatos usados por testes e fixtures; manter esse local facilita reprodução por fixtures existentes.
 
-   import pandas as pd
-   df = pd.read_pickle('dados/examples/PETR4.SA_raw.pkl')
-   print(df.info())
-   print(df.head())
+- Formato de validação no teste: `tests/test_schema.py` faz validações simples de ordem de colunas e formatos (regex) em vez de usar `pandera`. Justificativa: solução leve e sem dependências adicionais para CI rápido; recomendamos `pandera` para validações mais robustas em pipeline.
 
-Observações sobre o formato dos dados brutos
+- Não gerar `docs/schema.yaml` automaticamente: optamos por não criar um `schema.yaml` adicional para evitar manutenção de múltiplas fontes. Justificativa: evitar divergência entre JSON e YAML; se for necessário fornecer YAML por compatibilidade, gerar a partir do JSON e documentar o processo.
 
-- O DataFrame bruto normalmente vem com índice de datas (DatetimeIndex) e colunas como: "Open", "High", "Low", "Close", "Adj Close", "Volume". Alguns provedores podem incluir colunas adicionais (p.ex. "Dividends", "Stock Splits").
-- O script salva o bruto sem modificações, exceto garantir que exista uma coluna "Date" (faz reset_index() quando necessário) — a conversão para o esquema canônico ocorre separadamente.
+- Atualização de status do sprint: `docs/implementation-artifacts/sprint-status.yaml` foi atualizado para refletir `1-11` como `ready-for-review`. Justificativa: seguir o fluxo de trabalho do projeto e permitir integração com rastreamento de sprint por arquivo.
 
-Decisões de projeto e rationale
-
-- Adapter pattern: foi criado um Adapter (src/adapters) para isolar a lógica de obtenção de cotações do restante do código — facilita trocar provedores (yfinance, pandas-datareader, etc.) sem espalhar dependências.
-- Preferência por yfinance: para evitar problemas com distutils em algumas distribuições Python e reduzir dependências de sistema, as rotinas preferem yfinance quando disponível. O adaptador normaliza colunas e adiciona metadados (source, fetched_at em UTC ISO8601).
-- Metadados: usamos df.attrs['source'] e df.attrs['fetched_at'] no adaptador; ao persistir no CSV canônico adicionamos as colunas: ticker, date, open, high, low, close, adj_close, volume, source, fetched_at, raw_checksum.
-
-Arquivos importantes (resumo)
-
-- docs/schema.yaml — esquema canônico (conteúdo JSON)
-- docs/schema.md — documentação humana do schema
-- dados/examples/*.csv, *_raw.csv, *_raw.pkl — exemplos e fontes brutas
-- scripts/pull_sample.py — utilitário para coleta de amostras e inspeção bruta
-- src/adapters/* — implementação do adapter e tratamento de erros
-- tests/test_schema.py, tests/test_adapters.py — testes de validação
-
-Recomendações e próximos passos
-
-- Incluir validação formal de schema em CI (pandera ou validação customizada) para snapshots produzidos pelo pipeline.
-- Mover o schema para um arquivo com extensão explícita (docs/schema.json) para clareza, se aceitável; atualmente mantemos JSON dentro de docs/schema.yaml para compatibilidade com testes existentes.
-- Considerar adicionar um passo CI que execute scripts/pull_sample.py em modo mock para garantir que mudanças no provedor não quebrem o mapeamento.
-- Documentar procedimento de atualização de dependências (adicionar yfinance ao pyproject.toml e remover pandas-datareader caso se opte por yfinance-only).
-
-Observações finais
-
-Este relatório foi preparado para servir como referência técnica do que foi entregue na story 1-11 e como guia para replicação/adoção das mesmas práticas em novos projetos. Para dúvidas ou histórico de decisões mais detalhado, consulte os commits listados acima e os artefatos em docs/implementation-artifacts/.
+Essas decisões visam minimizar trabalho manual e risco de divergência entre testes e documentação enquanto preservam um caminho claro para evolução (ex.: migrar para validação mais forte com `pandera` e adicionar job de CI específico).
