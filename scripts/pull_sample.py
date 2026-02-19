@@ -127,14 +127,32 @@ def main() -> None:
     ticker = args.ticker
     df = fetch_yahoo(ticker, days=args.days)
 
+    # salvar resposta original (raw) para inspeção
+    if df is None:
+        print("Erro: não foi possível obter dados brutos (df is None)", file=sys.stderr)
+        sys.exit(2)
+
+    out_dir = Path("dados") / "examples"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    raw_pickle = out_dir / f"{ticker}_raw.pkl"
+    raw_csv = out_dir / f"{ticker}_raw.csv"
+    try:
+        df.to_pickle(raw_pickle)
+    except Exception as exc:
+        print(f"Warning: não foi possível salvar pickle bruto: {exc}", file=sys.stderr)
+    try:
+        df.to_csv(raw_csv, index=False)
+    except Exception as exc:
+        print(f"Warning: não foi possível salvar CSV bruto: {exc}", file=sys.stderr)
+
     canonical, raw_checksum = to_canonical(df, ticker)
     default_name = f"{ticker}_sample.csv"
-    out_dir = Path("dados") / "examples"
     out_path = Path(args.outfile) if args.outfile else out_dir / default_name
     out_path.parent.mkdir(parents=True, exist_ok=True)
     canonical.to_csv(out_path, index=False)
 
     print(f"Amostra salva em: {out_path}")
+    print(f"Raw salvo em: {raw_csv} (CSV) e {raw_pickle} (pickle)")
     print(f"raw_checksum: {raw_checksum}")
 
 
