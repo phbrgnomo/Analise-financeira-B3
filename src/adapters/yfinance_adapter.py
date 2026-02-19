@@ -7,9 +7,9 @@ e tratamento de erros padronizado.
 
 import logging
 import time
+import types
 from datetime import datetime, timedelta
 from typing import Dict, Optional
-import types
 
 import pandas as pd
 
@@ -112,7 +112,7 @@ class YFinanceAdapter(Adapter):
             "max_retries": self.max_retries,
         }
 
-        logger.info(f"Iniciando fetch de dados", extra=log_context)
+        logger.info("Iniciando fetch de dados", extra=log_context)
 
         # Implementar retry com backoff exponencial
         last_exception = None
