@@ -1,6 +1,6 @@
  # Story 0.7: Teste de integração quickstart (mocked) e passo de CI para validação de checksum
 
- Status: ready-for-dev
+ Status: in-review
 
  ## Story
 
@@ -15,16 +15,17 @@
  3. O CI publica o CSV gerado e um arquivo `.checksum` como artefato para inspeção manual.
  4. O workflow CI está definido em `.github/workflows/ci.yml` e inclui a etapa de integração mockada + validação de checksum.
 
- ## Tasks / Subtasks
+## Tasks / Subtasks
 
- - [ ] Implementar teste de integração mockado: `tests/integration/test_quickstart_mocked.py`
-   - [ ] Criar fixtures (em `tests/fixtures/`) que forneçam dados CSV e respostas de provedor mockadas
-   - [ ] Mockar adaptadores de provedores (ex.: monkeypatch / requests-mock) para que `pipeline.ingest` rode sem rede
-   - [ ] Validar que `snapshots/<ticker>-*.csv` é criado e contém cabeçalho esperado
- - [ ] Implementar utilitário de checksum em `src/utils/checksums.py` (SHA256)
- - [ ] Atualizar `.github/workflows/ci.yml` para incluir etapa de integração mockada, cálculo de checksum e publicação de artefatos
- - [ ] Adicionar arquivo de referência `tests/fixtures/expected_snapshot.checksum` com valor esperado para o teste
- - [ ] Documentar passo-a-passo em `docs/implantacao/0-7-teste-de-integracao.md`
+- [x] Implementar teste de integração mockado: `tests/integration/test_quickstart_mocked.py`
+  - [x] Criar fixtures (em `tests/fixtures/`) que forneçam dados CSV e respostas de provedor mockadas
+  - [x] Mockar adaptadores de provedores (ex.: monkeypatch / requests-mock) para que `pipeline.ingest` rode sem rede
+  - [x] Validar que `snapshots/<ticker>-*.csv` é criado e contém cabeçalho esperado (test grava CSV e `.checksum`)
+- [x] Implementar utilitário de checksum em `src/utils/checksums.py` (SHA256)
+- [x] Atualizar `.github/workflows/ci.yml` para incluir etapa de integração mockada, cálculo de checksum e publicação de artefatos (define `SNAPSHOT_DIR=snapshots_test`)
+- [x] Adicionar arquivo de referência `tests/fixtures/expected_snapshot.checksum` com valor esperado para o teste
+- [x] Documentar passo-a-passo em `docs/implantacao/0-7-teste-de-integracao.md` (atualizado com instruções de `SNAPSHOT_DIR`)
+- [ ] Documentar o que foi implantado nessa etapa conforme o FR28 (`docs/planning-artifacts/prd.md`)
 
  ## Dev Notes
 
@@ -47,21 +48,33 @@
  - PRD: docs/planning-artifacts/prd.md
  - Arquitetura: docs/planning-artifacts/architecture.md
 
- ## Dev Agent Record
+## Dev Agent Record
 
- ### Agent Model Used
+### Agent Model Used
 
- GPT-5 mini (GitHub Copilot)
+GPT-5 mini (GitHub Copilot)
 
- ### Completion Notes List
+### Completion Notes List
 
- - Arquivo de story criado com requisitos, critérios de aceite e tarefas iniciais.
- - Sprint-status atualizado para `ready-for-dev`.
+- Arquivo de story criado com requisitos, critérios de aceite e tarefas iniciais.
+- Sprint-status atualizado para `ready-for-dev`.
+- Implementado teste de integração: `tests/integration/test_quickstart_mocked.py` (2 tests)
+- Fixture `snapshot_dir` disponibilizada globalmente em `tests/conftest.py` e `tests/ci/conftest.py` respeita `SNAPSHOT_DIR`.
+- CI workflow em `.github/workflows/ci.yml` atualizado para definir `SNAPSHOT_DIR=snapshots_test` no job `integration`.
+- `src/utils/checksums.py` está presente e utilizado pelo teste.
+- Testes executados localmente: full suite `6 passed, 10 warnings`; integração `2 passed`.
+- Commits relevantes:
+  - 29a1fd9: test(integration): add quickstart_mocked integration test
+  - 26cb06f: test(integration): add mocked quickstart test; respect SNAPSHOT_DIR fixture; set SNAPSHOT_DIR in CI; update story File List
 
- ### File List
+### File List
 
- - docs/planning-artifacts/epics.md
- - docs/planning-artifacts/prd.md
- - docs/planning-artifacts/architecture.md
+- docs/planning-artifacts/epics.md
+- docs/planning-artifacts/prd.md
+- docs/planning-artifacts/architecture.md
+- tests/integration/test_quickstart_mocked.py
+- tests/ci/conftest.py
+- .github/workflows/ci.yml
+- src/utils/checksums.py
 
 Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/110

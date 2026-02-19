@@ -40,10 +40,10 @@ para que possamos definir expectativas para testes smoke em CI e runs locais.
 
 ```json
 {
-  "run_id": "str",          
-  "elapsed_sec": 0.123,      
-  "rows_used": 100,          
-  "peak_memory_mb": 45.6     
+  "run_id": "str",
+  "elapsed_sec": 0.123,
+  "rows_used": 100,
+  "peak_memory_mb": 45.6
 }
 ```
 

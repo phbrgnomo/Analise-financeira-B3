@@ -4,6 +4,9 @@ Este projeto visa utilizar dados da B3 para análise financeira
 
 Esse projeto tem a finalidade apenas de aprendizado. Use pelo seu próprio risco.
 
+<!-- CI badge -->
+![CI](https://github.com/phbrgnomo/Analise-financeira-B3/actions/workflows/ci.yml/badge.svg)
+
 ## Plano de implementação
 
 - `[]`Coleta de preços
@@ -31,3 +34,89 @@ Preencha os valores em `.env`. Variáveis importantes:
 - `LOG_LEVEL` — `INFO` por padrão
 
 Nunca comite seu arquivo `.env` com segredos reais.
+
+## Quickstart
+
+Instalação (recomenda-se usar `poetry`):
+
+```bash
+poetry install
+```
+
+Executar a CLI de ajuda:
+
+```bash
+poetry run main --help
+# ou, sem poetry (ambiente já configurado):
+python -m src.main --help
+```
+
+Rodar testes:
+
+```bash
+poetry run pytest -q
+```
+
+Playbooks úteis:
+
+- [Quickstart: ingest → persist → snapshot → notebook](docs/playbooks/quickstart-ticker.md)
+- [UX Playbook (mínimo)](docs/playbooks/ux.md)
+
+- CI Quick Reference
+
+- O workflow CI roda em pull requests para qualquer branch, e em pushes apenas nas branches protegidas `main`/`master`.
+- Jobs principais: `lint`, `test`, `smoke`.
+- `test` executa `poetry install` e `pytest` gerando `reports/junit.xml`.
+- `smoke` executa uma instalação rápida (`poetry install --no-dev`) e roda `tests/ci/smoke.sh`.
+- Em caso de falha o CI faz upload dos artifacts (relatórios e logs) para auxiliar debugging.
+
+Para mais detalhes, veja `.github/workflows/ci.yml` e `tests/ci/README.md`.
+
+Habilitar `pre-commit` hooks (já configurado no projeto):
+
+```bash
+poetry run pre-commit install
+poetry run pre-commit run --all-files
+```
+
+Local de dados e snapshots:
+
+- `dados/` — CSVs por ativo (gerados por `src.main`)
+- `snapshots/` — snapshots gerados pela pipeline
+
+### Validando snapshots localmente
+
+- Gerar snapshot usando a CLI em modo sample (sem rede):
+
+```bash
+export SNAPSHOT_DIR=./snapshots
+poetry run main --no-network --ticker PETR4.SA
+```
+
+- Verificar o arquivo e o checksum gerado:
+
+```bash
+ls -l snapshots
+sha256sum snapshots/PETR4_snapshot.csv
+cat snapshots/PETR4_snapshot.csv.checksum
+```
+
+- Gerar manualmente um snapshot de teste (alternativa sem depender da CLI):
+
+```bash
+python - <<'PY'
+import csv, os
+from src.utils.checksums import sha256_file
+os.makedirs('snapshots', exist_ok=True)
+p='snapshots/PETR4_snapshot.csv'
+with open(p,'w',newline='') as f:
+	writer=csv.writer(f)
+	writer.writerow(['ticker','date','open','high','low','close','adj_close','volume'])
+	writer.writerow(['PETR4','2024-01-01','10','10.2','9.8','10.1','10.1','1000'])
+ch=sha256_file(p)
+open(p+'.checksum','w').write(ch)
+print('snapshot',p,'checksum',ch)
+PY
+```
+
+Documentação adicional no diretório `docs/`.

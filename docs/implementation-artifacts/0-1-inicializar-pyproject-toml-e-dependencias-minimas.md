@@ -1,43 +1,59 @@
 # Story 0.1: Inicializar pyproject.toml e dependências mínimas
 
-Status: ready-for-dev
+Status: completed
 
 ## Story
-
-As a Developer,
-I want a minimal `pyproject.toml` with declared dependencies and dev-dependencies,
-so that I can install and run the project and tests consistently using `poetry`.
+Como Desenvolvedor(a),
+quero um `pyproject.toml` mínimo com dependências e dev-dependências declaradas,
+para que eu possa instalar e executar o projeto e os testes de forma consistente usando o `poetry`.
 
 ## Acceptance Criteria
-
-1. Given a clean checkout of the repository, when I run `poetry install` (or `poetry install --no-dev` for CI) then the runtime and dev dependencies are installed without errors.
-2. `poetry run main --help` (or `python -m src.main --help`) shows the CLI help output.
-3. `pyproject.toml` contains pinned/minimal versions for key packages (e.g., `pandas`, `sqlalchemy`, `typer`, `pytest`) and documents any important constraints.
+1. Dado um checkout limpo do repositório, ao executar `poetry install` (ou `poetry install --no-dev` para CI), as dependências de runtime e desenvolvimento são instaladas sem erros.
+2. `poetry run main --help` (ou `python -m src.main --help`) exibe a saída de ajuda da CLI.
+3. O `pyproject.toml` contém versões mínimas/pinadas para os principais pacotes (`pandas`, `sqlalchemy`, `typer`, `pytest`) e documenta quaisquer restrições importantes.
 
 ## Tasks / Subtasks
-
-- [ ] Add `pyproject.toml` with runtime dependencies: `pandas`, `sqlalchemy`, `typer`, `python-dotenv`.
-- [ ] Add dev-dependencies: `pytest`, `black`, `ruff`, `pre-commit` and configure basic pre-commit hooks.
-- [ ] Add entrypoint script `main` in `src/main.py` and verify `poetry run main --help`.
-- [ ] Document quickstart commands in README.md (install, run, test).
+- [x] Adicionar `pyproject.toml` com dependências de runtime: `pandas`, `sqlalchemy`, `typer`, `python-dotenv`.
+- [x] Adicionar dev-dependencies: `pytest`, `black`, `ruff`, `pre-commit` e configurar hooks básicos do pre-commit.
+- [x] Adicionar script de entrypoint `main` em `src/main.py` e verificar `poetry run main --help`.
+- [x] Documentar comandos de quickstart no README.md (instalação, execução, testes).
+- [x] Documentar o que foi implantado nessa etapa conforme o FR28 (`docs/planning-artifacts/prd.md`)
 
 ## Dev Notes
 
-- Keep versions conservative and explicitly pinned for reproducibility in early phases.
-- Follow existing project layout: `src/` package, `docs/` for planning and implementation artifacts.
-- Ensure compatibility with Python 3.14 as noted in planning artifacts.
+- Mantenha as versões conservadoras e explicitamente fixadas para garantir reprodutibilidade nas fases iniciais.
+- Siga o layout do projeto conforme descrito em `docs/planning-artifacts/architecture.md` na seção ## Project Structure & Boundaries.
+- Garanta compatibilidade com Python 3.14, conforme indicado nos artefatos de planejamento.
 
 ### Project Structure Notes
 
-- Place `pyproject.toml` at repository root.
-- Add `tests/` skeleton and `tests/fixtures/` for sample CSVs (see `docs/planning-artifacts/epics.md`).
+- Coloque o `pyproject.toml` na raiz do repositório.
+- Adicione o esqueleto da pasta `tests/` e a subpasta `tests/fixtures/` para CSVs de exemplo (ver `docs/planning-artifacts/epics.md`).
 
 ### References
 
 - Source: [docs/planning-artifacts/epics.md](docs/planning-artifacts/epics.md)
+- Architecture: [docs/planning-artifacts/architecture.md](docs/planning-artifacts/architecture.md)
 - Sprint status: [docs/implementation-artifacts/sprint-status.yaml](docs/implementation-artifacts/sprint-status.yaml)
 
 ## Dev Agent Record
+
+- Implementações realizadas nesta sessão:
+	- `pyproject.toml` atualizado com dependências runtime e dev-dependencies.
+	- `src/main.py` convertido para CLI mínima com `typer` (importações sob demanda para permitir `--help`).
+	- `tests/test_cli.py` adicionado e `pytest` executado com sucesso (2 passed).
+	- `.pre-commit-config.yaml` adicionado; hooks instalados e executados, correções aplicadas.
+	- `README.md` atualizado com seção Quickstart (instalação, execução, testes, pre-commit).
+ 	- `docs/implementation-artifacts/sprint-status.yaml` atualizado para `completed`.
+
+Arquivos alterados nesta sessão:
+    - `pyproject.toml`
+    - `src/main.py`
+    - `tests/test_cli.py`
+    - `.pre-commit-config.yaml`
+    - `README.md`
+    - `docs/implementation-artifacts/sprint-status.yaml`
+
 
 ### Agent Model Used
 
@@ -53,6 +69,7 @@ GPT-5 mini
 - `src/main.py` (verify entrypoint)
 - `README.md` (update quickstart)
 - `tests/` (skeleton and fixtures)
+
 
 
 Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/104

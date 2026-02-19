@@ -104,4 +104,3 @@ The coordinator must collect current todo list, append new items and call `manag
 
 </agent>
 ```
-

@@ -1,0 +1,206 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - master
+      - main
+  pull_request: {}
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+
+      - name: Cache ruff
+        uses: actions/cache@v4
+        with:
+          path: |
+            .ruff_cache
+          key: ${{ runner.os }}-ruff-${{ hashFiles('**/pyproject.toml') }}
+
+      - name: Cache poetry for lint
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/pypoetry
+            ~/.cache/pip
+            .venv
+          key: ${{ runner.os }}-poetry-lint-${{ hashFiles('**/poetry.lock', '**/pyproject.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-poetry-lint-
+
+      - name: Install Poetry and project dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install poetry
+          poetry install --no-interaction
+
+      - name: Run pre-commit (all files)
+        run: |
+          poetry run pre-commit run --all-files --show-diff-on-failure
+
+      - name: Black check
+        run: |
+          poetry run black --check .
+
+      - name: Ruff check
+        run: |
+          poetry run ruff check . --show-files
+
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: [3.12]
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Cache poetry and pip
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/pypoetry
+            ~/.cache/pip
+            .venv
+          key: ${{ runner.os }}-poetry-${{ hashFiles('**/poetry.lock', '**/pyproject.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-poetry-
+
+      - name: Install Poetry and dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install poetry
+          poetry config virtualenvs.in-project true
+          poetry install --no-interaction
+
+      - name: Run tests (pytest)
+        run: |
+          mkdir -p reports
+          poetry run pytest -q --maxfail=1 --junitxml=reports/junit.xml
+
+      - name: Upload test artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-reports
+          path: reports/**
+
+      - name: Upload snapshots on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: snapshots
+          path: snapshots_test/**
+
+  smoke:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: [3.12]
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Cache poetry and pip
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/pypoetry
+            ~/.cache/pip
+            .venv
+          key: ${{ runner.os }}-poetry-smoke-${{ hashFiles('**/poetry.lock', '**/pyproject.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-poetry-smoke-
+
+      - name: Install runtime deps (smoke)
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install poetry
+          poetry config virtualenvs.in-project true
+          poetry install --only main --no-interaction
+          # Install pytest into the poetry-managed venv so `poetry run` can use it
+          poetry run pip install pytest
+
+      - name: Run smoke tests
+        run: |
+          if [ ! -f tests/ci/smoke.sh ]; then
+            echo "ERROR: tests/ci/smoke.sh not found. Ensure CI helpers are committed." >&2
+            exit 1
+          fi
+          # Run smoke script inside poetry venv so installed deps are visible
+          poetry run bash tests/ci/smoke.sh
+
+      - name: Upload smoke artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-logs
+          path: tests/ci/**
+
+  integration:
+    # Ensure snapshots produced by tests are saved to snapshots_test for artifact upload
+    runs-on: ubuntu-latest
+    needs: test
+    strategy:
+      matrix:
+        python-version: [3.12]
+    # Do not use ${{ runner }} in job-level expressions (not available there).
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+
+
+      - name: Install Poetry and dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install poetry
+          poetry config virtualenvs.in-project true
+          poetry install --no-interaction
+
+      - name: Run integration tests (mocked quickstart)
+        run: |
+          mkdir -p "$RUNNER_TEMP/snapshots_test"
+          poetry run pytest -q tests/integration -k quickstart_mocked --maxfail=1
+
+      - name: Expose snapshot dir as step output
+        id: snapshot_dir
+        run: |
+          echo "snapshot_dir=$RUNNER_TEMP/snapshots_test" >> $GITHUB_OUTPUT
+
+      - name: Upload snapshots artifacts (always)
+        uses: actions/upload-artifact@v4
+        with:
+          name: snapshots
+          path: ${{ steps.snapshot_dir.outputs.snapshot_dir }}

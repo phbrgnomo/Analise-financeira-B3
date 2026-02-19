@@ -1,4 +1,4 @@
-generated: 2026-02-17T15:30:00Z
+
 project: Analise-financeira-B3
 project_key: NOKEY
 tracking_system: file-system
@@ -6,14 +6,14 @@ story_location: /home/phbr/Projects/01-owned/Analise-financeira-B3/docs/implemen
 
 development_status:
   epic-0: in-progress
-  0-1-inicializar-pyproject-toml-e-dependencias-minimas: ready-for-dev
-  0-2-criar-readme-md-quickstart: ready-for-dev
-  0-3-adicionar-pre-commit-com-black-e-ruff: ready-for-dev
-  0-4-criar-skeleton-de-ci-github-workflows-ci-yml: ready-for-dev
-  0-5-adicionar-fixtures-de-teste-e-exemplo-de-dados-amostra: ready-for-dev
-  0-6-criar-env-example-e-instrucoes-de-configuracao-local: ready-for-dev
-  0-7-teste-de-integracao-quickstart-mocked-e-passo-de-ci-para-validacao-de-checksum: ready-for-dev
-  0-8-playbooks-quickstart-e-ux-minimal-docs-playbooks-quickstart-ticker-md-docs-playbooks-ux-md: ready-for-dev
+  0-1-inicializar-pyproject-toml-e-dependencias-minimas: completed
+  0-2-criar-readme-md-quickstart: backlog
+  0-3-adicionar-pre-commit-com-black-e-ruff: completed
+  0-4-criar-skeleton-de-ci-github-workflows-ci-yml: completed
+  0-5-adicionar-fixtures-de-teste-e-exemplo-de-dados-amostra: completed
+  0-6-criar-env-example-e-instrucoes-de-configuracao-local: completed
+  0-7-teste-de-integracao-quickstart-mocked-e-passo-de-ci-para-validacao-de-checksum: completed
+  0-8-playbooks-quickstart-e-ux-minimal-docs-playbooks-quickstart-ticker-md-docs-playbooks-ux-md: completed
   epic-0-retrospective: optional
 
   epic-1: in-progress

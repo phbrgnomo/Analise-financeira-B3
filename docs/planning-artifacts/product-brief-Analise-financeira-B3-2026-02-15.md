@@ -126,5 +126,3 @@ Criar um repositório end‑to‑end que centralize conhecimento e experimentos,
 - Core Usage: executa scripts de ingestão, carrega dados de `prices` no banco SQLite, roda notebooks que reproduzem cálculos de retorno e gera visualizações comparativas.
 - Success Moment (Aha!): reproduz um gráfico/resultado idêntico a um experimento anterior usando snapshots CSV + banco SQLite e entende por que duas abordagens deram resultados distintos.
 - Long-term: usa o repositório para comparar abordagens, versionar experimentos e compartilhar trechos de código/testes com colegas.
-
-

@@ -397,7 +397,7 @@ So that downstream notebooks and modeling code can read precomputed returns.
 **Given** canonical `prices` stored in DB
 **When** the `compute_returns()` routine runs for a ticker
 **Then** daily returns are computed (simple pct change) and persisted to `returns` with `return_type='daily'`
-**And** annualization conventions (252 days) are documented in code/comments.  
+**And** annualization conventions (252 days) are documented in code/comments.
 **FRs referenced:** FR21
 
 ### Story 1.8: Implementar retries/backoff no adaptador crítico
@@ -1355,18 +1355,18 @@ So that on-call engineers can follow a reproducible checklist to rotate credenti
 
 ### NFR Coverage Map
 
-NFR-P1: Epic 3 - Quickstart performance (quickstart end-to-end)  
-NFR-P2: Epic 4 - Healthcheck/metrics responsiveness  
-NFR-P3: Epic 2 - Snapshot generation performance  
-NFR-R1: Epic 1 - Retries/backoff and ingest reliability  
-NFR-R2: Epic 4 - Backup/restore and operational resilience  
-NFR-O1: Epic 4 - Logs and observability  
-NFR-O2: Epic 4 - Metrics exposure via CLI  
-NFR-S1: Epic 1 / Epic 4 - Concurrency handling (operational controls in Epic 4, runtime guarantees in Epic 1)  
-NFR-S2: Epic 5 / Epic 1 - Design for batch/multi-ticker extensibility (architectural note)  
-NFR-Sec1: Epic 8 - DB permissions and operational security  
-NFR-M1: Epic 7 - Migrations/versioning and rollback support  
-NFR-M2: Epic 7 - CI validation gates for CSV/checksum and integration tests  
+NFR-P1: Epic 3 - Quickstart performance (quickstart end-to-end)
+NFR-P2: Epic 4 - Healthcheck/metrics responsiveness
+NFR-P3: Epic 2 - Snapshot generation performance
+NFR-R1: Epic 1 - Retries/backoff and ingest reliability
+NFR-R2: Epic 4 - Backup/restore and operational resilience
+NFR-O1: Epic 4 - Logs and observability
+NFR-O2: Epic 4 - Metrics exposure via CLI
+NFR-S1: Epic 1 / Epic 4 - Concurrency handling (operational controls in Epic 4, runtime guarantees in Epic 1)
+NFR-S2: Epic 5 / Epic 1 - Design for batch/multi-ticker extensibility (architectural note)
+NFR-Sec1: Epic 8 - DB permissions and operational security
+NFR-M1: Epic 7 - Migrations/versioning and rollback support
+NFR-M2: Epic 7 - CI validation gates for CSV/checksum and integration tests
 NFR-INT1: Epic 5 - Adapter interface stability, retries and rate-limit logging
 
 ## Dependencies / Prerequisites
