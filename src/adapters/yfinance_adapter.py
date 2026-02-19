@@ -9,15 +9,25 @@ import logging
 import time
 from datetime import datetime, timedelta
 from typing import Dict, Optional
+import types
 
 import pandas as pd
-from pandas_datareader import data as web
 
 from src.adapters.base import Adapter
 from src.adapters.errors import FetchError, NetworkError, ValidationError
 
 # Configuração de logging estruturado
 logger = logging.getLogger(__name__)
+
+# Tentar carregar pandas_datareader no nível de módulo; em caso de falha, expor um stub
+try:
+    from pandas_datareader import data as web  # type: ignore
+except Exception:
+    # stub para permitir que testes façam patch('src.adapters.yfinance_adapter.web.DataReader')
+    def _pdreader_missing(*args, **kwargs):
+        raise FetchError("Dependência 'pandas_datareader' não disponível para YFinanceAdapter.fetch")
+
+    web = types.SimpleNamespace(DataReader=_pdreader_missing, __is_stub__=True)
 
 
 class YFinanceAdapter(Adapter):
@@ -111,7 +121,17 @@ class YFinanceAdapter(Adapter):
                 log_context["attempt"] = attempt
                 logger.debug(f"Tentativa {attempt} de {self.max_retries}", extra=log_context)
 
-                # Buscar dados do Yahoo Finance
+                # Buscar dados do Yahoo Finance (usa `web` module-level se mockado em testes, caso contrário carrega pandas_datareader)
+                global web
+                if web is None:
+                    try:
+                        from pandas_datareader import data as web_module  # import local
+                        web = web_module
+                    except Exception as e:
+                        raise FetchError(
+                            "Dependência 'pandas_datareader' não disponível para YFinanceAdapter.fetch",
+                            original_exception=e,
+                        )
                 df = web.DataReader(
                     normalized_ticker,
                     data_source="yahoo",
@@ -157,6 +177,10 @@ class YFinanceAdapter(Adapter):
                     )
 
             except Exception as e:
+                # Erros de validação não são transitórios — repropagar imediatamente
+                if isinstance(e, ValidationError):
+                    raise
+
                 last_exception = e
                 log_context["status"] = "fetch_error"
                 log_context["error_message"] = str(e)
