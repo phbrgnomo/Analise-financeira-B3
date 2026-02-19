@@ -16,16 +16,16 @@ so that contributors and users can reproduce experiments and understand expected
 
 ## Tasks / Subtasks
 
- - [x] Draft `docs/playbooks/quickstart-ticker.md` with step-by-step quickstart commands and sample outputs
-  - [x] Include example `poetry run main --ticker PETR4.SA --force-refresh` and expected CSV/snapshot paths
-  - [x] Add verification steps (compute SHA256 checksum, open notebook, expected plots)
- - [x] Draft `docs/playbooks/ux.md` with CLI/Notebook/Streamlit minimal UX expectations
-  - [x] Document CLI flags and example stdout/stderr messages
-  - [x] Document notebook parameters and expected cells/plots
-  - [x] Document Streamlit minimal screens and expected interactions
- - [x] Add small sample command outputs and example snapshot checksum example
- - [x] Link both playbooks from README quickstart (if present)
- - [ ] Documentar o que foi implantado nessa etapa conforme o FR28 (`docs/planning-artifacts/prd.md`)
+- [x] Draft `docs/playbooks/quickstart-ticker.md` with step-by-step quickstart commands and sample outputs
+    - [x] Include example `poetry run main --ticker PETR4.SA --force-refresh` and expected CSV/snapshot paths
+    - [x] Add verification steps (compute SHA256 checksum, open notebook, expected plots)
+- [x] Draft `docs/playbooks/ux.md` with CLI/Notebook/Streamlit minimal UX expectations
+    - [x] Document CLI flags and example stdout/stderr messages
+    - [x] Document notebook parameters and expected cells/plots
+    - [x] Document Streamlit minimal screens and expected interactions
+- [x] Add small sample command outputs and example snapshot checksum example
+- [x] Link both playbooks from README quickstart (if present)
+- [x] Documentar o que foi implantado nessa etapa conforme o FR28 (`docs/planning-artifacts/prd.md`) — registrado em PRD (FR28) em 2026-02-18
 
 ## Dev Notes
 
@@ -57,8 +57,7 @@ GPT-5 mini
 
 - Created files: `docs/playbooks/quickstart-ticker.md`, `docs/playbooks/ux.md`
 - Ran test suite: `poetry run pytest` → 10 passed, 10 warnings
-- Notes: Playbooks drafted with quickstart commands, checksum verification steps and minimal UX expectations. Remaining items: link playbooks from README and document implantation details in PRD (FR28).
- - Notes: Playbooks drafted with quickstart commands, checksum verification steps and minimal UX expectations. Playbooks linked in README and PRD updated. All subtasks completed; ready for review.
+- Notes: Playbooks drafted with quickstart commands, checksum verification steps and minimal UX expectations. Playbooks linked in `README.md`; FR28 registered in `docs/planning-artifacts/prd.md`; sprint report added in `docs/sprint-reports/0-8-playbooks-implantacao.md`. All subtasks completed; story ready for review.
 
 ### File List
 

@@ -2,7 +2,7 @@
 
 Este documento descreve as expectativas mínimas de UX para CLI, notebooks e uma tela Streamlit simples.
 
-CLI
+## CLI
 
 - Flags suportadas (exemplos):
   - `--ticker <TICKER>` (ex.: PETR4.SA)
@@ -15,7 +15,7 @@ CLI
   - Warnings: `WARN: Incomplete data for <date>`
   - Errors: `ERROR: Failed to fetch data for <TICKER> - <reason>`
 
-Notebooks
+## Notebooks
 
 - Parâmetros esperados (exemplos):
   - `ticker = "PETR4.SA"`
@@ -26,7 +26,7 @@ Notebooks
   - Células de preparação carregam o snapshot CSV localizado em `snapshots/`
   - Células de análise computam retornos e geram ao menos um plot de preços ajustados e um plot de retornos
 
-Streamlit (minimal)
+## Streamlit (minimal)
 
 - Telas mínimas:
   1. Tela de seleção de ticker e período
@@ -37,7 +37,7 @@ Streamlit (minimal)
   - Ao clicar `Run`, mostrar mensagem `Processing...` e desabilitar inputs até finalizar
   - Exibir mensagens de sucesso/erro conforme CLI
 
-Exemplos de saída (stdout)
+## Exemplos de saída (stdout)
 
 ```
 INFO: Starting ingest for PETR4.SA
@@ -46,16 +46,16 @@ INFO: Snapshot saved to snapshots/PETR4_snapshot.csv
 INFO: Checksum: e3b0c44298fc1c149afbf4c8996fb924...
 ```
 
-Notas
+## Notas
 
 - Mensagens devem ser concisas e JSON-parseable quando `--verbose-json` for usado (opcional)
 - Use logging estruturado para facilitar parsing em CI/monitoring
 
-Checklist (mínimo)
+## Checklist (mínimo)
 
 - [ ] Documentou flags CLI e mensagens esperadas
 - [ ] Documentou parâmetros de notebook e comportamento esperado
 - [ ] Documentou telas mínimas do Streamlit e interações
 
-Referências
+## Referências
 - docs/playbooks/quickstart-ticker.md

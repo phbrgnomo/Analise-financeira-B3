@@ -7,7 +7,7 @@ status: review
 
 # Relatório de implantação — Story 0.8
 
-Resumo
+## Resumo
 
 Este documento registra a conclusão da Story 0.8 (Playbooks: Quickstart e UX) conforme o requisito FR28 do PRD. Foram criados playbooks operacionais e verificados os artefatos básicos em ambiente de desenvolvimento local.
 
@@ -22,7 +22,7 @@ Arquivos modificados/atualizados
 - `docs/implementation-artifacts/0-8-playbooks-quickstart-e-ux-minimal-docs-playbooks-quickstart-ticker-md-docs-playbooks-ux-md.md` — checklist e Dev Agent Record atualizados
 - `docs/implementation-artifacts/sprint-status.yaml` — status da story atualizado para `review`
 
-Validação local (passos executados)
+## Validação local (passos executados)
 
 1. Conferir playbooks (leitura rápida):
 
@@ -51,19 +51,19 @@ poetry run pytest -q
 # Resultado esperado: 10 passed, 0 failed (no ambiente local onde testes foram executados)
 ```
 
-Observações e notas
+## Observações e notas
 
 - Os playbooks são documentos iniciais (mínimos) — contêm comandos reproduzíveis, checklist e exemplos de verificação (checksum). São suficientes para um colaborador reproduzir o fluxo em ambiente dev.
 - Em CI, recomendo adicionar um job que execute um teste end‑to‑end mockado (pipeline.ingest com mocking de provider) e valide que o snapshot e checksum sejam gerados conforme FR13/FR37.
 - Para registro formal por release, podemos criar `docs/sprint-reports/0-8-playbooks-implantacao.md` (este arquivo) e anexar fixtures/snapshots de exemplo em `snapshots_test/` como evidência.
 
-Próximos passos recomendados
+## Próximos passos recomendados
 
 - Abrir PR com estas mudanças apontando para `dev-story-0-8` → `master` e pedir revisão (posso abrir o PR se desejar).
 - Adicionar uma entrada no CI para validar quickstart em modo mock (evita chamadas reais a provedores) e validar checksum automaticamente.
 - Opcional: criar `docs/sprint-reports/0-8-playbooks-implantacao-examples.md` contendo outputs de comandos (sha256, primeiras linhas do CSV) como evidência encurtada.
 
-Contato / Issue
+## Contato / Issue
 
 - Issue relacionada: https://github.com/phbrgnomo/Analise-financeira-B3/issues/111
 
