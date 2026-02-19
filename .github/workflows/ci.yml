@@ -163,7 +163,6 @@ jobs:
           path: tests/ci/**
 
   integration:
-  integration:
     # Ensure snapshots produced by tests are saved to snapshots_test for artifact upload
     runs-on: ubuntu-latest
     needs: test
