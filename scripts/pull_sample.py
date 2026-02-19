@@ -47,6 +47,7 @@ def fetch_yahoo(ticker: str, days: int = 5) -> pd.DataFrame:
         df = yf.download(ticker, start=start, end=end)
     except Exception as yf_exc:
         print("yfinance não disponível ou falhou:", yf_exc, file=sys.stderr)
+        raise
 
     # Garantir coluna Date disponível
     if "Date" not in df.columns:

@@ -1,6 +1,6 @@
 # Esquema Canônico (schema_version: 1)
 
-Este documento descreve o esquema canônico usado para snapshots CSV. Use `docs/schema.yaml` como fonte de verdade.
+Este documento descreve o esquema canônico usado para snapshots CSV. Use `docs/schema.json` como fonte de verdade.
 
 Campos:
 - ticker (string, não-nulo): símbolo do ativo (ex: PETR4.SA)
@@ -12,6 +12,6 @@ Campos:
 - raw_checksum (string, não-nulo): SHA256 hexdigest do payload original (CSV ou provider payload)
 
 Versionamento:
-- `schema_version` em `docs/schema.yaml` identifica mudanças.
+- `schema_version` em `docs/schema.json` identifica mudanças.
 - Mudanças 'minor' (adição de colunas opcionais, comentários) -> incrementar versão minor.
 - Mudanças 'breaking' (remoção/renomeação de colunas obrigatórias, troca de tipos) -> incrementar major e seguir processo de migração.
