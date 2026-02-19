@@ -35,7 +35,7 @@ def fetch_yahoo(ticker: str, days: int = 5) -> pd.DataFrame:
     Tenta usar yfinance; se não disponível, faz fallback para
     pandas_datareader.
     """
-    end = datetime.utcnow().date()
+    end = datetime.now(timezone.utc).date()
     start = end - timedelta(days=days)
 
     # Tentar yfinance primeiro (import local)
