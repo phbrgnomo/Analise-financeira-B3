@@ -94,6 +94,9 @@ O script calcula o SHA256 do arquivo de exemplo `snapshots/PETR4_snapshot_test.c
 - Documentação e planejamento do projeto em `docs/`.
 - Para entender o fluxo de ingestão e esquema canônico, veja [docs/implementation-artifacts/1-11-definir-esquema-canonico-de-dados-e-documentacao-do-modelo-schema-examples.md](docs/implementation-artifacts/1-11-definir-esquema-canonico-de-dados-e-documentacao-do-modelo-schema-examples.md).
 
+- Guia de implementação de adaptadores: [docs/modules/adapter-guidelines.md](docs/modules/adapter-guidelines.md)
+- Checklist de PR para adaptadores: [docs/implementation-artifacts/adapter-pr-checklist.md](docs/modules/adapter-pr-checklist.md)
+
 ---
 
 Se você quiser, eu posso: gerar badges adicionais (coverage, PyPI quando aplicável), adicionar exemplos de uso com parâmetros do `src.main`, ou abrir um PR com pré-commit configurado. Qual próximo passo prefere?

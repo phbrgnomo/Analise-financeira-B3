@@ -91,6 +91,16 @@ class TestAdapterInterface:
             def fetch(self, ticker: str, **kwargs) -> pd.DataFrame:
                 return pd.DataFrame()
 
+            def _fetch_once(
+                self,
+                ticker: str,
+                start: str,
+                end: str,
+                **kwargs,
+            ) -> pd.DataFrame:
+                # implementação mínima para satisfazer contrato abstrato
+                return pd.DataFrame()
+
         adapter = TestAdapter()
         metadata = adapter.get_metadata()
         assert "provider" in metadata
