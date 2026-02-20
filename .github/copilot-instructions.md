@@ -74,7 +74,7 @@ Type `/bmad-` in Copilot Chat to see all available BMAD workflows and agent acti
 
 - Pacote principal: src/
   - src.main — entrada do aplicativo; baixa cotações, calcula retornos e imprime relatórios
-  - src.dados_b3 — coleta dados (pandas_datareader -> Yahoo) e retorna DataFrames OHLCV/Adj Close
+  - src.dados_b3 — coleta dados (yfinance -> Yahoo) e retorna DataFrames OHLCV/Adj Close
   - src.retorno — funções para cálculo de retornos, risco, conversões e correlações; lê/espera CSVs em dados/
 - Dados persistidos: pasta dados/ contendo arquivos CSV por ativo com coluna 'Return'
 - Dependências principais definidas em pyproject.toml

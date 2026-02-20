@@ -20,7 +20,7 @@ so that a pipeline de ingest consiga obter preços para um ticker a partir de um
 
 - [ ] Definir `Adapter` abstrato em `src/adapters/base.py` com método `fetch(ticker) -> pd.DataFrame`
   - [ ] Especificar contrato de erros/exception custom (ex.: `AdapterError`)
-- [ ] Implementar `src/adapters/yfinance_adapter.py` com `YFinanceAdapter(Adapter)` usando `yfinance` ou `pandas_datareader` fallback
+- [ ] Implementar `src/adapters/yfinance_adapter.py` com `YFinanceAdapter(Adapter)` usando `yfinance` (não depender de `pandas_datareader`)
   - [ ] Garantir que retorna `DataFrame` e adiciona `source` no atributo/metadata
   - [ ] Implementar logging estruturado e retries simples (3 tentativas, backoff exponencial mínimo)
 - [ ] Escrever docstring e um pequeno README de uso em `docs/implementation-artifacts/1-1-implementar-interface-de-adapter-e-adaptador-yfinance-minimo.md#references`
@@ -30,7 +30,8 @@ so that a pipeline de ingest consiga obter preços para um ticker a partir de um
 ## Dev Notes
 
 - Linguagem/plataforma: Python 3.12 (seguir `pyproject.toml` do projeto).
-- Bibliotecas recomendadas: `pandas`, `yfinance` (ou `pandas-datareader` com Yahoo fallback), `typing`, `pytest` para testes.
+- Bibliotecas recomendadas: `pandas`, `yfinance`, `typing`, `pytest` para testes.
+- Nota: `pandas_datareader` apresenta incompatibilidades com Python 3.12 (dependência de `distutils` removida). Por isso o projeto deve referenciar e exigir `yfinance` para integração com o Yahoo Finance; evitar `pandas_datareader` nas documentações e novos códigos.
 - Arquitetura: separar `adapters/` (interfaces + providers) e `mappers/` (canonical mapping) conforme `docs/planning-artifacts/epics.md`.
 - Erros: criar `src/adapters/errors.py` com `AdapterError` (mensagem, code, original_exception) para padronizar tratamento.
 - Logging: usar logging estruturado (JSON) com campos mínimos: `ticker`, `provider`, `attempt`, `job_id`, `status`, `error_message`.
@@ -54,13 +55,14 @@ so that a pipeline de ingest consiga obter preços para um ticker a partir de um
 
 ### Testing Requirements
 
-- Unit tests: mockar chamadas a `yfinance`/`pandas_datareader` para garantir determinismo; testar erros e sucesso.
+- Unit tests: mockar chamadas a `yfinance` para garantir determinismo; testar erros e sucesso.
 - Coverage mínima para esta story: testes para interface, adaptador e tratamento de erro.
 
 ### References
 
 - Fonte primária: docs/planning-artifacts/epics.md (Epic 1 — Story 1.1)
 - Requisitos arquiteturais: docs/planning-artifacts/architecture.md
+- Esquema canônico: `docs/schema.json` — adapters devem mapear colunas do provedor para o esquema canônico (ver `docs/schema.md`).
 
 ## Dev Agent Record
 
