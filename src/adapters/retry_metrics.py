@@ -19,10 +19,10 @@ class RetryMetrics:
 
     Attributes:
         retry_count: Número total de retries executados (tentativas > 1)
-        success_after_retry: Operações que falharam inicialmente mas tiveram sucesso após retry
-        permanent_failures: Operações que falharam permanentemente após esgotar max_attempts
+        success_after_retry: Sucessos obtidos após pelo menos um retry
+        permanent_failures: Falhas permanentes após esgotar max_attempts
         first_attempt_success: Operações bem-sucedidas na primeira tentativa
-        total_attempts: Número total de tentativas (incluindo primeiras tentativas)
+        total_attempts: Número total de tentativas (incluindo primeiras)
     """
 
     retry_count: int = 0

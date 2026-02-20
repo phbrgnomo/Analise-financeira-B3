@@ -74,15 +74,15 @@ class YFinanceAdapter(Adapter):
         Inicializa adaptador Yahoo Finance.
 
         Args:
-            max_retries: Número de tentativas em caso de erro (padrão: utiliza RetryConfig ou 3)
-            backoff_factor: Multiplicador para backoff entre retries (padrão: utiliza RetryConfig ou 2.0)
-            timeout: Timeout em segundos (padrão: utiliza RetryConfig ou 30)
-            retry_config: (opcional) objeto RetryConfig para configurar políticas via código/ambiente
+            max_retries: Número de tentativas (usa RetryConfig por padrão)
+            backoff_factor: Fator de backoff (usa RetryConfig por padrão)
+            timeout: Timeout em segundos (usa RetryConfig por padrão)
+            retry_config: Optional RetryConfig para configurar políticas
         """
-        # Inicializar o Adapter base para carregar retry_config via ambiente e registrar métricas
+        # Inicializa Adapter base para carregar RetryConfig e métricas
         super().__init__(retry_config=retry_config)
 
-        # Priorizar parâmetros explicitamente passados; caso contrário herdar da retry_config
+        # Priorizar parâmetros explícitos ou herdar da retry_config
         self.max_retries = 3 if max_retries is None else max_retries
         self.backoff_factor = 2.0 if backoff_factor is None else backoff_factor
         self.timeout = 30 if timeout is None else timeout
