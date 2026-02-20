@@ -462,10 +462,10 @@ class TestYFinanceAdapter:
                 def fetch(self, ticker: str, **kwargs) -> pd.DataFrame:
                     return pd.DataFrame()
 
-                    def _fetch_once(
-                        self, ticker: str, start: str, end: str, **kwargs
-                    ) -> pd.DataFrame:
-                        return pd.DataFrame()
+                def _fetch_once(
+                    self, ticker: str, start: str, end: str, **kwargs
+                ) -> pd.DataFrame:
+                    return pd.DataFrame()
 
             adapter = TestAdapter()
 
