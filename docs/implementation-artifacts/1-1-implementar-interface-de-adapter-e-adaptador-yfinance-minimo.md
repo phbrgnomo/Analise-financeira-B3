@@ -20,17 +20,17 @@ so that a pipeline de ingest consiga obter preços para um ticker a partir de um
 
 - [x] Definir `Adapter` abstrato em `src/adapters/base.py` com método `fetch(ticker) -> pd.DataFrame`
   - [x] Especificar contrato de erros/exception custom (ex.: `AdapterError`)
-- [x] Implementar `src/adapters/yfinance_adapter.py` com `YFinanceAdapter(Adapter)` usando `pandas_datareader` com fallback/test-stub
+ - [x] Implementar `src/adapters/yfinance_adapter.py` com `YFinanceAdapter(Adapter)` usando `yfinance` (`yf.download`) com wrapper/stub para testes
   - [x] Garantir que retorna `DataFrame` e adiciona `source` no atributo/metadata
   - [x] Implementar logging estruturado e retries simples (3 tentativas, backoff exponencial mínimo). ValidationError não faz retry.
 - [x] Escrever docstring e um pequeno README de uso em `docs/implementation-artifacts/1-1-implementar-interface-de-adapter-e-adaptador-yfinance-minimo.md#references`
-- [x] Adicionar/atualizar testes unitários em `tests/test_adapters.py` que mockam `pandas_datareader` e validam esquema de saída
+- [x] Adicionar/atualizar testes unitários em `tests/test_adapters.py` que mockam o wrapper `web.DataReader`/`yfinance` e validam esquema de saída
 - [x] Documentar o que foi implantado nessa etapa em `docs/sprint-reports` conforme definido no FR28 (`docs/planning-artifacts/prd.md`)
 
 ## Dev Notes
 
 - Linguagem/plataforma: Python 3.12 (seguir `pyproject.toml` do projeto).
-- Bibliotecas recomendadas: `pandas`, `yfinance` (ou `pandas-datareader` com Yahoo fallback), `typing`, `pytest` para testes.
+- Bibliotecas recomendadas: `pandas`, `yfinance`, `typing`, `pytest` para testes.
 - Arquitetura: separar `adapters/` (interfaces + providers) e `mappers/` (canonical mapping) conforme `docs/planning-artifacts/epics.md`.
 - Erros: criar `src/adapters/errors.py` com `AdapterError` (mensagem, code, original_exception) para padronizar tratamento.
 - Logging: usar logging estruturado (JSON) com campos mínimos: `ticker`, `provider`, `attempt`, `job_id`, `status`, `error_message`.
@@ -52,9 +52,9 @@ so that a pipeline de ingest consiga obter preços para um ticker a partir de um
   - `tests/test_adapters.py` (unit tests)
 - Mantenha imports absolutos do pacote `src` e registre módulos no `pyproject.toml` entrypoint conforme convenção do projeto.
 
-### Testing Requirements
+-### Testing Requirements
 
-- Unit tests: mockar chamadas a `yfinance`/`pandas_datareader` para garantir determinismo; testar erros e sucesso.
+- Unit tests: mockar chamadas a `yfinance` (via wrapper `web.DataReader`) para garantir determinismo; testar erros e sucesso.
 - Coverage mínima para esta story: testes para interface, adaptador e tratamento de erro.
 
 ### References
@@ -70,13 +70,13 @@ GPT-5 mini
 
 ### Completion Notes List
 
-- Implementado Adapter abstrato e adaptador mínimo para Yahoo Finance (pandas_datareader) com importação tolerante a ambiente e suporte a mocks em testes.
+- Implementado Adapter abstrato e adaptador mínimo para Yahoo Finance (`yfinance`) com importação tolerante a ambiente e suporte a mocks em testes.
 - Alterações técnicas principais:
-  - Refatoração: importação local/tolerante de `pandas_datareader` para evitar falha em tempo de import quando dependências do sistema não estão presentes.
+  - Refatoração: importação local/tolerante de `yfinance` para evitar falha em tempo de import quando dependências do sistema não estão presentes.
   - Tratamento: `ValidationError` agora é considerado não-transitório e é re-lançado sem retry.
   - Testes: suite de testes atualizada/compatibilizada; mocks usados para isolar chamadas de rede.
 - Commits relevantes:
-  - 920816b — "Refatorar YFinanceAdapter: importação lazy de pandas_datareader, permitir mocks em testes e tratar ValidationError sem retry"
+  - 920816b — "Refatorar YFinanceAdapter: importação lazy de yfinance, permitir mocks em testes e tratar ValidationError sem retry"
 
 
 ### File List

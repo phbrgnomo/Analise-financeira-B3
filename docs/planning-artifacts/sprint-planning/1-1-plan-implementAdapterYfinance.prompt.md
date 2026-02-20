@@ -1,6 +1,6 @@
 Plan: Implementar Adapter e adaptador yfinance mínimo
 
-TL;DR — Criar interface `Adapter` e um adaptador `yfinance` que retorne um `pandas.DataFrame` com metadados `source` e `fetched_at`. Usaremos `pandas-datareader` (sem adicionar `yfinance`) como provider por padrão; o adaptador tentará usar `yfinance` se estiver instalado. Testes unitários usam fixtures CSV existentes para evitar chamadas de rede.
+TL;DR — Criar interface `Adapter` e um adaptador `yfinance` que retorne um `pandas.DataFrame` com metadados `source` e `fetched_at`. Usaremos `yfinance` (`yf.download`) como provider principal. Testes unitários usam fixtures CSV existentes para evitar chamadas de rede.
 
 Steps
 1. Criar pacote de adapters:
@@ -13,8 +13,8 @@ Steps
 3. Implementar adaptador provider:
    - Criar `src/adapters/yfinance_adapter.py` com `class YFinanceAdapter(Adapter)`.
    - Implementação:
-     - Tentar `import yfinance as yf` — se disponível, usar `yf.download(...)`.
-     - Caso contrário, usar `pandas_datareader.data.DataReader(ticker, 'yahoo', start=None, end=None)`.
+   - Tentar `import yfinance as yf` — se disponível, usar `yf.download(...)`.
+   - Não depender de `pandas_datareader` — usar wrapper compatível para facilitar mocks em testes.
      - Normalizar colunas para garantir presença de `['Open','High','Low','Close','Adj Close','Volume']` quando aplicável.
      - Setar metadados: `df.attrs['source'] = 'yahoo'` e `df.attrs['fetched_at'] = fetched_at_utc_iso`.
      - Retries simples (até 3 tentativas) com backoff exponencial mínimo; levantar `AdapterError` com códigos descritivos em falhas.
@@ -24,7 +24,7 @@ Steps
 5. Testes:
    - Criar `tests/test_adapters.py`.
    - Testes:
-     - Mockar `pandas_datareader.data.DataReader` (ou função interna) para retornar DataFrame carregado de `tests/fixtures/sample_ticker.csv`.
+   - Mockar o wrapper `web.DataReader` ou `yfinance` para retornar DataFrame carregado de `tests/fixtures/sample_ticker.csv`.
      - Verificar que `fetch()` retorna `pd.DataFrame`, contém colunas mínimas e `df.attrs['source'] == 'yahoo'` e `fetched_at` em UTC ISO8601.
      - Testar raising de `AdapterError` quando DataReader lança exceção.
    - Reutilizar fixtures existentes em `tests/fixtures/`.
@@ -51,7 +51,7 @@ poetry run black --check .
 ```
 
 Decisions
-- Dependência: usar `pandas-datareader` (já presente). Implementação tentará `yfinance` se disponível, mas não exigirá a nova dependência.
+- Dependência: usar `yfinance` como provider principal. Não usar `pandas-datareader` no código novo.
 - Assinatura pública: `Adapter.fetch(ticker: str) -> pd.DataFrame` (conforme Acceptance Criteria).
 - Nome/arquitetura: manter arquivo `yfinance_adapter.py` (compatível com story) mas implementar via DataReader por padrão; expor `YFinanceAdapter`.
 - Erros: padronizar com `AdapterError` (mensagem, code, original_exception).

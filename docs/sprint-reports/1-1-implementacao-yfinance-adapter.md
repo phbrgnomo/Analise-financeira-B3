@@ -6,18 +6,18 @@
 
 ## Resumo
 
-Documento de implantação da Story 1-1: definição da interface Adapter e implementação mínima do adaptador YFinance (pandas_datareader fallback), incluindo testes unitários e ajustes no comportamento de validação.
+Documento de implantação da Story 1-1: definição da interface Adapter e implementação mínima do adaptador YFinance (implementação baseada em `yfinance`), incluindo testes unitários e ajustes no comportamento de validação.
 
 ## O que foi implantado
 
 - Interface/contrato: `Adapter.fetch(ticker: str) -> pd.DataFrame` (presente em `src/adapters/base.py`).
 - Exceções padronizadas: `AdapterError`, `FetchError`, `NetworkError`, `ValidationError` (`src/adapters/errors.py`).
 - Adaptador mínimo: `YFinanceAdapter` (`src/adapters/yfinance_adapter.py`) com:
-  - importação tolerante/lazy de `pandas_datareader` para permitir execução em ambientes sem a dependência instalada;
+  - importação tolerante/lazy de `yfinance` para permitir execução em ambientes sem a dependência instalada;
   - fallback/stub passível de mock nos testes (`web` module-level stub);
   - retries com backoff exponencial para erros transitórios e tratamento imediato para `ValidationError` (não faz retry);
   - adição de metadados no DataFrame retornado: `source`, `ticker`, `fetched_at`, `adapter`.
-- Testes unitários: `tests/test_adapters.py` — mocks de `pandas_datareader` para isolar chamadas de rede, cobrindo sucesso, validação e retries.
+- Testes unitários: `tests/test_adapters.py` — mocks do wrapper `web.DataReader`/`yfinance` para isolar chamadas de rede, cobrindo sucesso, validação e retries.
 
 ## Arquivos criados/modificados
 
@@ -62,7 +62,7 @@ print(df.head())
 print(df.attrs)
 ```
 
-Observações: o adaptador normaliza `PETR4` para `PETR4.SA` automaticamente; em ambientes sem `pandas_datareader` instalado o adaptador lança `FetchError` com mensagem descritiva (testes usam mocks para esse caso).
+Observações: o adaptador normaliza `PETR4` para `PETR4.SA` automaticamente; em ambientes sem `yfinance` instalado o adaptador lança `FetchError` com mensagem descritiva (testes usam mocks para esse caso).
 
 ## Notas e próximos passos
 

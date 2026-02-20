@@ -27,12 +27,13 @@ try:
 
     # Wrapper compatível com a API esperada pelo código legado (web.DataReader)
     def _datareader_wrapper(ticker, data_source=None, start=None, end=None, **kwargs):
-        # Ignora `data_source` que fazia parte do pandas_datareader e usa yfinance
+        # Ignora o parâmetro `data_source` (compatibilidade com pandas_datareader API)
+        # e usa `yfinance` internamente via `yf.download`
         return yf.download(ticker, start=start, end=end, progress=False)
 
     web = types.SimpleNamespace(DataReader=_datareader_wrapper, __is_wrapper__=True)
 
-except Exception:
+except (ImportError, ModuleNotFoundError):
     # stub para permitir patch de web.DataReader nos testes
     def _yf_missing(*args, **kwargs):
         raise FetchError(
@@ -260,14 +261,14 @@ class YFinanceAdapter(Adapter):
         try:
             datetime.strptime(date_str, "%Y-%m-%d")
             return date_str
-        except Exception:
+        except ValueError:
             pass
 
         # Tentar MM-DD-YYYY
         try:
             dt = datetime.strptime(date_str, "%m-%d-%Y")
             return dt.strftime("%Y-%m-%d")
-        except Exception:
+        except ValueError:
             pass
 
         # Se não casou com os formatos esperados, levantar ValidationError
