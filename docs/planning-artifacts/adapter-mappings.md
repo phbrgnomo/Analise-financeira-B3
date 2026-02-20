@@ -34,6 +34,28 @@ Observações:
 - Tipos devem ser normalizados: datas em ISO `YYYY-MM-DD`, números como `REAL`, volumes como `INTEGER` quando possível.
 - Colunas adicionais retornadas pelo provedor podem ser preservadas em `raw_response` ou mapeadas para campos auxiliares conforme necessário.
 
+### Exemplo de código (uso do canonical mapper)
+
+```python
+from src.adapters.yfinance_adapter import YFinanceAdapter
+from src.etl.mapper import to_canonical
+
+# Buscar dados brutos
+adapter = YFinanceAdapter()
+raw_df = adapter.fetch("PETR4.SA", start_date="2026-01-01", end_date="2026-01-31")
+
+# Converter para schema canônico
+canonical_df = to_canonical(raw_df, provider_name="yfinance", ticker="PETR4.SA")
+
+# canonical_df agora tem colunas: ticker, date, open, high, low, close,
+# adj_close, volume, source, fetched_at
+# e metadata em canonical_df.attrs: raw_checksum, provider, ticker
+
+# Usar com camada de persistência
+from src.db.db import write_prices
+write_prices(canonical_df)  # Upsert no SQLite
+```
+
 ## Exemplo: Alpha Vantage -> Canonical
 
 Provedor: `Alpha Vantage` (TIME_SERIES_DAILY_ADJUSTED)
