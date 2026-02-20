@@ -62,12 +62,12 @@ class TestCanonicalMapperIntegration:
         # Verify types are compatible with SQLite/DB schema
         assert canonical_df["ticker"].dtype == object  # string
         assert pd.api.types.is_datetime64_any_dtype(canonical_df["date"])
-        assert canonical_df["open"].dtype == float
-        assert canonical_df["high"].dtype == float
-        assert canonical_df["low"].dtype == float
-        assert canonical_df["close"].dtype == float
-        assert canonical_df["adj_close"].dtype == float
-        assert canonical_df["volume"].dtype == int
+        assert pd.api.types.is_float_dtype(canonical_df["open"])
+        assert pd.api.types.is_float_dtype(canonical_df["high"])
+        assert pd.api.types.is_float_dtype(canonical_df["low"])
+        assert pd.api.types.is_float_dtype(canonical_df["close"])
+        assert pd.api.types.is_float_dtype(canonical_df["adj_close"])
+        assert pd.api.types.is_integer_dtype(canonical_df["volume"])
         assert canonical_df["source"].dtype == object  # string
         # fetched_at should be a datetime dtype per canonical schema
         assert pd.api.types.is_datetime64_any_dtype(

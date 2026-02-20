@@ -185,30 +185,28 @@ class TestToCanonical:
 
     def test_timezone_normalization_to_utc(self):
         """Verify fetched_at is normalized to UTC ISO8601."""
-        # Arrange
-        dates = pd.date_range("2026-01-01", periods=1, freq="D")
-        raw_df = pd.DataFrame(
-            {
-                "Open": [100.0],
-                "High": [105.0],
-                "Low": [99.0],
-                "Close": [104.0],
-                "Adj Close": [103.5],
-                "Volume": [1000000],
-            },
-            index=dates,
+        result = self._extracted_from_test_metadata_preserved_in_attrs_4(
+            "test", "TEST"
         )
-
-        # Act
-        result = to_canonical(raw_df, provider_name="test", ticker="TEST")
-
         # Assert: fetched_at should be a datetime-like UTC value per schema
         fetched_at = result["fetched_at"].iloc[0]
         assert isinstance(fetched_at, pd.Timestamp)
 
     def test_metadata_preserved_in_attrs(self):
         """Verify metadata (raw_checksum, provider, ticker) is stored in attrs."""
-        # Arrange
+        result = self._extracted_from_test_metadata_preserved_in_attrs_4(
+            "alphavantage", "AAPL"
+        )
+        # Assert: attrs should contain metadata
+        assert "raw_checksum" in result.attrs
+        assert "provider" in result.attrs
+        assert "ticker" in result.attrs
+        assert result.attrs["provider"] == "alphavantage"
+        assert result.attrs["ticker"] == "AAPL"
+
+    # TODO Rename this here and in `test_timezone_normalization_to_utc` and
+    # `test_metadata_preserved_in_attrs`
+    def _extracted_from_test_metadata_preserved_in_attrs_4(self, provider_name, ticker):
         dates = pd.date_range("2026-01-01", periods=1, freq="D")
         raw_df = pd.DataFrame(
             {
@@ -221,13 +219,4 @@ class TestToCanonical:
             },
             index=dates,
         )
-
-        # Act
-        result = to_canonical(raw_df, provider_name="alphavantage", ticker="AAPL")
-
-        # Assert: attrs should contain metadata
-        assert "raw_checksum" in result.attrs
-        assert "provider" in result.attrs
-        assert "ticker" in result.attrs
-        assert result.attrs["provider"] == "alphavantage"
-        assert result.attrs["ticker"] == "AAPL"
+        return to_canonical(raw_df, provider_name=provider_name, ticker=ticker)

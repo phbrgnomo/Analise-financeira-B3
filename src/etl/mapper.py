@@ -23,9 +23,10 @@ import logging
 import os
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Union
 
 import pandas as pd
-import pandera.pandas as pa
+import pandera as pa
 from pandera import Check
 from pandera.pandas import Column, DataFrameSchema
 
@@ -59,8 +60,18 @@ def _col_from_json(col_def: dict) -> Column:
     return Column(dtype, nullable=nullable, coerce=True)
 
 
-def load_canonical_schema_from_json(path: Path) -> DataFrameSchema:
-    data = json.loads(path.read_text())
+def load_canonical_schema_from_json(path_or_dict: Union[Path, dict]) -> DataFrameSchema:
+    """Build a pandera DataFrameSchema from a file path or an already-loaded dict.
+
+    Accepting a dict avoids re-reading the JSON file when the caller already
+    parsed it (useful for tests or when the module wants to reuse the
+    parsed schema for other purposes).
+    """
+    if isinstance(path_or_dict, dict):
+        data = path_or_dict
+    else:
+        data = json.loads(path_or_dict.read_text())
+
     cols = {c["name"]: _col_from_json(c) for c in data.get("columns", [])}
     df_checks = []
     if "high" in cols and "low" in cols:
@@ -97,15 +108,17 @@ def _determine_schema_cols() -> list:
 
 
 def _col_lookup_in_df(df: pd.DataFrame, columns_map: dict, candidate: str):
-    if candidate in df.columns:
-        return candidate
+    # Prefer matching against the normalized columns_map where keys are
+    # lowercased strings of the original column labels. This avoids errors
+    # when df.columns contains non-string labels (e.g., DatetimeIndex).
     key = candidate.lower()
     if key in columns_map:
         return columns_map[key]
     alt = key.replace(" ", "_")
     if alt in columns_map:
         return columns_map[alt]
-    return None
+    # As a fallback, allow exact object membership checks.
+    return candidate if candidate in df.columns else None
 
 
 def _pick_provider_values(
@@ -148,9 +161,12 @@ if _env_path:
 else:
     _schema_path = Path(__file__).resolve().parents[2] / "docs" / "schema.json"
 
-CanonicalSchema = load_canonical_schema_from_json(_schema_path)
-# keep parsed JSON handy for DataFrame construction and column order
+# Read schema JSON once and reuse it to build the pandera schema and to
+# determine column order. This avoids reading/parsing the file multiple
+# times during import and makes it simple to inject a pre-parsed schema for
+# tests or multi-schema scenarios.
 _SCHEMA_JSON = json.loads(_schema_path.read_text())
+CanonicalSchema = load_canonical_schema_from_json(_SCHEMA_JSON)
 
 # Minimal provider candidates for common canonical columns. Adapters can
 # provide a more complete mapping if needed.
@@ -170,7 +186,7 @@ def _fill_special_values(df: pd.DataFrame, name: str, meta: dict, nrows: int):
     meta: dictionary with keys 'ticker','provider_name','fetched_at','raw_checksum'.
     """
     if name == "date":
-        date_col = next((c for c in df.columns if c.lower() == "date"), None)
+        date_col = next((c for c in df.columns if str(c).lower() == "date"), None)
         if date_col is not None:
             return pd.to_datetime(df[date_col])
         return pd.to_datetime(df.index)
@@ -180,9 +196,7 @@ def _fill_special_values(df: pd.DataFrame, name: str, meta: dict, nrows: int):
         return [meta["provider_name"]] * nrows
     if name == "fetched_at":
         return [meta["fetched_at"]] * nrows
-    if name == "raw_checksum":
-        return [meta["raw_checksum"]] * nrows
-    return None
+    return [meta["raw_checksum"]] * nrows if name == "raw_checksum" else None
 
 
 def to_canonical(
@@ -215,14 +229,15 @@ def to_canonical(
         raise MappingError(f"Cannot map empty DataFrame for ticker {ticker}")
 
     # Build case-insensitive column map to allow provider variations
-    columns_map = {c.lower(): c for c in df.columns}
+    # Use str(c).lower() to avoid failures when column labels are not strings
+    columns_map = {str(c).lower(): c for c in df.columns}
 
     # Note: 'Adj Close' is optional in provider responses; canonical schema allows
     # adj_close to be nullable. Require only the primary OHLCV columns here.
     required_cols_lower = ["open", "high", "low", "close", "volume"]
-    missing_cols = [col for col in required_cols_lower if col not in columns_map]
-
-    if missing_cols:
+    if missing_cols := [
+        col for col in required_cols_lower if col not in columns_map
+    ]:
         raise MappingError(
             f"Missing required columns for ticker {ticker}: {missing_cols}. "
             f"Available columns: {list(df.columns)}"

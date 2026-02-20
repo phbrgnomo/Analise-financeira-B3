@@ -12,9 +12,11 @@ Comportamento:
 - Imprime resumo e opcionalmente salva CSV canônico
 """
 
+
 from __future__ import annotations
 
 import argparse
+import contextlib
 import logging
 import sys
 from pathlib import Path
@@ -55,30 +57,24 @@ def main() -> int:
 
     def _normalize_provider_df(raw: pd.DataFrame) -> pd.DataFrame:
         # If columns are MultiIndex, try to pick the level with expected column names
-        if getattr(raw.columns, "nlevels", 1) > 1:
-            lvl0 = list(raw.columns.get_level_values(0))
-            lvl1 = list(raw.columns.get_level_values(1))
-            if any(c in expected_cols for c in lvl0):
-                raw.columns = lvl0
-                return raw
-            if any(c in expected_cols for c in lvl1):
-                raw.columns = lvl1
-                return raw
-            # fallback: join levels
-            raw.columns = [
-                "_".join([str(x) for x in col if x is not None])
-                for col in raw.columns
-            ]
+        if getattr(raw.columns, "nlevels", 1) <= 1:
+                    # If first row contains a repeated ticker header (some CSV dumps),
+                    # try to detect and fix (e.g., header row with Unnamed or single
+                    # column with ticker as second line)
+            return raw if raw.columns.tolist()[0] == "Unnamed: 0" else raw
+        lvl0 = list(raw.columns.get_level_values(0))
+        lvl1 = list(raw.columns.get_level_values(1))
+        if any(c in expected_cols for c in lvl0):
+            raw.columns = lvl0
             return raw
-
-        # If first row contains a repeated ticker header (some CSV dumps), try
-        # to detect and fix (e.g., header row with Unnamed or single column with
-        # ticker as second line)
-        if raw.columns.tolist()[0] == "Unnamed: 0":
-            # possible double header; try reading second row as header is not
-            # implemented here — return raw to allow manual inspection
+        if any(c in expected_cols for c in lvl1):
+            raw.columns = lvl1
             return raw
-
+        # fallback: join levels
+        raw.columns = [
+            "_".join([str(x) for x in col if x is not None])
+            for col in raw.columns
+        ]
         return raw
 
     df = _normalize_provider_df(df)
@@ -89,10 +85,8 @@ def main() -> int:
         print("MappingError:", e, file=sys.stderr)
         # for debugging, dump columns and types
         print("Provider DF columns:", list(df.columns), file=sys.stderr)
-        try:
+        with contextlib.suppress(Exception):
             print(df.head().to_string(), file=sys.stderr)
-        except Exception:
-            pass
         return 3
 
     print("Canonical columns:", list(canonical.columns))
