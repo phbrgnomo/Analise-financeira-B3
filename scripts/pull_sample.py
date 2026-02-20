@@ -153,7 +153,8 @@ def main() -> None:
 
     canonical, raw_checksum = to_canonical(df, ticker)
     default_name = f"{ticker}_sample.csv"
-    out_path = Path(args.outfile) if args.outfile else out_dir / default_name
+    # Saída fixa para simplificar uso em scripts de teste
+    out_path = out_dir / default_name
     out_path.parent.mkdir(parents=True, exist_ok=True)
     canonical.to_csv(out_path, index=False)
 
