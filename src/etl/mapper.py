@@ -1,10 +1,20 @@
 """
-Canonical mapper: normalizes provider DataFrames to project's canonical schema.
+Canonical mapper: normalizes provider DataFrames to the project's canonical schema.
 
-This module provides:
-- to_canonical(): main function to map raw provider DataFrame to canonical format
-- CanonicalSchema: pandera schema for validation
-- MappingError: exception for mapping failures
+Behavior:
+- Loads canonical schema from docs/schema.json (the project's source of truth) and
+  builds a pandera.DataFrameSchema.
+- to_canonical() constructs a canonical DataFrame using the schema column
+  order/types, maps provider columns to canonical names, injects computed fields
+  (fetched_at, raw_checksum), and validates using the loaded schema.
+
+Helpers:
+- load_canonical_schema_from_json(path) -> DataFrameSchema: builds the pandera
+  schema from JSON.
+
+Notes:
+- Provider-to-canonical mapping is best kept in adapters; this mapper contains a
+  minimal heuristic mapping for common providers (yfinance).
 """
 
 import hashlib
@@ -75,6 +85,47 @@ else:
     _schema_path = Path(__file__).resolve().parents[2] / "docs" / "schema.json"
 
 CanonicalSchema = load_canonical_schema_from_json(_schema_path)
+# keep parsed JSON handy for DataFrame construction and column order
+_SCHEMA_JSON = json.loads(_schema_path.read_text())
+
+# Minimal provider candidates for common canonical columns. Adapters can
+# provide a more complete mapping if needed.
+_CANON_TO_PROVIDER = {
+    "open": ["Open", "open"],
+    "high": ["High", "high"],
+    "low": ["Low", "low"],
+    "close": ["Close", "close"],
+    "adj_close": ["Adj Close", "Adj_Close", "adj_close"],
+    "volume": ["Volume", "volume"],
+}
+
+
+def _pick_provider_values(df: pd.DataFrame, candidates, nrows: int):
+    for c in candidates:
+        if c in df.columns:
+            return df[c].values
+    return [pd.NA] * nrows
+
+
+def _fill_special_values(df: pd.DataFrame, name: str, meta: dict, nrows: int):
+    """Fill values for schema fields that are computed or come from metadata.
+
+    meta: dictionary with keys 'ticker','provider_name','fetched_at','raw_checksum'.
+    """
+    if name == "date":
+        return (
+            pd.to_datetime(df["Date"]) if "Date" in df.columns
+            else pd.to_datetime(df.index)
+        )
+    if name == "ticker":
+        return [meta["ticker"]] * nrows
+    if name == "source":
+        return [meta["provider_name"]] * nrows
+    if name == "fetched_at":
+        return [meta["fetched_at"]] * nrows
+    if name == "raw_checksum":
+        return [meta["raw_checksum"]] * nrows
+    return None
 
 
 def to_canonical(
@@ -123,23 +174,36 @@ def to_canonical(
     # Generate fetched_at timestamp (UTC ISO8601)
     fetched_at = datetime.now(timezone.utc).isoformat()
 
-    # Build canonical DataFrame
+    # Build canonical DataFrame using the canonical schema JSON for column
+    # order and names. This avoids duplicating the canonical contract in code.
     try:
-        canonical_df = pd.DataFrame(
-            {
-                "ticker": ticker,
-                "date": df.index,
-                "open": df["Open"].values,
-                "high": df["High"].values,
-                "low": df["Low"].values,
-                "close": df["Close"].values,
-                "adj_close": df["Adj Close"].values,
-                "volume": df["Volume"].values,
-                "source": provider_name,
-                "fetched_at": fetched_at,
-                "raw_checksum": raw_checksum,
-            }
-        )
+        nrows = len(df)
+        data = {}
+
+        # small helpers extracted to reduce function complexity
+        def _pick_provider(col_candidates, nrows=nrows):
+            for c in col_candidates:
+                if c in df.columns:
+                    return df[c].values
+            return [pd.NA] * nrows
+
+        meta = {
+            "ticker": ticker,
+            "provider_name": provider_name,
+            "fetched_at": fetched_at,
+            "raw_checksum": raw_checksum,
+        }
+
+        for col_def in _SCHEMA_JSON.get("columns", []):
+            name = col_def.get("name")
+            val = _fill_special_values(df, name, meta, nrows)
+            if val is not None:
+                data[name] = val
+                continue
+            candidates = _CANON_TO_PROVIDER.get(name, [name, name.capitalize()])
+            data[name] = _pick_provider(candidates, nrows=nrows)
+
+        canonical_df = pd.DataFrame(data)
     except (KeyError, ValueError, TypeError) as e:
         raise MappingError(
             f"Failed to construct canonical DataFrame for {ticker}: {e}"
