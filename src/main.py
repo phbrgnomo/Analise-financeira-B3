@@ -47,6 +47,16 @@ def main():
         except Exception as e:
             print(f"Problemas baixando dados: {e}")
             continue
+        # Persistir raw provider e registrar metadados
+        from datetime import datetime  # import local para minimizar impacto no startup
+        from datetime import timezone as _tz
+
+        from src.ingest.pipeline import save_raw_csv
+        ts_raw = datetime.now(_tz.utc).strftime("%Y%m%dT%H%M%SZ")
+        save_meta = save_raw_csv(df, "yfinance", f"{a}.SA", ts_raw)
+        if save_meta.get("status") != "success":
+            print(f"Falha ao salvar raw para {a}: {save_meta.get('error_message')}")
+            continue
         # Calcula o retorno
         print(f"Calculado retornos de {a}")
         df["Return"] = rt.r_log(df["Adj Close"], df["Adj Close"].shift(1))

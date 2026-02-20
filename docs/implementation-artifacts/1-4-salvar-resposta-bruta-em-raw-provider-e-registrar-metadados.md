@@ -79,3 +79,22 @@ GPT-5 mini
 - docs/implementation-artifacts/1-4-salvar-resposta-bruta-em-raw-provider-e-registrar-metadados.md
 
 Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/117
+
+## Execução automatizada — resumo
+
+- executed_at: 2026-02-20T13:36:46Z
+- executor: bmad-agent-bmm-dev (Amelia — Developer Agent)
+- actions:
+  - Criado `src/ingest/pipeline.py` com função `save_raw_csv` e registro de metadados
+  - Atualizado `src/main.py` para chamar `save_raw_csv` antes da persistência canônica
+  - Adicionado teste `tests/test_save_raw.py` que valida escrita, checksum e registro em SQLite
+- files_changed:
+  - src/ingest/pipeline.py
+  - src/ingest/__init__.py
+  - src/main.py
+  - tests/test_save_raw.py
+  - docs/implementation-artifacts/1-4-salvar-resposta-bruta-em-raw-provider-e-registrar-metadados.md
+- commands_run:
+  - git checkout -b feat/story-1-4-impl
+  - git add -A && git commit -m "feat(story-1-4): salvar raw e registrar metadados (story 1-4)"
+  - pytest -q
