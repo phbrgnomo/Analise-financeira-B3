@@ -137,6 +137,7 @@ def to_canonical(
                 "volume": df["Volume"].values,
                 "source": provider_name,
                 "fetched_at": fetched_at,
+                "raw_checksum": raw_checksum,
             }
         )
     except (KeyError, ValueError, TypeError) as e:

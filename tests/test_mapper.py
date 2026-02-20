@@ -50,6 +50,7 @@ class TestToCanonical:
             "volume",
             "source",
             "fetched_at",
+            "raw_checksum",
         ]
         assert list(result.columns) == expected_columns
 
