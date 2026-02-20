@@ -158,7 +158,9 @@ def to_canonical(
         raise MappingError(f"Cannot map empty DataFrame for ticker {ticker}")
 
     # Check required columns (case-insensitive, provider-typical names)
-    required_cols = ["Open", "High", "Low", "Close", "Adj Close", "Volume"]
+    # Note: 'Adj Close' is optional in provider responses; canonical schema allows
+    # adj_close to be nullable. Require only the primary OHLCV columns here.
+    required_cols = ["Open", "High", "Low", "Close", "Volume"]
     missing_cols = [col for col in required_cols if col not in df.columns]
 
     if missing_cols:
