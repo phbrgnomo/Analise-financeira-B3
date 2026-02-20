@@ -7,19 +7,16 @@ e tratamento de erros padronizado.
 
 
 
-import contextlib
 import logging
 import re
-import time
 import types
 from datetime import datetime, timedelta, timezone
 from typing import Dict, Optional
 
 import pandas as pd
-import requests
 
 from src.adapters.base import Adapter
-from src.adapters.errors import FetchError, NetworkError, ValidationError
+from src.adapters.errors import FetchError
 
 # Configuração de logging estruturado
 logger = logging.getLogger(__name__)
@@ -141,29 +138,37 @@ class YFinanceAdapter(Adapter):
 
         logger.info("Iniciando fetch de dados", extra=log_context)
 
-        # Delegar obtenção com retry para helper
-        df = self._fetch_with_retries(
+        # Delegar obtenção com retry para helper implementado no Adapter base
+        df = super()._fetch_with_retries(
             normalized_ticker,
             start_date,
             end_date,
-            log_context,
+            log_context=log_context,
+            max_retries=self.max_retries,
+            backoff_factor=self.backoff_factor,
+            timeout=self.timeout,
             **kwargs,
         )
 
         # Adicionar metadados
         df.attrs["source"] = "yahoo"
         df.attrs["ticker"] = normalized_ticker
-        df.attrs["fetched_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")  # noqa: E501
+        fetched_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        df.attrs["fetched_at"] = fetched_at
         df.attrs["adapter"] = "YFinanceAdapter"
 
         return df
 
     def _fetch_with_retries(
         self,
-        normalized_ticker: str,
-        start_date: str,
-        end_date: str,
-        log_context: dict,
+        ticker: str,
+        start: str,
+        end: str,
+        log_context: Optional[dict] = None,
+        max_retries: Optional[int] = None,
+        backoff_factor: Optional[float] = None,
+        timeout: Optional[float] = None,
+        required_columns: Optional[list] = None,
         **kwargs,
     ) -> pd.DataFrame:
         """
@@ -172,86 +177,23 @@ class YFinanceAdapter(Adapter):
         Este método encapsula a lógica de retry e de captura de exceções
         relacionadas a rede/erros de API.
         """
-        last_exception = None
-        for attempt in range(1, self.max_retries + 1):
-            try:
-                log_context["attempt"] = attempt
-                log_msg = f"Tentativa {attempt} de {self.max_retries}"
-                logger.debug(log_msg, extra=log_context)
-
-                # Buscar dados usando web.DataReader (wrapper para yfinance)
-                df = web.DataReader(
-                    normalized_ticker,
-                    data_source="yahoo",
-                    start=start_date,
-                    end=end_date,
-                    **kwargs,
-                )
-
-                # Validar estrutura do DataFrame
-                self._validate_dataframe(df, normalized_ticker)
-
-                log_context["status"] = "success"
-                log_context["rows_fetched"] = len(df)
-                log_msg = f"Dados obtidos com sucesso: {len(df)} linhas"
-                logger.info(log_msg, extra=log_context)
-
-                return df
-
-            except (
-                ConnectionError,
-                TimeoutError,
-                requests.exceptions.ConnectionError,
-                requests.exceptions.ReadTimeout,
-                requests.exceptions.Timeout,
-            ) as e:
-                last_exception = e
-                log_context["status"] = "network_error"
-                log_context["error_message"] = str(e)
-                logger.warning(
-                    f"Erro de rede na tentativa {attempt}", extra=log_context
-                )
-
-                if attempt >= self.max_retries:
-                    raise NetworkError(
-                        "Falha de rede ao buscar "
-                        f"{normalized_ticker} após {self.max_retries} tentativas",
-                        original_exception=e,
-                    ) from e
-
-                wait_time = self.backoff_factor**attempt
-                logger.debug(
-                    f"Aguardando {wait_time}s antes de retry", extra=log_context
-                )
-                time.sleep(wait_time)
-            except ValidationError:
-                # Erros de validação não são transitórios — repropagar imediatamente
-                raise
-
-            except Exception as e:
-                last_exception = e
-                log_context["status"] = "fetch_error"
-                log_context["error_message"] = str(e)
-                log_context["error_type"] = type(e).__name__
-                log_msg = f"Erro ao buscar dados na tentativa {attempt}"
-                logger.error(log_msg, extra=log_context)
-
-                if attempt >= self.max_retries:
-                    raise FetchError(
-                        f"Erro ao buscar dados de {normalized_ticker}: {str(e)}",
-                        original_exception=e,
-                    ) from e
-
-                wait_time = self.backoff_factor**attempt
-                time.sleep(wait_time)
-
-        # Fallback caso todas as tentativas falhem
-        raise FetchError(
-            (
-                f"Falha ao buscar dados de {normalized_ticker} "
-                f"após {self.max_retries} tentativas"
+        # Backwards-compatible wrapper: delega para a implementação no Adapter base.
+        return super()._fetch_with_retries(
+            ticker,
+            start,
+            end,
+            log_context=log_context,
+            max_retries=(
+                self.max_retries if max_retries is None else max_retries
             ),
-            original_exception=last_exception,
+            backoff_factor=(
+                self.backoff_factor
+                if backoff_factor is None
+                else backoff_factor
+            ),
+            timeout=(self.timeout if timeout is None else timeout),
+            required_columns=required_columns,
+            **kwargs,
         )
 
     def _normalize_ticker(self, ticker: str) -> str:
@@ -277,59 +219,15 @@ class YFinanceAdapter(Adapter):
 
         return ticker
 
-    def _normalize_date(self, date_str: str) -> str:
+    # _normalize_date and _validate_dataframe are inherited from Adapter base
+
+    def _fetch_once(self, ticker: str, start: str, end: str, **kwargs) -> pd.DataFrame:
         """
-        Normaliza formato de data para YYYY-MM-DD.
-
-        Aceita formatos: 'YYYY-MM-DD' ou 'MM-DD-YYYY'
-
-        Args:
-            date_str: String de data
-
-        Returns:
-            Data no formato 'YYYY-MM-DD'
+        Implementação única de fetch para o provedor Yahoo (usado pelo base retry).
         """
-        date_str = date_str.strip()
-
-        # Tentar YYYY-MM-DD
-        with contextlib.suppress(ValueError):
-            datetime.strptime(date_str, "%Y-%m-%d")
-            return date_str
-        # Tentar MM-DD-YYYY
-        with contextlib.suppress(ValueError):
-            dt = datetime.strptime(date_str, "%m-%d-%Y")
-            return dt.strftime("%Y-%m-%d")
-        # Se não casou com os formatos esperados, levantar ValidationError
-        raise ValidationError(f"Formato de data inválido: {date_str}")
-
-    def _validate_dataframe(self, df: pd.DataFrame, ticker: str) -> None:
-        """
-        Valida estrutura do DataFrame retornado.
-
-        Args:
-            df: DataFrame a validar
-            ticker: Ticker para mensagem de erro
-
-        Raises:
-            ValidationError: Se DataFrame não possui estrutura esperada
-        """
-        required_columns = ["Open", "High", "Low", "Close", "Adj Close", "Volume"]
-
-        if df.empty:
-            raise ValidationError(
-                f"DataFrame vazio retornado para {ticker}. "
-                "Verifique se o ticker é válido e se há dados para o período."
-            )
-
-        if missing_columns := set(required_columns) - set(df.columns):
-            raise ValidationError(
-                f"Colunas obrigatórias ausentes para {ticker}: {missing_columns}"
-            )
-
-        if not isinstance(df.index, pd.DatetimeIndex):
-            raise ValidationError(
-                f"Índice do DataFrame não é DatetimeIndex para {ticker}"
-            )
+        return web.DataReader(
+            ticker, data_source="yahoo", start=start, end=end, **kwargs
+        )
 
     def get_metadata(self) -> Dict[str, str]:
         """

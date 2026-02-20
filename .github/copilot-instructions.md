@@ -61,6 +61,11 @@ Type `/bmad-` in Copilot Chat to see all available BMAD workflows and agent acti
 - Agentes trabalhando nesse projeto devem sempre utilizar `poetry` para execução de comandos, instalação de dependências e gerenciamento do ambiente virtual. O entrypoint definido é `main` em `src/main.py`, e deve ser invocado via `poetry run main` ou `python -m src.main` para garantir que o ambiente virtual seja ativado corretamente.
 - A cada novo inicio de trabalho, o agente deve verificar a existencia dos arquivos que serão modificados ou criados, para garantir que alterações no codigo não sejam duplicadas e consistentes com o que já está presente.
 
+- Antes de criar um Pull Request, agentes devem executar os checklists locais:
+  - Rodar o pre-commit em todos os arquivos: `poetry run pre-commit run --all-files`.
+  - Executar o orquestrador de CI para validar a pipeline localmente: `bash tests/ci/ci_orchestrator.sh`.
+  - Se algum dos passos falhar, corrija as falhas localmente antes de abrir o PR.
+
 ## Projeto — comandos úteis
 
 - Instalar dependências: poetry install

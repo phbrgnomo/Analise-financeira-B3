@@ -29,6 +29,7 @@ pip-delete-this-directory.txt
 coverage.xml
 htmlcov/
 .ruff_cache/
+/reports/junit.xml
 
 # MyPy cache
 .mypy_cache/
