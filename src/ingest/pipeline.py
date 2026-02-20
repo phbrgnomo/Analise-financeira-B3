@@ -98,7 +98,7 @@ def save_raw_csv(
         checksum = sha256_file(file_path)
 
         # write checksum file next to CSV (e.g. file.csv.checksum)
-        checksum_path = Path(str(file_path) + ".checksum")
+        checksum_path = Path(f"{str(file_path)}.checksum")
         checksum_path.write_text(checksum)
 
         # persist metadata in sqlite
@@ -129,7 +129,7 @@ def save_raw_csv(
         finally:
             conn.close()
 
-        metadata = {
+        return {
             "job_id": job_id,
             "source": provider,
             "fetched_at": fetched_at,
@@ -139,8 +139,6 @@ def save_raw_csv(
             "status": "success",
             "created_at": created_at,
         }
-        return metadata
-
     except Exception as e:
         logger.exception("Erro ao salvar raw CSV: %s", e)
         # attempt to record failure in DB

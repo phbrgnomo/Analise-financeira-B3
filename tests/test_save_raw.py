@@ -22,7 +22,7 @@ def test_save_raw_csv_and_register(tmp_path):
     assert csv_path.exists()
 
     # checksum file
-    checksum_path = Path(str(csv_path) + ".checksum")
+    checksum_path = Path(f"{str(csv_path)}.checksum")
     assert checksum_path.exists()
 
     # checksum value matches content
@@ -32,14 +32,19 @@ def test_save_raw_csv_and_register(tmp_path):
     # DB entry exists
     conn = sqlite3.connect(str(db_path))
     try:
-        cur = conn.cursor()
-        cur.execute(
-            "SELECT job_id, status, filepath FROM ingest_logs WHERE job_id = ?",
-            (meta["job_id"],),
-        )
-        row = cur.fetchone()
-        assert row is not None
-        assert row[1] == "success"
-        assert row[2] == meta["filepath"]
+        assert_ingest_log_entry(conn, meta)
     finally:
         conn.close()
+
+
+# TODO Rename this here and in `test_save_raw_csv_and_register`
+def assert_ingest_log_entry(conn, meta):
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT job_id, status, filepath FROM ingest_logs WHERE job_id = ?",
+        (meta["job_id"],),
+    )
+    row = cur.fetchone()
+    assert row is not None
+    assert row[1] == "success"
+    assert row[2] == meta["filepath"]
