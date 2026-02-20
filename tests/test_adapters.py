@@ -5,8 +5,7 @@ Testa interface Adapter, erros customizados e implementação YFinanceAdapter
 usando mocks para garantir determinismo e isolamento de rede.
 """
 
-from datetime import datetime
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pandas as pd
 import pytest
@@ -328,6 +327,6 @@ class TestYFinanceAdapter:
         metadata = adapter.get_metadata()
 
         assert metadata["provider"] == "yahoo"
-        assert metadata["library"] == "pandas_datareader"
+        assert metadata["library"] == "yfinance"
         assert metadata["max_retries"] == "5"
         assert "adapter_version" in metadata

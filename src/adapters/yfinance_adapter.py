@@ -1,14 +1,15 @@
 """
-Adaptador para o provedor Yahoo Finance usando pandas_datareader.
+Adaptador para o provedor Yahoo Finance usando yfinance.
 
 Implementa busca de dados OHLCV com retry, logging estruturado
 e tratamento de erros padronizado.
 """
 
+
 import logging
 import time
 import types
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Optional
 
 import pandas as pd
@@ -19,15 +20,24 @@ from src.adapters.errors import FetchError, NetworkError, ValidationError
 # Configuração de logging estruturado
 logger = logging.getLogger(__name__)
 
-# Tentar carregar pandas_datareader no nível de módulo; em caso de falha, expor um stub
+# Tentar carregar yfinance no nível de módulo; em caso de falha, expor um wrapper/stub
 try:
-    from pandas_datareader import data as web  # type: ignore
+    import yfinance as yf  # type: ignore
+
+    # Wrapper compatível com a API esperada pelo código legado (web.DataReader)
+    def _datareader_wrapper(ticker, data_source=None, start=None, end=None, **kwargs):
+        # Ignora `data_source` que fazia parte do pandas_datareader e usa yfinance
+        return yf.download(ticker, start=start, end=end, progress=False)
+
+    web = types.SimpleNamespace(DataReader=_datareader_wrapper, __is_wrapper__=True)
+
 except Exception:
     # stub para permitir que testes façam patch('src.adapters.yfinance_adapter.web.DataReader')
-    def _pdreader_missing(*args, **kwargs):
-        raise FetchError("Dependência 'pandas_datareader' não disponível para YFinanceAdapter.fetch")
+    def _yf_missing(*args, **kwargs):
+        raise FetchError("Dependência 'yfinance' não disponível para YFinanceAdapter.fetch")
 
-    web = types.SimpleNamespace(DataReader=_pdreader_missing, __is_stub__=True)
+    yf = types.SimpleNamespace(download=_yf_missing, __is_stub__=True)
+    web = types.SimpleNamespace(DataReader=_yf_missing, __is_stub__=True)
 
 
 class YFinanceAdapter(Adapter):
@@ -64,7 +74,7 @@ class YFinanceAdapter(Adapter):
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
         **kwargs,
-    ) -> pd.DataFrame:
+    ) -> pd.DataFrame:  # noqa: C901
         """
         Busca dados OHLCV do Yahoo Finance para um ticker.
 
@@ -119,19 +129,11 @@ class YFinanceAdapter(Adapter):
         for attempt in range(1, self.max_retries + 1):
             try:
                 log_context["attempt"] = attempt
-                logger.debug(f"Tentativa {attempt} de {self.max_retries}", extra=log_context)
+                log_msg = f"Tentativa {attempt} de {self.max_retries}"
+                logger.debug(log_msg, extra=log_context)
 
-                # Buscar dados do Yahoo Finance (usa `web` module-level se mockado em testes, caso contrário carrega pandas_datareader)
-                global web
-                if web is None:
-                    try:
-                        from pandas_datareader import data as web_module  # import local
-                        web = web_module
-                    except Exception as e:
-                        raise FetchError(
-                            "Dependência 'pandas_datareader' não disponível para YFinanceAdapter.fetch",
-                            original_exception=e,
-                        )
+                # Buscar dados usando web.DataReader (wrapper para yfinance)
+
                 df = web.DataReader(
                     normalized_ticker,
                     data_source="yahoo",
@@ -145,14 +147,13 @@ class YFinanceAdapter(Adapter):
                 # Adicionar metadados
                 df.attrs["source"] = "yahoo"
                 df.attrs["ticker"] = normalized_ticker
-                df.attrs["fetched_at"] = datetime.utcnow().isoformat() + "Z"
+                df.attrs["fetched_at"] = datetime.now(timezone.utc).isoformat() + "Z"
                 df.attrs["adapter"] = "YFinanceAdapter"
 
                 log_context["status"] = "success"
                 log_context["rows_fetched"] = len(df)
-                logger.info(
-                    f"Dados obtidos com sucesso: {len(df)} linhas", extra=log_context
-                )
+                log_msg = f"Dados obtidos com sucesso: {len(df)} linhas"
+                logger.info(log_msg, extra=log_context)
 
                 return df
 
@@ -291,7 +292,7 @@ class YFinanceAdapter(Adapter):
         base_metadata.update(
             {
                 "provider": "yahoo",
-                "library": "pandas_datareader",
+                "library": "yfinance",
                 "max_retries": str(self.max_retries),
                 "backoff_factor": str(self.backoff_factor),
             }

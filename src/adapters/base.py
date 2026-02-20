@@ -5,7 +5,7 @@ Define o contrato público que todos os adaptadores devem implementar.
 """
 
 from abc import ABC, abstractmethod
-from typing import Dict, Optional
+from typing import Dict
 
 import pandas as pd
 
