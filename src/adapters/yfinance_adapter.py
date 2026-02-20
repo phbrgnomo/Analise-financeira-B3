@@ -7,6 +7,7 @@ e tratamento de erros padronizado.
 
 
 import logging
+import re
 import time
 import types
 from datetime import datetime, timedelta, timezone
@@ -114,7 +115,7 @@ class YFinanceAdapter(Adapter):
             start = datetime.now() - timedelta(days=365)
             start_date = start.strftime("%Y-%m-%d")
 
-        # Normalizar formato de datas para YYYY-MM-DD
+        # Normalizar formato de datas para YYYY-MM-DD (valida formatos)
         start_date = self._normalize_date(start_date)
         end_date = self._normalize_date(end_date)
 
@@ -183,11 +184,11 @@ class YFinanceAdapter(Adapter):
                         original_exception=e,
                     ) from e
 
-            except Exception as e:
+            except ValidationError:
                 # Erros de validação não são transitórios — repropagar imediatamente
-                if isinstance(e, ValidationError):
-                    raise
+                raise
 
+            except Exception as e:
                 last_exception = e
                 log_context["status"] = "fetch_error"
                 log_context["error_message"] = str(e)
@@ -227,9 +228,16 @@ class YFinanceAdapter(Adapter):
         """
         ticker = ticker.strip().upper()
 
-        # Identificar se é ativo B3 (termina com número)
-        # Ex: PETR4, VALE3, ITUB3 -> adicionar .SA
-        if ticker and ticker[-1].isdigit() and not ticker.endswith(".SA"):
+        # Se já contém um sufixo (ex.: .SA, .NS) ou contém ponto, respeitar
+        if "." in ticker:
+            return ticker
+
+        # Match básico para tickers alfanuméricos que terminam em dígito (B3)
+        if (
+            re.match(r"^[A-Z0-9]+$", ticker)
+            and ticker[-1].isdigit()
+            and not ticker.endswith(".SA")
+        ):
             return f"{ticker}.SA"
 
         return ticker
@@ -248,18 +256,22 @@ class YFinanceAdapter(Adapter):
         """
         date_str = date_str.strip()
 
-        # Detectar formato MM-DD-YYYY (usado no código legado)
-        if "-" in date_str:
-            parts = date_str.split("-")
-            if len(parts) == 3:
-                # Se primeiro campo tem 4 dígitos, já está em YYYY-MM-DD
-                if len(parts[0]) == 4:
-                    return date_str
-                # Caso contrário, converter MM-DD-YYYY -> YYYY-MM-DD
-                elif len(parts[2]) == 4:
-                    return f"{parts[2]}-{parts[0]}-{parts[1]}"
+        # Tentar YYYY-MM-DD
+        try:
+            datetime.strptime(date_str, "%Y-%m-%d")
+            return date_str
+        except Exception:
+            pass
 
-        return date_str
+        # Tentar MM-DD-YYYY
+        try:
+            dt = datetime.strptime(date_str, "%m-%d-%Y")
+            return dt.strftime("%Y-%m-%d")
+        except Exception:
+            pass
+
+        # Se não casou com os formatos esperados, levantar ValidationError
+        raise ValidationError(f"Formato de data inválido: {date_str}")
 
     def _validate_dataframe(self, df: pd.DataFrame, ticker: str) -> None:
         """
@@ -299,10 +311,22 @@ class YFinanceAdapter(Adapter):
             Dict com informações do provedor e versões
         """
         base_metadata = super().get_metadata()
+
+        # Detectar disponibilidade da biblioteca yfinance
+        library = "yfinance"
+        if hasattr(yf, "__is_stub__") and yf.__is_stub__:
+            version = "unknown"
+            library_available = "no"
+        else:
+            version = getattr(yf, "__version__", "unknown")
+            library_available = "yes"
+
         base_metadata.update(
             {
                 "provider": "yahoo",
-                "library": "yfinance",
+                "library": library,
+                "library_version": version,
+                "library_available": library_available,
                 "max_retries": str(self.max_retries),
                 "backoff_factor": str(self.backoff_factor),
             }

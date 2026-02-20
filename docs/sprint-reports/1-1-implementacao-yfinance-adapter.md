@@ -25,6 +25,10 @@ Documento de implantação da Story 1-1: definição da interface Adapter e impl
 - Modified: `tests/test_adapters.py` — testes adicionados/ajustados para o adaptador.
 - Modified: `docs/implementation-artifacts/1-1-implementar-interface-de-adapter-e-adaptador-yfinance-minimo.md` — status e registro de conclusão.
 - New file: `docs/sprint-reports/1-1-implementacao-yfinance-adapter.md` (este documento).
+ - Modified: `src/adapters/base.py` — ajustes na interface e documentação do contrato do adaptador.
+ - Modified: `src/adapters/errors.py` — adição/ajuste de exceções padronizadas utilizadas pelo adaptador.
+ - Modified: `src/adapters/__init__.py` — export do `YFinanceAdapter` atualizado.
+ - Modified: `poetry.lock` — lockfile atualizado por mudanças em dependências durante implementação.
 
 ## Commits relevantes
 
