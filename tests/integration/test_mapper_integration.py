@@ -55,6 +55,7 @@ class TestCanonicalMapperIntegration:
             "volume",
             "source",
             "fetched_at",
+            "raw_checksum",
         }
         assert set(canonical_df.columns) == expected_columns
 

@@ -34,7 +34,7 @@ class MappingError(Exception):
 _TYPE_MAP = {
     "string": str,
     "date": pd.Timestamp,
-    "datetime": pd.Timestamp,
+    "datetime": str,
     "float": float,
     "int": int,
 }
