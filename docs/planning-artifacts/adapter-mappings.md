@@ -24,6 +24,10 @@ Mapping canônico sugerido para a tabela `prices`:
 - `low` <- `Low`
 - `close` <- `Close`
 - `adj_close` <- `Adj Close`
+
+Observação sobre persistência:
+- `adj_close` é mapeado a partir de `Adj Close` e é útil para cálculos de retornos e análises.
+- Porém, por decisão de design, `adj_close` pode existir na saída canônica do mapper para consumo interno, mas **não é garantido** que seja persistido na tabela final do banco (`docs/schema.json` é a fonte de verdade para o esquema persistido). Se a persistência exigir `adj_close`, isso deve ser documentado e versionado no `schema.json`.
 - `volume` <- `Volume`
 - `source` <- `'yfinance'`
 - `fetched_at` <- timestamp de ingestão (UTC)
@@ -33,6 +37,28 @@ Mapping canônico sugerido para a tabela `prices`:
 Observações:
 - Tipos devem ser normalizados: datas em ISO `YYYY-MM-DD`, números como `REAL`, volumes como `INTEGER` quando possível.
 - Colunas adicionais retornadas pelo provedor podem ser preservadas em `raw_response` ou mapeadas para campos auxiliares conforme necessário.
+
+### Exemplo de código (uso do canonical mapper)
+
+```python
+from src.adapters.yfinance_adapter import YFinanceAdapter
+from src.etl.mapper import to_canonical
+
+# Buscar dados brutos
+adapter = YFinanceAdapter()
+raw_df = adapter.fetch("PETR4.SA", start_date="2026-01-01", end_date="2026-01-31")
+
+# Converter para schema canônico
+canonical_df = to_canonical(raw_df, provider_name="yfinance", ticker="PETR4.SA")
+
+# canonical_df agora tem colunas: ticker, date, open, high, low, close,
+# adj_close, volume, source, fetched_at
+# e metadata em canonical_df.attrs: raw_checksum, provider, ticker
+
+# Usar com camada de persistência
+from src.db.db import write_prices
+write_prices(canonical_df)  # Upsert no SQLite
+```
 
 ## Exemplo: Alpha Vantage -> Canonical
 
