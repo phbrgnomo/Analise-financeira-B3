@@ -35,7 +35,7 @@ class AdapterError(Exception):
     def __str__(self):
         """Retorna representação string do erro."""
         if self.original_exception:
-            return f"[{self.code}] {self.message} (caused by: {self.original_exception})"
+            return f"[{self.code}] {self.message} (caused by: {self.original_exception})"  # noqa: E501
         return f"[{self.code}] {self.message}"
 
 

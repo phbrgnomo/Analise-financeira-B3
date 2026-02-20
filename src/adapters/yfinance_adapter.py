@@ -6,6 +6,8 @@ e tratamento de erros padronizado.
 """
 
 
+
+import contextlib
 import logging
 import re
 import time
@@ -29,7 +31,13 @@ try:
     def _datareader_wrapper(ticker, data_source=None, start=None, end=None, **kwargs):
         # Ignora o parâmetro `data_source` (compatibilidade com pandas_datareader API)
         # e usa `yfinance` internamente via `yf.download`
-        return yf.download(ticker, start=start, end=end, progress=False)
+        return yf.download(
+            ticker,
+            start=start,
+            end=end,
+            progress=False,
+            **kwargs,
+        )
 
     web = types.SimpleNamespace(DataReader=_datareader_wrapper, __is_wrapper__=True)
 
@@ -78,7 +86,7 @@ class YFinanceAdapter(Adapter):
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
         **kwargs,
-    ) -> pd.DataFrame:  # noqa: C901
+    ) -> pd.DataFrame:    # noqa: C901
         """
         Busca dados OHLCV do Yahoo Finance para um ticker.
 
@@ -154,7 +162,7 @@ class YFinanceAdapter(Adapter):
                 # Adicionar metadados
                 df.attrs["source"] = "yahoo"
                 df.attrs["ticker"] = normalized_ticker
-                df.attrs["fetched_at"] = datetime.now(timezone.utc).isoformat() + "Z"
+                df.attrs["fetched_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")  # noqa: E501
                 df.attrs["adapter"] = "YFinanceAdapter"
 
                 log_context["status"] = "success"
@@ -172,19 +180,18 @@ class YFinanceAdapter(Adapter):
                     f"Erro de rede na tentativa {attempt}", extra=log_context
                 )
 
-                if attempt < self.max_retries:
-                    wait_time = self.backoff_factor**attempt
-                    logger.debug(
-                        f"Aguardando {wait_time}s antes de retry", extra=log_context
-                    )
-                    time.sleep(wait_time)
-                else:
+                if attempt >= self.max_retries:
                     raise NetworkError(
                         "Falha de rede ao buscar "
                         f"{normalized_ticker} após {self.max_retries} tentativas",
                         original_exception=e,
                     ) from e
 
+                wait_time = self.backoff_factor**attempt
+                logger.debug(
+                    f"Aguardando {wait_time}s antes de retry", extra=log_context
+                )
+                time.sleep(wait_time)
             except ValidationError:
                 # Erros de validação não são transitórios — repropagar imediatamente
                 raise
@@ -197,15 +204,14 @@ class YFinanceAdapter(Adapter):
                 log_msg = f"Erro ao buscar dados na tentativa {attempt}"
                 logger.error(log_msg, extra=log_context)
 
-                if attempt < self.max_retries:
-                    wait_time = self.backoff_factor**attempt
-                    time.sleep(wait_time)
-                else:
+                if attempt >= self.max_retries:
                     raise FetchError(
                         f"Erro ao buscar dados de {normalized_ticker}: {str(e)}",
                         original_exception=e,
                     ) from e
 
+                wait_time = self.backoff_factor**attempt
+                time.sleep(wait_time)
         # Fallback caso todas as tentativas falhem
         raise FetchError(
             (
@@ -228,11 +234,6 @@ class YFinanceAdapter(Adapter):
             Ticker normalizado
         """
         ticker = ticker.strip().upper()
-
-        # Se já contém um sufixo (ex.: .SA, .NS) ou contém ponto, respeitar
-        if "." in ticker:
-            return ticker
-
         # Match básico para tickers alfanuméricos que terminam em dígito (B3)
         if (
             re.match(r"^[A-Z0-9]+$", ticker)
@@ -258,19 +259,13 @@ class YFinanceAdapter(Adapter):
         date_str = date_str.strip()
 
         # Tentar YYYY-MM-DD
-        try:
+        with contextlib.suppress(ValueError):
             datetime.strptime(date_str, "%Y-%m-%d")
             return date_str
-        except ValueError:
-            pass
-
         # Tentar MM-DD-YYYY
-        try:
+        with contextlib.suppress(ValueError):
             dt = datetime.strptime(date_str, "%m-%d-%Y")
             return dt.strftime("%Y-%m-%d")
-        except ValueError:
-            pass
-
         # Se não casou com os formatos esperados, levantar ValidationError
         raise ValidationError(f"Formato de data inválido: {date_str}")
 
@@ -293,8 +288,7 @@ class YFinanceAdapter(Adapter):
                 "Verifique se o ticker é válido e se há dados para o período."
             )
 
-        missing_columns = set(required_columns) - set(df.columns)
-        if missing_columns:
+        if missing_columns := set(required_columns) - set(df.columns):
             raise ValidationError(
                 f"Colunas obrigatórias ausentes para {ticker}: {missing_columns}"
             )

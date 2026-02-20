@@ -52,7 +52,7 @@ so that a pipeline de ingest consiga obter preços para um ticker a partir de um
   - `tests/test_adapters.py` (unit tests)
 - Mantenha imports absolutos do pacote `src` e registre módulos no `pyproject.toml` entrypoint conforme convenção do projeto.
 
--### Testing Requirements
+### Testing Requirements
 
 - Unit tests: mockar chamadas a `yfinance` (via wrapper `web.DataReader`) para garantir determinismo; testar erros e sucesso.
 - Coverage mínima para esta story: testes para interface, adaptador e tratamento de erro.
