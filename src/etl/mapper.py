@@ -95,7 +95,6 @@ _CANON_TO_PROVIDER = {
     "high": ["High", "high"],
     "low": ["Low", "low"],
     "close": ["Close", "close"],
-    "adj_close": ["Adj Close", "Adj_Close", "adj_close"],
     "volume": ["Volume", "volume"],
 }
 
@@ -141,7 +140,7 @@ def to_canonical(
 
     Returns:
         DataFrame with canonical columns: ticker, date, open, high, low, close,
-        adj_close, volume, source, fetched_at
+        volume, source, fetched_at
 
     Raises:
         MappingError: If required columns are missing, DataFrame is empty,
