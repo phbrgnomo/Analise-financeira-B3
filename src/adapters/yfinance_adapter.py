@@ -32,9 +32,11 @@ try:
     web = types.SimpleNamespace(DataReader=_datareader_wrapper, __is_wrapper__=True)
 
 except Exception:
-    # stub para permitir que testes façam patch('src.adapters.yfinance_adapter.web.DataReader')
+    # stub para permitir patch de web.DataReader nos testes
     def _yf_missing(*args, **kwargs):
-        raise FetchError("Dependência 'yfinance' não disponível para YFinanceAdapter.fetch")
+        raise FetchError(
+            "Dependência 'yfinance' não disponível para YFinanceAdapter.fetch"
+        )
 
     yf = types.SimpleNamespace(download=_yf_missing, __is_stub__=True)
     web = types.SimpleNamespace(DataReader=_yf_missing, __is_stub__=True)
@@ -42,7 +44,7 @@ except Exception:
 
 class YFinanceAdapter(Adapter):
     """
-    Adaptador para Yahoo Finance via pandas_datareader.
+    Adaptador para Yahoo Finance via yfinance.
 
     Busca dados históricos de preços com suporte a retry automático,
     backoff exponencial e logging estruturado de requisições.
@@ -85,8 +87,9 @@ class YFinanceAdapter(Adapter):
             **kwargs: Argumentos adicionais ignorados (compatibilidade futura)
 
         Returns:
-            pd.DataFrame com colunas ['Open', 'High', 'Low', 'Close', 'Adj Close', 'Volume']
-            e índice DatetimeIndex. Metadados incluem 'source', 'ticker', 'fetched_at'.
+            pd.DataFrame com colunas ['Open', 'High', 'Low',
+            'Close', 'Adj Close', 'Volume'] e índice DatetimeIndex.
+            Metadados incluem 'source', 'ticker', 'fetched_at'.
 
         Raises:
             FetchError: Erro ao buscar dados
@@ -95,7 +98,9 @@ class YFinanceAdapter(Adapter):
 
         Example:
             >>> adapter = YFinanceAdapter()
-            >>> df = adapter.fetch('PETR4.SA', start_date='2024-01-01', end_date='2024-12-31')
+            >>> df = adapter.fetch(
+            ...     'PETR4.SA', start_date='2024-01-01', end_date='2024-12-31'
+            ... )
             >>> print(df.head())
         """
         # Normalizar ticker para formato Yahoo (adicionar .SA se necessário para B3)
@@ -173,9 +178,10 @@ class YFinanceAdapter(Adapter):
                     time.sleep(wait_time)
                 else:
                     raise NetworkError(
-                        f"Falha de rede ao buscar {normalized_ticker} após {self.max_retries} tentativas",
+                        "Falha de rede ao buscar "
+                        f"{normalized_ticker} após {self.max_retries} tentativas",
                         original_exception=e,
-                    )
+                    ) from e
 
             except Exception as e:
                 # Erros de validação não são transitórios — repropagar imediatamente
@@ -186,7 +192,8 @@ class YFinanceAdapter(Adapter):
                 log_context["status"] = "fetch_error"
                 log_context["error_message"] = str(e)
                 log_context["error_type"] = type(e).__name__
-                logger.error(f"Erro ao buscar dados na tentativa {attempt}", extra=log_context)
+                log_msg = f"Erro ao buscar dados na tentativa {attempt}"
+                logger.error(log_msg, extra=log_context)
 
                 if attempt < self.max_retries:
                     wait_time = self.backoff_factor**attempt
@@ -195,11 +202,14 @@ class YFinanceAdapter(Adapter):
                     raise FetchError(
                         f"Erro ao buscar dados de {normalized_ticker}: {str(e)}",
                         original_exception=e,
-                    )
+                    ) from e
 
         # Fallback caso todas as tentativas falhem
         raise FetchError(
-            f"Falha ao buscar dados de {normalized_ticker} após {self.max_retries} tentativas",
+            (
+                f"Falha ao buscar dados de {normalized_ticker} "
+                f"após {self.max_retries} tentativas"
+            ),
             original_exception=last_exception,
         )
 

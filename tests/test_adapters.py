@@ -35,7 +35,11 @@ class TestAdapterErrors:
     def test_adapter_error_with_original_exception(self):
         """Testa AdapterError com exceção original encadeada."""
         original = ValueError("Erro original")
-        error = AdapterError("Erro wrapper", code="WRAPPER", original_exception=original)
+        error = AdapterError(
+            "Erro wrapper",
+            code="WRAPPER",
+            original_exception=original,
+        )
         assert error.original_exception == original
         assert "caused by" in str(error)
         assert "Erro original" in str(error)
@@ -314,7 +318,7 @@ class TestYFinanceAdapter:
         mock_datareader.return_value = mock_df
 
         adapter = YFinanceAdapter()
-        result = adapter.fetch("PETR4")
+        adapter.fetch("PETR4")
 
         # Verificar que DataReader foi chamado com datas
         call_args = mock_datareader.call_args
