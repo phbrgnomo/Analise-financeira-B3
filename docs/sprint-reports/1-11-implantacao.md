@@ -15,7 +15,7 @@ O que foi implementado
 
 - Criado `docs/schema.json` com `schema_version: 1` e notas semânticas por coluna.
 - Adicionada documentação em `docs/schema.md` explicando campos, versionamento e migrações.
-- Inclusão de `dados/examples/ticker_example.csv` como exemplo referenciado pela documentação.
+- Inclusão de `dados/samples/ticker_example.csv` como exemplo referenciado pela documentação.
 - Adicionado teste unitário `tests/test_schema.py` que valida ordem das colunas e formatos essenciais (date, fetched_at, raw_checksum).
 - Adicionada referência ao esquema em `docs/implementation-artifacts/1-1-implementar-interface-de-adapter-e-adaptador-yfinance-minimo.md`.
 - Atualizado `docs/implementation-artifacts/sprint-status.yaml` com o status desta story (ready-for-review).

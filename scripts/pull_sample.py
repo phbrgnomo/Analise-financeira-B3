@@ -45,6 +45,13 @@ def fetch_yahoo(ticker: str, days: int = 5) -> pd.DataFrame:
         import yfinance as yf  # type: ignore
 
         df = yf.download(ticker, start=start, end=end)
+
+        if df.empty:
+            print(
+                f"Warning: yfinance retornou DataFrame vazio para {ticker}.",
+                file=sys.stderr,
+            )
+            print(f"Intervalo: {start} - {end}", file=sys.stderr)
     except Exception as yf_exc:
         print("yfinance não disponível ou falhou:", yf_exc, file=sys.stderr)
         raise
@@ -131,8 +138,8 @@ def main() -> None:
     df = fetch_yahoo(ticker, days=args.days)
 
     # salvar resposta original (raw) para inspeção
-    if df is None:
-        print("Erro: não foi possível obter dados brutos (df is None)", file=sys.stderr)
+    if df.empty:
+        print("Erro: DataFrame bruto vazio do provedor", file=sys.stderr)
         sys.exit(2)
 
     out_dir = Path("dados") / "samples"

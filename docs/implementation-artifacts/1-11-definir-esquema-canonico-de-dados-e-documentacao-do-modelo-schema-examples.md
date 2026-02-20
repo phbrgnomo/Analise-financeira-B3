@@ -58,7 +58,7 @@ GPT-5 mini
 ### Completion Notes List
 
 - Created canonical schema and example artifacts; updated sprint status.
-- Implemented artifacts: docs/schema.yaml, docs/schema.md, dados/examples/ticker_example.csv, tests/test_schema.py; added unit test validating schema vs example CSV (tests/test_schema.py). New test executed locally and passed.
+- Implemented artifacts: docs/schema.json, docs/schema.md, dados/samples/ticker_example.csv, tests/test_schema.py; added unit test validating schema vs example CSV (tests/test_schema.py). New test executed locally and passed.
 - Adicionada referência ao schema em `docs/implementation-artifacts/1-1-implementar-interface-de-adapter-e-adaptador-yfinance-minimo.md`.
 - Criado `docs/implementation-artifacts/sprint-status.yaml` e `docs/sprint-reports/1-11-implantacao.md` documentando a implantação.
 
