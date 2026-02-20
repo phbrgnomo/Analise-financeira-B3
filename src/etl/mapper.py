@@ -8,11 +8,15 @@ This module provides:
 """
 
 import hashlib
+import json
 import logging
+import os
 from datetime import datetime, timezone
+from pathlib import Path
 
 import pandas as pd
 import pandera.pandas as pa
+from pandera import Check
 from pandera.pandas import Column, DataFrameSchema
 
 logger = logging.getLogger(__name__)
@@ -24,23 +28,53 @@ class MappingError(Exception):
     pass
 
 
-# Pandera schema for canonical DataFrame validation
-CanonicalSchema = DataFrameSchema(
-    {
-        "ticker": Column(str, nullable=False),
-        "date": Column(pd.Timestamp, nullable=False),
-        "open": Column(float, nullable=False),
-        "high": Column(float, nullable=False),
-        "low": Column(float, nullable=False),
-        "close": Column(float, nullable=False),
-        "adj_close": Column(float, nullable=False),
-        "volume": Column(int, nullable=False, coerce=True),
-        "source": Column(str, nullable=False),
-        "fetched_at": Column(str, nullable=False),
-    },
-    strict=True,
-    coerce=True,
-)
+# Load canonical schema from docs/schema.json (source of truth)
+
+
+_TYPE_MAP = {
+    "string": str,
+    "date": pd.Timestamp,
+    "datetime": pd.Timestamp,
+    "float": float,
+    "int": int,
+}
+
+
+def _col_from_json(col_def: dict) -> Column:
+    ctype = col_def.get("type")
+    if ctype not in _TYPE_MAP:
+        raise ValueError(f"Unknown type in canonical schema: {ctype!r}")
+    dtype = _TYPE_MAP[ctype]
+    nullable = bool(col_def.get("nullable", True))
+    return Column(dtype, nullable=nullable, coerce=True)
+
+
+def load_canonical_schema_from_json(path: Path) -> DataFrameSchema:
+    data = json.loads(path.read_text())
+    cols = {c["name"]: _col_from_json(c) for c in data.get("columns", [])}
+    df_checks = []
+    if "high" in cols and "low" in cols:
+        # ensure that when present, high > low (ignore NaNs)
+        df_checks.append(
+            Check(
+                lambda df: (
+                    df["high"].isna()
+                    | df["low"].isna()
+                    | (df["high"] > df["low"])
+                ).all(),
+                element_wise=False,
+            )
+        )
+    return DataFrameSchema(cols, strict=True, coerce=True, checks=df_checks)
+
+
+_env_path = os.environ.get("CANONICAL_SCHEMA_PATH")
+if _env_path:
+    _schema_path = Path(_env_path)
+else:
+    _schema_path = Path(__file__).resolve().parents[2] / "docs" / "schema.json"
+
+CanonicalSchema = load_canonical_schema_from_json(_schema_path)
 
 
 def to_canonical(
