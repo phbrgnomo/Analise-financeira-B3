@@ -51,7 +51,7 @@ def main() -> int:
         return 2
 
     # Normalize provider DataFrame if necessary (e.g., MultiIndex columns from yfinance)
-    expected_cols = {"Open", "High", "Low", "Close", "Adj Close", "Volume"}
+    expected_cols = {"Open", "High", "Low", "Close", "Volume"}
 
     def _normalize_provider_df(raw: pd.DataFrame) -> pd.DataFrame:
         # If columns are MultiIndex, try to pick the level with expected column names
