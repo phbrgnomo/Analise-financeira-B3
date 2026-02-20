@@ -16,6 +16,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Dict, Optional
 
 import pandas as pd
+import requests
 
 from src.adapters.base import Adapter
 from src.adapters.errors import FetchError, NetworkError, ValidationError
@@ -116,12 +117,13 @@ class YFinanceAdapter(Adapter):
         # Normalizar ticker para formato Yahoo (adicionar .SA se necessário para B3)
         normalized_ticker = self._normalize_ticker(ticker)
 
-        # Definir datas padrão se não fornecidas
+        # Definir datas padrão se não fornecidas usando uma única referência de tempo
+        now = datetime.now()
         if end_date is None:
-            end_date = datetime.now().strftime("%Y-%m-%d")
+            end_date = now.strftime("%Y-%m-%d")
         if start_date is None:
             # Padrão: último ano
-            start = datetime.now() - timedelta(days=365)
+            start = now - timedelta(days=365)
             start_date = start.strftime("%Y-%m-%d")
 
         # Normalizar formato de datas para YYYY-MM-DD (valida formatos)
@@ -139,7 +141,37 @@ class YFinanceAdapter(Adapter):
 
         logger.info("Iniciando fetch de dados", extra=log_context)
 
-        # Implementar retry com backoff exponencial
+        # Delegar obtenção com retry para helper
+        df = self._fetch_with_retries(
+            normalized_ticker,
+            start_date,
+            end_date,
+            log_context,
+            **kwargs,
+        )
+
+        # Adicionar metadados
+        df.attrs["source"] = "yahoo"
+        df.attrs["ticker"] = normalized_ticker
+        df.attrs["fetched_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")  # noqa: E501
+        df.attrs["adapter"] = "YFinanceAdapter"
+
+        return df
+
+    def _fetch_with_retries(
+        self,
+        normalized_ticker: str,
+        start_date: str,
+        end_date: str,
+        log_context: dict,
+        **kwargs,
+    ) -> pd.DataFrame:
+        """
+        Tenta obter os dados remotos com retry e backoff exponencial.
+
+        Este método encapsula a lógica de retry e de captura de exceções
+        relacionadas a rede/erros de API.
+        """
         last_exception = None
         for attempt in range(1, self.max_retries + 1):
             try:
@@ -148,22 +180,16 @@ class YFinanceAdapter(Adapter):
                 logger.debug(log_msg, extra=log_context)
 
                 # Buscar dados usando web.DataReader (wrapper para yfinance)
-
                 df = web.DataReader(
                     normalized_ticker,
                     data_source="yahoo",
                     start=start_date,
                     end=end_date,
+                    **kwargs,
                 )
 
                 # Validar estrutura do DataFrame
                 self._validate_dataframe(df, normalized_ticker)
-
-                # Adicionar metadados
-                df.attrs["source"] = "yahoo"
-                df.attrs["ticker"] = normalized_ticker
-                df.attrs["fetched_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")  # noqa: E501
-                df.attrs["adapter"] = "YFinanceAdapter"
 
                 log_context["status"] = "success"
                 log_context["rows_fetched"] = len(df)
@@ -172,7 +198,13 @@ class YFinanceAdapter(Adapter):
 
                 return df
 
-            except (ConnectionError, TimeoutError) as e:
+            except (
+                ConnectionError,
+                TimeoutError,
+                requests.exceptions.ConnectionError,
+                requests.exceptions.ReadTimeout,
+                requests.exceptions.Timeout,
+            ) as e:
                 last_exception = e
                 log_context["status"] = "network_error"
                 log_context["error_message"] = str(e)
@@ -212,6 +244,7 @@ class YFinanceAdapter(Adapter):
 
                 wait_time = self.backoff_factor**attempt
                 time.sleep(wait_time)
+
         # Fallback caso todas as tentativas falhem
         raise FetchError(
             (

@@ -5,6 +5,7 @@ Testa interface Adapter, erros customizados e implementação YFinanceAdapter
 usando mocks para garantir determinismo e isolamento de rede.
 """
 
+import types
 from unittest.mock import patch
 
 import pandas as pd
@@ -334,3 +335,23 @@ class TestYFinanceAdapter:
         assert metadata["library"] == "yfinance"
         assert metadata["max_retries"] == "5"
         assert "adapter_version" in metadata
+        # Verifica disponibilidade e versão da biblioteca yfinance
+        assert "library_available" in metadata
+        assert "library_version" in metadata
+        if metadata["library_available"] == "yes":
+            assert metadata["library_version"] != "unknown"
+
+    def test_get_metadata_when_yfinance_missing(self, monkeypatch):
+        """Simula yfinance ausente e verifica metadados resultantes."""
+        # Substitui o objeto `yf` do módulo por um stub indicando ausência
+        monkeypatch.setattr(
+            "src.adapters.yfinance_adapter.yf",
+            types.SimpleNamespace(__is_stub__=True),
+            raising=False,
+        )
+
+        adapter = YFinanceAdapter()
+        metadata = adapter.get_metadata()
+
+        assert metadata["library_available"] == "no"
+        assert metadata["library_version"] == "unknown"
