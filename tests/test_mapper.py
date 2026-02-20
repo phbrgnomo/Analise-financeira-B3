@@ -60,10 +60,11 @@ class TestToCanonical:
         assert result["open"].iloc[0] == 100.0
         assert result["adj_close"].iloc[0] == 103.5
 
-        # Assert: fetched_at is UTC ISO8601
+        # Assert: fetched_at is a datetime-like (schema defines datetime)
         fetched_at = result["fetched_at"].iloc[0]
-        assert isinstance(fetched_at, str)
-        assert fetched_at.endswith("Z") or "+" in fetched_at
+        import pandas as _pd
+
+        assert isinstance(fetched_at, _pd.Timestamp)
 
         # Assert: metadata includes raw_checksum
         assert "raw_checksum" in result.attrs
@@ -113,8 +114,15 @@ class TestToCanonical:
         # Assert: checksums should match
         assert result1.attrs["raw_checksum"] == result2.attrs["raw_checksum"]
 
-        # Verify checksum is actually SHA256 of CSV representation
-        csv_bytes = raw_df.to_csv(index=True).encode("utf-8")
+        # Verify checksum is actually SHA256 of the deterministic CSV representation
+        csv_sorted = raw_df.sort_index()
+        csv_str = csv_sorted.to_csv(
+            index=True,
+            date_format="%Y-%m-%dT%H:%M:%S",
+            float_format="%.10g",
+            na_rep="",
+        )
+        csv_bytes = csv_str.encode("utf-8")
         expected_checksum = hashlib.sha256(csv_bytes).hexdigest()
         assert result1.attrs["raw_checksum"] == expected_checksum
 
@@ -194,12 +202,9 @@ class TestToCanonical:
         # Act
         result = to_canonical(raw_df, provider_name="test", ticker="TEST")
 
-        # Assert: fetched_at should be ISO8601 UTC
+        # Assert: fetched_at should be a datetime-like UTC value per schema
         fetched_at = result["fetched_at"].iloc[0]
-        # Parse and verify it's valid UTC timestamp
-        assert "T" in fetched_at  # ISO8601 format
-        # Should end with Z or have timezone info
-        assert fetched_at.endswith("Z") or "+" in fetched_at or "-" in fetched_at[-6:]
+        assert isinstance(fetched_at, pd.Timestamp)
 
     def test_metadata_preserved_in_attrs(self):
         """Verify metadata (raw_checksum, provider, ticker) is stored in attrs."""

@@ -24,6 +24,10 @@ Mapping canônico sugerido para a tabela `prices`:
 - `low` <- `Low`
 - `close` <- `Close`
 - `adj_close` <- `Adj Close`
+
+Observação sobre persistência:
+- `adj_close` é mapeado a partir de `Adj Close` e é útil para cálculos de retornos e análises.
+- Porém, por decisão de design, `adj_close` pode existir na saída canônica do mapper para consumo interno, mas **não é garantido** que seja persistido na tabela final do banco (`docs/schema.json` é a fonte de verdade para o esquema persistido). Se a persistência exigir `adj_close`, isso deve ser documentado e versionado no `schema.json`.
 - `volume` <- `Volume`
 - `source` <- `'yfinance'`
 - `fetched_at` <- timestamp de ingestão (UTC)

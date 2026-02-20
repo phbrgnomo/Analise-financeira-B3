@@ -6,6 +6,8 @@ Campos:
 - ticker (string, não-nulo): símbolo do ativo (ex: PETR4.SA)
 - date (date, não-nulo): data da cotação no formato YYYY-MM-DD
 - open/high/low/close/adj_close (float, nulos permitidos): preços
+ - open/high/low/close (float, nulos permitidos): preços
+ - Obs: `adj_close` pode aparecer na saída canônica para cálculos (ex.: retornos), mas NÃO faz parte do esquema persistido por padrão. Consulte `docs/schema.json` para a fonte de verdade do esquema persistido.
 - volume (int, nulo permitido): volume negociado
 - source (string, não-nulo): origem dos dados (ex: 'yahoo')
 - fetched_at (datetime, não-nulo): timestamp UTC ISO8601 de coleta

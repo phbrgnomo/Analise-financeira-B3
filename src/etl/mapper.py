@@ -44,7 +44,7 @@ class MappingError(Exception):
 _TYPE_MAP = {
     "string": str,
     "date": pd.Timestamp,
-    "datetime": str,
+    "datetime": pd.Timestamp,
     "float": float,
     "int": int,
 }
@@ -75,7 +75,71 @@ def load_canonical_schema_from_json(path: Path) -> DataFrameSchema:
                 element_wise=False,
             )
         )
-    return DataFrameSchema(cols, strict=True, coerce=True, checks=df_checks)
+    # Allow extra columns (e.g., adj_close) to be present in DataFrames
+    # even if they are not part of the final DB schema. Validation will
+    # still enforce types for known columns.
+    return DataFrameSchema(cols, strict=False, coerce=True, checks=df_checks)
+
+
+def _determine_schema_cols() -> list:
+    """Return schema columns list with adj_close inserted if necessary."""
+    schema_cols = [c.get("name") for c in _SCHEMA_JSON.get("columns", [])]
+    if "adj_close" not in schema_cols:
+        try:
+            close_idx = schema_cols.index("close")
+        except ValueError:
+            close_idx = None
+        if close_idx is not None:
+            schema_cols.insert(close_idx + 1, "adj_close")
+        else:
+            schema_cols.append("adj_close")
+    return schema_cols
+
+
+def _col_lookup_in_df(df: pd.DataFrame, columns_map: dict, candidate: str):
+    if candidate in df.columns:
+        return candidate
+    key = candidate.lower()
+    if key in columns_map:
+        return columns_map[key]
+    alt = key.replace(" ", "_")
+    if alt in columns_map:
+        return columns_map[alt]
+    return None
+
+
+def _pick_provider_values(
+    df: pd.DataFrame,
+    columns_map: dict,
+    col_candidates,
+    nrows: int,
+):
+    for c in col_candidates:
+        actual = _col_lookup_in_df(df, columns_map, c)
+        if actual is not None:
+            return df[actual].values
+    return [pd.NA] * nrows
+
+
+def _build_canonical_data(
+    df: pd.DataFrame, meta: dict, nrows: int, columns_map: dict
+) -> dict:
+    """Construct canonical-data dict including optional adj_close handling.
+
+    Separated into a helper to reduce complexity of `to_canonical`.
+    """
+    data = {}
+    schema_cols = _determine_schema_cols()
+
+    for name in schema_cols:
+        val = _fill_special_values(df, name, meta, nrows)
+        if val is not None:
+            data[name] = val
+            continue
+        candidates = _CANON_TO_PROVIDER.get(name, [name, name.capitalize()])
+        data[name] = _pick_provider_values(df, columns_map, candidates, nrows)
+
+    return data
 
 
 _env_path = os.environ.get("CANONICAL_SCHEMA_PATH")
@@ -96,14 +160,8 @@ _CANON_TO_PROVIDER = {
     "low": ["Low", "low"],
     "close": ["Close", "close"],
     "volume": ["Volume", "volume"],
+    "adj_close": ["Adj Close", "adj_close"],
 }
-
-
-def _pick_provider_values(df: pd.DataFrame, candidates, nrows: int):
-    for c in candidates:
-        if c in df.columns:
-            return df[c].values
-    return [pd.NA] * nrows
 
 
 def _fill_special_values(df: pd.DataFrame, name: str, meta: dict, nrows: int):
@@ -112,10 +170,10 @@ def _fill_special_values(df: pd.DataFrame, name: str, meta: dict, nrows: int):
     meta: dictionary with keys 'ticker','provider_name','fetched_at','raw_checksum'.
     """
     if name == "date":
-        return (
-            pd.to_datetime(df["Date"]) if "Date" in df.columns
-            else pd.to_datetime(df.index)
-        )
+        date_col = next((c for c in df.columns if c.lower() == "date"), None)
+        if date_col is not None:
+            return pd.to_datetime(df[date_col])
+        return pd.to_datetime(df.index)
     if name == "ticker":
         return [meta["ticker"]] * nrows
     if name == "source":
@@ -156,11 +214,13 @@ def to_canonical(
     if df.empty:
         raise MappingError(f"Cannot map empty DataFrame for ticker {ticker}")
 
-    # Check required columns (case-insensitive, provider-typical names)
+    # Build case-insensitive column map to allow provider variations
+    columns_map = {c.lower(): c for c in df.columns}
+
     # Note: 'Adj Close' is optional in provider responses; canonical schema allows
     # adj_close to be nullable. Require only the primary OHLCV columns here.
-    required_cols = ["Open", "High", "Low", "Close", "Volume"]
-    missing_cols = [col for col in required_cols if col not in df.columns]
+    required_cols_lower = ["open", "high", "low", "close", "volume"]
+    missing_cols = [col for col in required_cols_lower if col not in columns_map]
 
     if missing_cols:
         raise MappingError(
@@ -168,25 +228,28 @@ def to_canonical(
             f"Available columns: {list(df.columns)}"
         )
 
-    # Compute raw_checksum (SHA256 of CSV representation)
-    csv_bytes = df.to_csv(index=True).encode("utf-8")
-    raw_checksum = hashlib.sha256(csv_bytes).hexdigest()
+    # Compute raw_checksum (SHA256 of a deterministic CSV representation)
+    # Sort by index and use fixed date/float formats to reduce environment differences
+    raw_csv = (
+        df.sort_index()
+        .to_csv(
+            index=True,
+            date_format="%Y-%m-%dT%H:%M:%S",
+            float_format="%.10g",
+            na_rep="",
+        )
+        .encode("utf-8")
+    )
+    raw_checksum = hashlib.sha256(raw_csv).hexdigest()
 
-    # Generate fetched_at timestamp (UTC ISO8601)
-    fetched_at = datetime.now(timezone.utc).isoformat()
+    # Generate fetched_at timestamp (UTC ISO8601 with 'Z')
+    fetched_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
     # Build canonical DataFrame using the canonical schema JSON for column
     # order and names. This avoids duplicating the canonical contract in code.
     try:
         nrows = len(df)
         data = {}
-
-        # small helpers extracted to reduce function complexity
-        def _pick_provider(col_candidates, nrows=nrows):
-            for c in col_candidates:
-                if c in df.columns:
-                    return df[c].values
-            return [pd.NA] * nrows
 
         meta = {
             "ticker": ticker,
@@ -195,14 +258,7 @@ def to_canonical(
             "raw_checksum": raw_checksum,
         }
 
-        for col_def in _SCHEMA_JSON.get("columns", []):
-            name = col_def.get("name")
-            val = _fill_special_values(df, name, meta, nrows)
-            if val is not None:
-                data[name] = val
-                continue
-            candidates = _CANON_TO_PROVIDER.get(name, [name, name.capitalize()])
-            data[name] = _pick_provider(candidates, nrows=nrows)
+        data = _build_canonical_data(df, meta, nrows, columns_map)
 
         canonical_df = pd.DataFrame(data)
     except (KeyError, ValueError, TypeError) as e:
