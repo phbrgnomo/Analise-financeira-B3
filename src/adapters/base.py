@@ -117,6 +117,31 @@ class Adapter(ABC):
                 f"Índice do DataFrame não é DatetimeIndex para {ticker}"
             )
 
+    def _is_network_error(self, e: Exception) -> bool:
+        """
+        Heurística para identificar erros de rede que justificam retry.
+
+        Centraliza a classificação por nome/tipo/módulo para manter a
+        lógica do loop de retry mais legível.
+        """
+        err_name = type(e).__name__
+        is_network = err_name in ("ConnectionError", "TimeoutError")
+
+        # Exceções vindas do namespace 'requests' também devem ser tratadas
+        # como erros de rede.
+        module_name = getattr(e, "__module__", "")
+        if hasattr(e, "__class__") and module_name.startswith("requests"):
+            is_network = True
+
+        return is_network
+
+    def _compute_backoff(self, attempt: int, backoff_factor: float) -> float:
+        """Calcula o tempo de espera (backoff exponencial) para uma tentativa."""
+        try:
+            return backoff_factor ** attempt
+        except Exception:
+            # fallback seguro
+            return float(backoff_factor) * attempt
     def _fetch_with_retries(
         self,
         ticker: str,
@@ -136,14 +161,15 @@ class Adapter(ABC):
         last_exception = None
         if log_context is None:
             log_context = {}
-
         for attempt in range(1, max_retries + 1):
             try:
                 log_context["attempt"] = attempt
                 log_msg = f"Tentativa {attempt} de {max_retries}"
                 logger.debug(log_msg, extra=log_context)
 
-                df = self._fetch_once(ticker, start, end, **kwargs)
+                # Passa explicitamente `timeout` para _fetch_once para que
+                # provedores concretos possam aplicar timeouts nativamente.
+                df = self._fetch_once(ticker, start, end, timeout=timeout, **kwargs)
 
                 # Validar estrutura do DataFrame (padrão ou custom)
                 self._validate_dataframe(df, ticker, required_columns=required_columns)
@@ -155,24 +181,14 @@ class Adapter(ABC):
 
                 return df
 
-            except (
-                ConnectionError,
-                TimeoutError,
-                Exception,
-            ) as e:
-                # Determinar se é erro de rede conhecido
+            except ValidationError:
+                # Propaga sem retry
+                raise
+
+            except Exception as e:
                 last_exception = e
-                err_name = type(e).__name__
-                # Heurística: exceptions do requests indicam problemas de rede
-                is_network = err_name in ("ConnectionError", "TimeoutError")
 
-                if (
-                    hasattr(e, "__class__")
-                    and getattr(e, "__module__", "").startswith("requests")
-                ):
-                    is_network = True
-
-                if is_network:
+                if self._is_network_error(e):
                     log_context["status"] = "network_error"
                     log_context["error_message"] = str(e)
                     logger.warning(
@@ -188,19 +204,14 @@ class Adapter(ABC):
                             original_exception=e,
                         ) from e
 
-                    wait_time = backoff_factor ** attempt
+                    wait_time = self._compute_backoff(attempt, backoff_factor)
                     logger.debug(
                         f"Aguardando {wait_time}s antes de retry", extra=log_context
                     )
                     time.sleep(wait_time)
                     continue
 
-                # ValidationError deve propagar sem retry
-                if isinstance(e, ValidationError):
-                    raise
-
                 # Outros erros: tratar como fetch error e fazer retry até esgotar
-                last_exception = e
                 log_context["status"] = "fetch_error"
                 log_context["error_message"] = str(e)
                 log_context["error_type"] = type(e).__name__
@@ -214,7 +225,7 @@ class Adapter(ABC):
                         original_exception=e,
                     ) from e
 
-                wait_time = backoff_factor ** attempt
+                wait_time = self._compute_backoff(attempt, backoff_factor)
                 time.sleep(wait_time)
 
         # Fallback caso todas as tentativas falhem

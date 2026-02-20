@@ -95,7 +95,7 @@ O script calcula o SHA256 do arquivo de exemplo `snapshots/PETR4_snapshot_test.c
 - Para entender o fluxo de ingestão e esquema canônico, veja [docs/implementation-artifacts/1-11-definir-esquema-canonico-de-dados-e-documentacao-do-modelo-schema-examples.md](docs/implementation-artifacts/1-11-definir-esquema-canonico-de-dados-e-documentacao-do-modelo-schema-examples.md).
 
 - Guia de implementação de adaptadores: [docs/modules/adapter-guidelines.md](docs/modules/adapter-guidelines.md)
-- Checklist de PR para adaptadores: [docs/implementation-artifacts/adapter-pr-checklist.md](docs/modules/adapter-pr-checklist.md)
+- Checklist de PR para adaptadores: [docs/modules/adapter-pr-checklist.md](docs/modules/adapter-pr-checklist.md)
 
 ---
 

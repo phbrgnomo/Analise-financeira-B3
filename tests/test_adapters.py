@@ -178,7 +178,11 @@ class TestYFinanceAdapter:
 
         # Verificar chamada ao DataReader
         mock_datareader.assert_called_once_with(
-            "PETR4.SA", data_source="yahoo", start="2024-01-01", end="2024-01-05"
+            "PETR4.SA",
+            data_source="yahoo",
+            start="2024-01-01",
+            end="2024-01-05",
+            timeout=30,
         )
 
         # Verificar resultado
@@ -227,7 +231,7 @@ class TestYFinanceAdapter:
         assert "High" in str(exc_info.value)
 
     @patch("src.adapters.yfinance_adapter.web.DataReader")
-    @patch("src.adapters.yfinance_adapter.time.sleep")
+    @patch("src.adapters.base.time.sleep")
     def test_fetch_network_error_with_retry(self, mock_sleep, mock_datareader):
         """Testa retry automático em caso de erro de rede."""
         # Primeira tentativa: erro de rede
@@ -256,7 +260,7 @@ class TestYFinanceAdapter:
         assert len(result) == 2
 
     @patch("src.adapters.yfinance_adapter.web.DataReader")
-    @patch("src.adapters.yfinance_adapter.time.sleep")
+    @patch("src.adapters.base.time.sleep")
     def test_fetch_max_retries_exceeded_raises_network_error(
         self, mock_sleep, mock_datareader
     ):
@@ -272,7 +276,7 @@ class TestYFinanceAdapter:
         assert mock_datareader.call_count == 3
 
     @patch("src.adapters.yfinance_adapter.web.DataReader")
-    @patch("src.adapters.yfinance_adapter.time.sleep")
+    @patch("src.adapters.base.time.sleep")
     def test_fetch_generic_error_with_retry(self, mock_sleep, mock_datareader):
         """Testa retry em caso de erro genérico."""
         dates = pd.date_range("2024-01-01", periods=2)
@@ -297,7 +301,7 @@ class TestYFinanceAdapter:
         assert len(result) == 2
 
     @patch("src.adapters.yfinance_adapter.web.DataReader")
-    @patch("src.adapters.yfinance_adapter.time.sleep")
+    @patch("src.adapters.base.time.sleep")
     def test_fetch_all_retries_fail_raises_fetch_error(
         self, mock_sleep, mock_datareader
     ):
@@ -365,3 +369,120 @@ class TestYFinanceAdapter:
 
         assert metadata["library_available"] == "no"
         assert metadata["library_version"] == "unknown"
+
+
+    class TestAdapterBaseHelpers:
+        """Testes para helpers centralizados em `Adapter` (normalize/validate)."""
+
+        def test_adapter_normalize_date_valid_formats(self):
+            class TestAdapter(Adapter):
+                def fetch(self, ticker: str, **kwargs) -> pd.DataFrame:
+                    return pd.DataFrame()
+
+                def _fetch_once(
+                    self, ticker: str, start: str, end: str, **kwargs
+                ) -> pd.DataFrame:
+                    return pd.DataFrame()
+
+            adapter = TestAdapter()
+
+            normalized_iso = adapter._normalize_date("2023-02-15")
+            assert normalized_iso == "2023-02-15"
+
+            normalized_us = adapter._normalize_date("02-15-2023")
+            assert normalized_us == "2023-02-15"
+
+        def test_adapter_normalize_date_invalid_format_raises_validation_error(self):
+            class TestAdapter(Adapter):
+                def fetch(self, ticker: str, **kwargs) -> pd.DataFrame:
+                    return pd.DataFrame()
+
+                def _fetch_once(
+                    self, ticker: str, start: str, end: str, **kwargs
+                ) -> pd.DataFrame:
+                    return pd.DataFrame()
+
+            adapter = TestAdapter()
+
+            with pytest.raises(ValidationError) as excinfo:
+                adapter._normalize_date("15/02/2023")
+
+            assert "Formato de data inválido" in str(excinfo.value)
+
+        def test_adapter_validate_dataframe_empty_raises_validation_error(self):
+            class TestAdapter(Adapter):
+                def fetch(self, ticker: str, **kwargs) -> pd.DataFrame:
+                    return pd.DataFrame()
+
+                def _fetch_once(
+                    self, ticker: str, start: str, end: str, **kwargs
+                ) -> pd.DataFrame:
+                    return pd.DataFrame()
+
+            adapter = TestAdapter()
+            df = pd.DataFrame()
+
+            with pytest.raises(ValidationError, match="DataFrame vazio"):
+                adapter._validate_dataframe(df, "TICKER")
+
+        def test_validate_dataframe_missing_required_columns_mentions_them(self):
+            class TestAdapter(Adapter):
+                def fetch(self, ticker: str, **kwargs) -> pd.DataFrame:
+                    return pd.DataFrame()
+
+                def _fetch_once(
+                    self, ticker: str, start: str, end: str, **kwargs
+                ) -> pd.DataFrame:
+                    return pd.DataFrame()
+
+            adapter = TestAdapter()
+
+            index = pd.date_range("2023-01-01", periods=3, freq="D")
+            # criar um DataFrame não-vazio mas sem as colunas requeridas
+            df = pd.DataFrame({"foo": [1, 2, 3]}, index=index)
+
+            with pytest.raises(ValidationError) as excinfo:
+                adapter._validate_dataframe(df, "TICKER")
+
+            msg = str(excinfo.value)
+            required_columns = getattr(adapter, "REQUIRED_COLUMNS", None)
+            if required_columns:
+                for col in required_columns:
+                    assert col in msg
+            else:
+                msg_lower = msg.lower()
+                assert (
+                    "coluna" in msg_lower
+                    or "colunas" in msg_lower
+                    or "missing" in msg_lower
+                )
+
+        def test_validate_dataframe_non_datetime_index(self):
+            class TestAdapter(Adapter):
+                def fetch(self, ticker: str, **kwargs) -> pd.DataFrame:
+                    return pd.DataFrame()
+
+                    def _fetch_once(
+                        self, ticker: str, start: str, end: str, **kwargs
+                    ) -> pd.DataFrame:
+                        return pd.DataFrame()
+
+            adapter = TestAdapter()
+
+            # criar DataFrame com todas as colunas requeridas, mas índice não Datetime
+            df = pd.DataFrame(
+                {
+                    "Open": [1.0],
+                    "High": [1.1],
+                    "Low": [0.9],
+                    "Close": [1.0],
+                    "Adj Close": [1.0],
+                    "Volume": [100],
+                },
+                index=[0],
+            )
+
+            with pytest.raises(
+                ValidationError, match="Índice do DataFrame não é DatetimeIndex"
+            ):
+                adapter._validate_dataframe(df, "TICKER")

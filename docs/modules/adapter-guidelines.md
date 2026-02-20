@@ -35,7 +35,7 @@ Objetivo: documentar o contrato, convenções e melhores práticas para implemen
 - Use o mecanismo de retry do base; não reimplemente lógica de retry em cada adaptador.
 
 **Compatibilidade e testes**
-- Tests do projeto usam monkeypatch/patcH em `src.adapters.yfinance_adapter.web.DataReader`. Para manter compatibilidade durante testes, o adaptador do Yahoo mantém um shim `web.DataReader`. Novos adaptadores podem expor shims similares ou aceitar a injeção do `fetcher` via construtor.
+- Tests do projeto usam monkeypatch/patch em `src.adapters.yfinance_adapter.web.DataReader`. Para manter compatibilidade durante testes, o adaptador do Yahoo mantém um shim `web.DataReader`. Novos adaptadores podem expor shims similares ou aceitar a injeção do `fetcher` via construtor.
 - Escreva testes que verifiquem o comportamento público (`fetch`) preferencialmente. Se for necessário testar helpers, importe diretamente os helpers do local correto (`Adapter._normalize_date` agora vive no base).
 - Não dependa de mensagens de erro exatas nos testes; prefira asserções sobre o tipo da exceção e atributos estruturados quando possível.
 
