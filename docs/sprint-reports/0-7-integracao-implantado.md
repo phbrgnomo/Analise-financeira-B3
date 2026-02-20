@@ -70,7 +70,7 @@ Mapping para Acceptance Criteria (AC)
 O que foi implementado (detalhado)
 - Testes
   - `tests/integration/test_quickstart_mocked.py` — teste de integração com dois casos: geração do snapshot + verificação do diretório temporário.
-  - Uso de monkeypatch para simular o wrapper `web.DataReader`/`yfinance` evitando rede.
+  - Uso de monkeypatch para simular chamadas de `yfinance` (ex.: `yfinance.download`) evitando rede.
 - Fixtures
   - `tests/conftest.py` — adição de fixture `snapshot_dir` (escopo session) que respeita `SNAPSHOT_DIR` quando setado (CI friendly).
   - `tests/ci/conftest.py` — compatibilidade adicional para runners/legacy.
@@ -114,7 +114,7 @@ ls -la snapshots_test
 4. PR / CI: abrir PR da branch `epic-0` para `master` e verificar job `integration` gera artifacts no run do GitHub Actions.
 
 Decisões técnicas e justificativas
-- Usar monkeypatch no wrapper `web.DataReader`/`yfinance` simplifica a simulação de fontes e mantém compatibilidade com o código existente (`src.dados_b3`).
+  - Usar `yfinance` monkeypatched (ex.: `yfinance.download`) simplifica a simulação de fontes e evita dependência em `pandas_datareader`, que não é suportado em Python 3.12.
 - Centralizar fixture `snapshot_dir` em `tests/conftest.py` (escopo global) permite reuso em testes unitários e de integração e facilita a configuração via `SNAPSHOT_DIR` pelo CI.
 - Escolha de SHA256 por ser amplamente suportado e facilmente verificável em runners.
 

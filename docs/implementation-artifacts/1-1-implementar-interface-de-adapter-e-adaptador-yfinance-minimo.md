@@ -54,13 +54,14 @@ so that a pipeline de ingest consiga obter preços para um ticker a partir de um
 
 ### Testing Requirements
 
-- Unit tests: mockar chamadas a `yfinance` (via wrapper `web.DataReader`) para garantir determinismo; testar erros e sucesso.
+- Unit tests: mockar chamadas a `yfinance` para garantir determinismo; testar erros e sucesso.
 - Coverage mínima para esta story: testes para interface, adaptador e tratamento de erro.
 
 ### References
 
 - Fonte primária: docs/planning-artifacts/epics.md (Epic 1 — Story 1.1)
 - Requisitos arquiteturais: docs/planning-artifacts/architecture.md
+- Esquema canônico: `docs/schema.json` — adapters devem mapear colunas do provedor para o esquema canônico (ver `docs/schema.md`).
 
 ## Dev Agent Record
 

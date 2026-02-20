@@ -27,7 +27,7 @@ development_status:
   1-8-implementar-retries-backoff-no-adaptador-critico: ready-for-dev
   1-9-garantir-execucao-concorrente-segura-por-ticker-lock-simples: ready-for-dev
   1-10-cache-de-snapshots-e-ingestao-incremental: ready-for-dev
-  1-11-definir-esquema-canonico-de-dados-e-documentacao-do-modelo-schema-examples: ready-for-dev
+  1-11-definir-esquema-canonico-de-dados-e-documentacao-do-modelo-schema-examples: ready-for-review
   epic-1-retrospective: optional
 
   epic-2: in-progress
