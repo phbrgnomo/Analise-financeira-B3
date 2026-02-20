@@ -17,17 +17,17 @@ development_status:
   epic-0-retrospective: completed
 
   epic-1: in-progress
-  1-1-implementar-interface-de-adapter-e-adaptador-yfinance-minimo: ready-for-dev
-  1-2-implementar-canonical-mapper-provider-schema-canonico: ready-for-dev
+  1-1-implementar-interface-de-adapter-e-adaptador-yfinance-minimo: completed
+  1-2-implementar-canonical-mapper-provider-schema-canonico: sprint-2
   1-3-implementar-comando-pipeline-ingest-orquestrador-basico: ready-for-dev
-  1-4-salvar-resposta-bruta-em-raw-provider-e-registrar-metadados: ready-for-dev
+  1-4-salvar-resposta-bruta-em-raw-provider-e-registrar-metadados: sprint-2
   1-5-validar-estrutura-csv-e-filtrar-flag-rows-invalidas: ready-for-dev
   1-6-persistir-dados-canonicos-no-sqlite-com-upsert-por-ticker-date: ready-for-dev
   1-7-implementar-transformacao-de-retornos-e-persistencia-em-returns: ready-for-dev
-  1-8-implementar-retries-backoff-no-adaptador-critico: ready-for-dev
+  1-8-implementar-retries-backoff-no-adaptador-critico: sprint-2
   1-9-garantir-execucao-concorrente-segura-por-ticker-lock-simples: ready-for-dev
   1-10-cache-de-snapshots-e-ingestao-incremental: ready-for-dev
-  1-11-definir-esquema-canonico-de-dados-e-documentacao-do-modelo-schema-examples: ready-for-review
+  1-11-definir-esquema-canonico-de-dados-e-documentacao-do-modelo-schema-examples: completed
   epic-1-retrospective: optional
 
   epic-2: in-progress
