@@ -10,7 +10,6 @@ This module provides:
 import hashlib
 import logging
 from datetime import datetime, timezone
-from typing import Dict, Any
 
 import pandas as pd
 import pandera.pandas as pa

@@ -4,9 +4,7 @@ Integration smoke test for canonical mapper with mock provider.
 Verifies that canonical output shape can be consumed by DB layer.
 """
 
-import pytest
 import pandas as pd
-from datetime import datetime
 
 from src.etl.mapper import to_canonical
 
@@ -17,7 +15,7 @@ class TestCanonicalMapperIntegration:
     def test_canonical_output_shape_for_db_layer(self):
         """
         Verify canonical DataFrame has correct shape/types for DB upsert.
-        
+
         This is a smoke test that validates the canonical mapper produces
         output compatible with the expected DB schema (even if DB layer
         doesn't exist yet).
@@ -82,7 +80,7 @@ class TestCanonicalMapperIntegration:
     def test_canonical_output_ready_for_upsert_operation(self):
         """
         Verify canonical DataFrame supports upsert key (ticker, date).
-        
+
         DB layer is expected to upsert by composite key (ticker, date).
         This test verifies the canonical output includes those columns
         with no duplicates.

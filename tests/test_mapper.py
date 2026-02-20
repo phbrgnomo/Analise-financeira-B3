@@ -9,12 +9,11 @@ Covers:
 """
 
 import hashlib
-import pytest
-import pandas as pd
-import numpy as np
-from datetime import datetime, timezone
 
-from src.etl.mapper import to_canonical, CanonicalSchema, MappingError
+import pandas as pd
+import pytest
+
+from src.etl.mapper import CanonicalSchema, MappingError, to_canonical
 
 
 class TestToCanonical:
