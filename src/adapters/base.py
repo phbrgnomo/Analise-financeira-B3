@@ -5,6 +5,7 @@ Define o contrato público que todos os adaptadores devem implementar.
 """
 
 import contextlib
+import json
 import logging
 import time
 from abc import ABC, abstractmethod
@@ -14,6 +15,8 @@ from typing import Dict, List, Optional
 import pandas as pd
 
 from src.adapters.errors import FetchError, NetworkError, ValidationError
+from src.adapters.retry_config import RetryConfig
+from src.adapters.retry_metrics import get_global_metrics
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +31,16 @@ class Adapter(ABC):
     O adaptador é responsável apenas por buscar dados brutos do provedor,
     sem realizar persistência ou transformações complexas.
     """
+
+    def __init__(self, retry_config: Optional[RetryConfig] = None):
+        """
+        Inicializa adaptador com configuração de retry.
+
+        Args:
+            retry_config: Configuração de retry. Se None, carrega do ambiente.
+        """
+        self.retry_config = retry_config or RetryConfig.from_env()
+        self._metrics = get_global_metrics()
 
     @abstractmethod
     def fetch(self, ticker: str, **kwargs) -> pd.DataFrame:
