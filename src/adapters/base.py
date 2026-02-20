@@ -165,19 +165,39 @@ class Adapter(ABC):
         backoff_factor: float = 2.0,
         timeout: Optional[float] = None,
         required_columns: Optional[List[str]] = None,
+        idempotent: bool = True,
         **kwargs,
     ) -> pd.DataFrame:
         """
         Loop de retry/backoff que chama `_fetch_once` e aplica validações genéricas.
         Mapeia exceções para `NetworkError` / `FetchError`.
+
+        Novidades:
+        - Registra métricas por tentativa (RetryMetrics)
+        - Registra logs estruturados com `attempt`, `next_delay_ms` e `error_message`
+        - Respeita marcação de idempotência: se `idempotent=False`, os retries são desabilitados
+        - Usa `RetryConfig` se disponível para calcular delays
         """
         last_exception = None
         if log_context is None:
             log_context = {}
-        for attempt in range(1, max_retries + 1):
+
+        metrics = getattr(self, "_metrics", get_global_metrics())
+
+        # Se operação não é idempotente, evitar retries salvo configuração explícita
+        effective_max_retries = max_retries
+        if not idempotent and max_retries > 1:
+            logger.warning(
+                "Operação marcada como não-idempotente; desabilitando retries",
+                extra={**log_context, "idempotent": False},
+            )
+            effective_max_retries = 1
+
+        for attempt in range(1, effective_max_retries + 1):
+            metrics.record_attempt()
             try:
                 log_context["attempt"] = attempt
-                log_msg = f"Tentativa {attempt} de {max_retries}"
+                log_msg = f"Tentativa {attempt} de {effective_max_retries}"
                 logger.debug(log_msg, extra=log_context)
 
                 # Passa explicitamente `timeout` para _fetch_once para que
@@ -192,6 +212,11 @@ class Adapter(ABC):
                 log_msg = f"Dados obtidos com sucesso: {len(df)} linhas"
                 logger.info(log_msg, extra=log_context)
 
+                if attempt == 1:
+                    metrics.record_first_attempt_success()
+                else:
+                    metrics.record_success_after_retry()
+
                 return df
 
             except ValidationError:
@@ -201,23 +226,51 @@ class Adapter(ABC):
             except Exception as e:
                 last_exception = e
 
-                if self._is_network_error(e):
-                    log_context["status"] = "network_error"
+                # Tentar extrair status HTTP se disponível
+                status_code = None
+                if hasattr(e, "response"):
+                    status_code = getattr(e.response, "status_code", None)
+                elif hasattr(e, "status_code"):
+                    status_code = getattr(e, "status_code", None)
+
+                # Determinar se erro é elegível para retry
+                retryable = False
+                if status_code is not None and hasattr(self, "retry_config"):
+                    retryable = status_code in self.retry_config.retry_on_status_codes
+                if not retryable:
+                    retryable = self._is_network_error(e)
+
+                if retryable:
+                    log_context["status"] = "retryable_error"
                     log_context["error_message"] = str(e)
+                    if status_code is not None:
+                        log_context["http_status"] = status_code
                     logger.warning(
-                        f"Erro de rede na tentativa {attempt}", extra=log_context
+                        f"Erro retryable na tentativa {attempt}", extra=log_context
                     )
 
-                    if attempt >= max_retries:
+                    if attempt >= effective_max_retries:
+                        metrics.record_permanent_failure()
                         raise NetworkError(
                             (
                                 "Falha de rede ao buscar "
-                                f"{ticker} após {max_retries} tentativas"
+                                f"{ticker} após {effective_max_retries} tentativas"
                             ),
                             original_exception=e,
                         ) from e
 
-                    wait_time = self._compute_backoff(attempt, backoff_factor)
+                    # calcular delay usando configuração se presente
+                    if hasattr(self, "retry_config"):
+                        wait_time = self.retry_config.compute_delay_seconds(attempt)
+                        delay_ms = self.retry_config.compute_delay_ms(attempt)
+                    else:
+                        wait_time = self._compute_backoff(attempt, backoff_factor)
+                        delay_ms = int(wait_time * 1000)
+
+                    # registrar que houve um retry planejado
+                    metrics.record_retry()
+
+                    log_context["next_delay_ms"] = delay_ms
                     logger.debug(
                         f"Aguardando {wait_time}s antes de retry", extra=log_context
                     )
@@ -232,20 +285,30 @@ class Adapter(ABC):
                     f"Erro ao buscar dados na tentativa {attempt}", extra=log_context
                 )
 
-                if attempt >= max_retries:
+                if attempt >= effective_max_retries:
+                    metrics.record_permanent_failure()
                     raise FetchError(
                         f"Erro ao buscar dados de {ticker}: {str(e)}",
                         original_exception=e,
                     ) from e
 
-                wait_time = self._compute_backoff(attempt, backoff_factor)
+                # calcular delay e seguir retry
+                if hasattr(self, "retry_config"):
+                    wait_time = self.retry_config.compute_delay_seconds(attempt)
+                    delay_ms = self.retry_config.compute_delay_ms(attempt)
+                else:
+                    wait_time = self._compute_backoff(attempt, backoff_factor)
+                    delay_ms = int(wait_time * 1000)
+
+                metrics.record_retry()
+                log_context["next_delay_ms"] = delay_ms
                 time.sleep(wait_time)
 
         # Fallback caso todas as tentativas falhem
         raise FetchError(
             (
                 f"Falha ao buscar dados de {ticker} "
-                f"após {max_retries} tentativas"
+                f"após {effective_max_retries} tentativas"
             ),
             original_exception=last_exception,
         )

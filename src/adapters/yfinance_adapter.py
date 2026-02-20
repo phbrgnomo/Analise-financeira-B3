@@ -64,19 +64,36 @@ class YFinanceAdapter(Adapter):
     """
 
     def __init__(
-        self, max_retries: int = 3, backoff_factor: float = 2.0, timeout: int = 30
+        self,
+        max_retries: int | None = None,
+        backoff_factor: float | None = None,
+        timeout: int | None = None,
+        retry_config=None,
     ):
         """
         Inicializa adaptador Yahoo Finance.
 
         Args:
-            max_retries: Número de tentativas em caso de erro (padrão: 3)
-            backoff_factor: Multiplicador para backoff entre retries (padrão: 2.0)
-            timeout: Timeout em segundos (padrão: 30)
+            max_retries: Número de tentativas em caso de erro (padrão: utiliza RetryConfig ou 3)
+            backoff_factor: Multiplicador para backoff entre retries (padrão: utiliza RetryConfig ou 2.0)
+            timeout: Timeout em segundos (padrão: utiliza RetryConfig ou 30)
+            retry_config: (opcional) objeto RetryConfig para configurar políticas via código/ambiente
         """
-        self.max_retries = max_retries
-        self.backoff_factor = backoff_factor
-        self.timeout = timeout
+        # Inicializar o Adapter base para carregar retry_config via ambiente e registrar métricas
+        super().__init__(retry_config=retry_config)
+
+        # Priorizar parâmetros explicitamente passados; caso contrário herdar da retry_config
+        self.max_retries = 3 if max_retries is None else max_retries
+        self.backoff_factor = 2.0 if backoff_factor is None else backoff_factor
+        self.timeout = 30 if timeout is None else timeout
+
+        if hasattr(self, "retry_config") and self.retry_config:
+            if max_retries is None:
+                self.max_retries = self.retry_config.max_attempts
+            if backoff_factor is None:
+                self.backoff_factor = self.retry_config.backoff_factor
+            if timeout is None:
+                self.timeout = self.retry_config.timeout_seconds
 
     def fetch(
         self,
