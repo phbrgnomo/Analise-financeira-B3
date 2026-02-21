@@ -174,15 +174,16 @@ class Adapter(ABC):
             return backoff_factor ** attempt
         except Exception:
             # fallback seguro
-            return float(backoff_factor) * attempt
+            return backoff_factor * attempt
 
     def _extract_status_code(self, e: Exception):
         """Extrai código HTTP se presente na exceção."""
-        if hasattr(e, "response"):
-            return getattr(e.response, "status_code", None)
-        if hasattr(e, "status_code"):
-            return getattr(e, "status_code", None)
-        return None
+        # Use getattr to avoid static analyzers complaining about
+        # attribute access on the base Exception type.
+        resp = getattr(e, "response", None)
+        if resp is not None:
+            return getattr(resp, "status_code", None)
+        return getattr(e, "status_code", None)
 
     def _is_retryable_exception(self, e: Exception, status_code) -> bool:
         """Decide se uma exceção é elegível para retry."""
@@ -201,6 +202,21 @@ class Adapter(ABC):
             delay_ms = int(wait * 1000)
         return wait, delay_ms
 
+    def _do_retry_procedure(
+        self,
+        metrics,
+        log_context: dict,
+        attempt: int,
+        backoff_factor: float,
+    ) -> None:
+        """Procedimento comum para registrar retry, definir delay e esperar."""
+        wait_time, delay_ms = self._compute_wait(attempt, backoff_factor)
+        metrics.record_retry()
+        log_context["next_delay_ms"] = delay_ms
+        msg = f"Aguardando {wait_time}s antes de retry"
+        logger.debug(msg, extra=log_context)
+        time.sleep(wait_time)
+
     def _fetch_with_retries(  # noqa: C901
         self,
         ticker: str,
@@ -213,7 +229,7 @@ class Adapter(ABC):
         required_columns: Optional[List[str]] = None,
         idempotent: bool = True,
         **kwargs,
-    ) -> pd.DataFrame:  # noqa: C901
+    ) -> pd.DataFrame:    # noqa: C901
         """
         Loop de retry/backoff que chama `_fetch_once` e aplica validações genéricas.
         Mapeia exceções para `NetworkError` / `FetchError`.
@@ -231,7 +247,7 @@ class Adapter(ABC):
         metrics = getattr(self, "_metrics", get_global_metrics())
 
         effective_max_retries = max_retries
-        if not idempotent and max_retries > 1:
+        if not idempotent and effective_max_retries > 1:
             logger.warning(
                 "Operação não-idempotente; desabilitando retries",
                 extra={**log_context, "idempotent": False},
@@ -284,12 +300,9 @@ class Adapter(ABC):
                         )
                         raise NetworkError(msg, original_exception=e) from e
 
-                    wait_time, delay_ms = self._compute_wait(attempt, backoff_factor)
-                    metrics.record_retry()
-                    log_context["next_delay_ms"] = delay_ms
-                    msg = f"Aguardando {wait_time}s antes de retry"
-                    logger.debug(msg, extra=log_context)
-                    time.sleep(wait_time)
+                    self._do_retry_procedure(
+                        metrics, log_context, attempt, backoff_factor
+                    )
                     continue
 
                 # Outros erros: tratar como fetch error
@@ -306,10 +319,9 @@ class Adapter(ABC):
                         original_exception=e,
                     ) from e
 
-                wait_time, delay_ms = self._compute_wait(attempt, backoff_factor)
-                metrics.record_retry()
-                log_context["next_delay_ms"] = delay_ms
-                time.sleep(wait_time)
+                self._do_retry_procedure(
+                    metrics, log_context, attempt, backoff_factor
+                )
 
         msg = (
             f"Falha ao buscar dados de {ticker} "
