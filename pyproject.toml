@@ -30,14 +30,8 @@ pytest = "^7.4.0"
 ruff = "^0.14.14"
 pre-commit = "^3.3.0"
 jsonschema = "^4.19.0"
-mypy = "^1.10.0"
 
 [tool.ruff]
 line-length = 88
 lint.select = ["E", "F", "W", "C", "B", "I"]
 lint.ignore = ["E203"]
-
-[tool.mypy]
-python_version = "3.12"
-ignore_missing_imports = true
-strict = false
