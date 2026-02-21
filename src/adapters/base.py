@@ -153,21 +153,29 @@ class Adapter(ABC):
             return backoff_factor ** attempt
         except Exception:
             # fallback seguro
-            return float(backoff_factor) * attempt
+            return backoff_factor * attempt
 
     def _extract_status_code(self, e: Exception):
-        """Extrai código HTTP se presente na exceção."""
-        if hasattr(e, "response"):
-            return getattr(e.response, "status_code", None)
-        if hasattr(e, "status_code"):
-            return getattr(e, "status_code", None)
-        return None
+        """Extrai código HTTP se presente na exceção.
+
+        Usa getattr em vez de acessar `e.response` diretamente para evitar
+        avisos de análise estática quando o tipo da exceção não declara
+        esse atributo.
+        """
+        resp = getattr(e, "response", None)
+        if resp is not None:
+            return getattr(resp, "status_code", None)
+
+        return getattr(e, "status_code", None)
 
     def _is_retryable_exception(self, e: Exception, status_code) -> bool:
         """Decide se uma exceção é elegível para retry."""
-        if status_code is not None and hasattr(self, "retry_config"):
-            if status_code in self.retry_config.retry_on_status_codes:
-                return True
+        if (
+            status_code is not None
+            and hasattr(self, "retry_config")
+            and status_code in self.retry_config.retry_on_status_codes
+        ):
+            return True
         return self._is_network_error(e)
 
     def _compute_wait(self, attempt: int, backoff_factor: float) -> tuple[float, int]:
@@ -192,7 +200,7 @@ class Adapter(ABC):
         required_columns: Optional[List[str]] = None,
         idempotent: bool = True,
         **kwargs,
-    ) -> pd.DataFrame:  # noqa: C901
+    ) -> pd.DataFrame:    # noqa: C901
         """
         Loop de retry/backoff que chama `_fetch_once` e aplica validações genéricas.
         Mapeia exceções para `NetworkError` / `FetchError`.
@@ -210,7 +218,7 @@ class Adapter(ABC):
         metrics = getattr(self, "_metrics", get_global_metrics())
 
         effective_max_retries = max_retries
-        if not idempotent and max_retries > 1:
+        if not idempotent and effective_max_retries > 1:
             logger.warning(
                 "Operação não-idempotente; desabilitando retries",
                 extra={**log_context, "idempotent": False},

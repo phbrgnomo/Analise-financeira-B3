@@ -186,6 +186,7 @@ class YFinanceAdapter(Adapter):
         backoff_factor: Optional[float] = None,
         timeout: Optional[float] = None,
         required_columns: Optional[list] = None,
+        idempotent: bool = True,
         **kwargs,
     ) -> pd.DataFrame:
         """
@@ -210,6 +211,7 @@ class YFinanceAdapter(Adapter):
             ),
             timeout=(self.timeout if timeout is None else timeout),
             required_columns=required_columns,
+            idempotent=idempotent,
             **kwargs,
         )
 
@@ -257,7 +259,9 @@ class YFinanceAdapter(Adapter):
 
         # Detectar disponibilidade da biblioteca yfinance
         library = "yfinance"
-        if hasattr(yf, "__is_stub__") and yf.__is_stub__:
+        # Use getattr to avoid accessing an attribute that may not exist
+        # on the real `yfinance` module (silences static analysis warnings).
+        if getattr(yf, "__is_stub__", False):
             version = "unknown"
             library_available = "no"
         else:
