@@ -3,8 +3,10 @@
 Provides deterministic write for snapshot DataFrames using existing
 serialization utilities so generated snapshots are stable across runs.
 """
+
 from __future__ import annotations
 
+import contextlib
 import os
 from pathlib import Path
 
@@ -29,20 +31,17 @@ def write_snapshot(df, out_path: Path, *, set_permissions: bool = False) -> str:
         na_rep="",
     )
 
-    tmp = out_path.with_suffix(out_path.suffix + ".tmp")
+    tmp = out_path.with_suffix(f"{out_path.suffix}.tmp")
     with open(tmp, "wb") as fh:
         fh.write(data)
     os.replace(str(tmp), str(out_path))
 
     checksum = sha256_bytes(data)
-    checksum_path = out_path.with_name(out_path.name + ".checksum")
+    checksum_path = out_path.with_name(f"{out_path.name}.checksum")
     checksum_path.write_text(checksum)
 
     if set_permissions and hasattr(os, "chmod"):
-        try:
+        with contextlib.suppress(Exception):
             os.chmod(str(out_path), 0o640)
             os.chmod(str(checksum_path), 0o640)
-        except Exception:
-            pass
-
     return checksum

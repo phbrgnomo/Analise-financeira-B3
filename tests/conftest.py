@@ -5,12 +5,12 @@ Define fixtures úteis para integração e playback de rede.
 from __future__ import annotations
 
 import os
-from typing import Callable
+from typing import Callable, Generator
 
 import pandas as pd
 import pytest
 
-from tests.fixture_utils import create_prices_db_from_csv, get_or_make_snapshot_dir
+from .fixture_utils import create_prices_db_from_csv, get_or_make_snapshot_dir
 
 
 def _load_sample_dataframe(ticker: str, start=None, end=None, **kwargs) -> pd.DataFrame:
@@ -41,7 +41,7 @@ def _load_sample_dataframe(ticker: str, start=None, end=None, **kwargs) -> pd.Da
 
 
 @pytest.fixture(autouse=True)
-def mock_yfinance_data(monkeypatch) -> Callable:
+def mock_yfinance_data(monkeypatch) -> Generator[Callable, None, None]:
     """Monkeypatch `src.adapters.yfinance_adapter.web.DataReader` para playback.
 
     Usa `tests/fixtures/sample_ticker.csv` como fonte determinística quando

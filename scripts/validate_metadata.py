@@ -29,9 +29,7 @@ def extra_checks(data: dict):
     checksum = data.get("checksum")
     if checksum and len(checksum) != 64:
         errors.append(f"checksum length is {len(checksum)} but must be 64 hex chars")
-    # date parse
-    sd = data.get("snapshot_date")
-    if sd:
+    if sd := data.get("snapshot_date"):
         try:
             datetime.strptime(sd, "%Y-%m-%d")
         except Exception as e:
@@ -67,8 +65,7 @@ def main():
         print(e.message)
         sys.exit(1)
 
-    extras = extra_checks(data)
-    if extras:
+    if extras := extra_checks(data):
         print("Extra validation errors:")
         for e in extras:
             print(" - ", e)
