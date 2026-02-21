@@ -1,5 +1,5 @@
-import os
 from datetime import date, timedelta
+from pathlib import Path
 
 import typer
 
@@ -10,7 +10,7 @@ d_atual = date.today()
 
 
 @app.command()
-def main():
+def main():  # noqa: C901
     # importações locais para evitar exigir dependências apenas para `--help`
     import pandas as pd
 
@@ -37,7 +37,8 @@ def main():
     for a in ativos:
         # Verifica se os arquivo já existem
         # {TODO} adicionar verificação se os dados correspondem às datas solicitadas
-        if os.path.isfile(f"dados/{a}.csv"):
+        data_path = Path("dados") / f"{a}.csv"
+        if data_path.is_file():
             print(f"Dados encontrados para {a}")
             continue
         # Se os dados não existirem, realiza o download
@@ -86,7 +87,9 @@ def main():
         else:
             df["Return"] = None
         # Salva dados em .csv
-        df.to_csv(f"dados/{a}.csv")
+        # Garantir que o diretório exista e salvar
+        Path("dados").mkdir(parents=True, exist_ok=True)
+        df.to_csv(data_path)
 
     for a in ativos:
         # Abre o arquivo de dados
@@ -110,7 +113,34 @@ def main():
         print(f"Coeficiente de variação(dia):{rt.coef_var(risco, retorno_medio)}")
 
         # Calcula projeção de faixa de expectativa de retorno
-        ultimo_preco = round(df.tail(1).values[0][6], 2)
+        # Evita índices literais: busca coluna de preço preferida e pega último valor
+        price_candidates = ("Adj Close", "adj_close", "Close", "close")
+        last_price = None
+        for c in price_candidates:
+            if c in df.columns:
+                try:
+                    last_price = float(df[c].iloc[-1])
+                except Exception:
+                    last_price = None
+                break
+        if last_price is None:
+            # fallback: tentar última célula existente (evita index literal)
+            try:
+                last_row = df.iloc[-1]
+                # prefer coluna 'close' se existir
+                if "close" in df.columns:
+                    last_price = float(last_row["close"])
+                else:
+                    # pega primeiro valor numérico na linha
+                    for v in last_row:
+                        try:
+                            last_price = float(v)
+                            break
+                        except Exception:
+                            continue
+            except Exception:
+                last_price = 0.0
+        ultimo_preco = round(last_price, 2)
         proj_preco = ultimo_preco * (1 + retorno_anual)
         print("\nProjeçoes para o 1 ano:")
         print(f"Ultimo Preco: {ultimo_preco}")
