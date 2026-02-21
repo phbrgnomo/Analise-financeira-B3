@@ -1,0 +1,26 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Snapshot Metadata",
+  "type": "object",
+  "required": ["ticker", "snapshot_date", "rows", "checksum", "schema_version", "source"],
+  "properties": {
+    "ticker": {"type": "string"},
+    "snapshot_date": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$"},
+    "rows": {"type": "integer", "minimum": 0},
+    "checksum": {"type": "string", "pattern": "^[a-fA-F0-9]{64}$"},
+    "schema_version": {"type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$"},
+    "source": {"type": "string"},
+    "snapshot_version": {"type": "integer"},
+    "notes": {"type": "string"},
+    "generated_by": {"type": "string"},
+    "rows_summary": {
+      "type": "object",
+      "properties": {
+        "min_date": {"type": "string"},
+        "max_date": {"type": "string"},
+        "count": {"type": "integer"}
+      }
+    }
+  },
+  "additionalProperties": false
+}

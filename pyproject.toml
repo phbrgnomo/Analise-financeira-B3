@@ -29,6 +29,7 @@ main = "src.main:app"
 pytest = "^7.4.0"
 ruff = "^0.14.14"
 pre-commit = "^3.3.0"
+jsonschema = "^4.19.0"
 
 [tool.ruff]
 line-length = 88
