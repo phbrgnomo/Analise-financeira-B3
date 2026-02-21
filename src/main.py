@@ -25,7 +25,7 @@ def main():
     # data_fim = input("Data de fim (MM-DD-AAAA): ")
 
     # Define ativos a serem pesquisados
-    ativos = ["PETR4", "ITUB3", "BBDC4", "VALE3", "WIZS3", "ECOR3"]
+    ativos = ["PETR4", "ITUB3", "BBDC4"]
 
     periodo_dados = 52  # Periodo total dos dados em semanas
     time_skew = timedelta(weeks=periodo_dados)

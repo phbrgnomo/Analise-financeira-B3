@@ -194,7 +194,7 @@ def _write_csv_atomic(df: pd.DataFrame, file_path: Union[str, Path]) -> None:
     file_path = Path(file_path)
     filename = file_path.name
     provider_dir = file_path.parent
-    fd, tmp = tempfile.mkstemp(prefix=filename + ".", dir=str(provider_dir))
+    fd, tmp = tempfile.mkstemp(prefix=f"{filename}.", dir=str(provider_dir))
     os.close(fd)
     tmp = Path(tmp)
     try:
