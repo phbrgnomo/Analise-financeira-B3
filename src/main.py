@@ -1,5 +1,6 @@
 from datetime import date, timedelta
 from pathlib import Path
+from src.paths import DATA_DIR
 
 import typer
 
@@ -37,7 +38,7 @@ def main():  # noqa: C901
     for a in ativos:
         # Verifica se os arquivo já existem
         # {TODO} adicionar verificação se os dados correspondem às datas solicitadas
-        data_path = Path("dados") / f"{a}.csv"
+        data_path = DATA_DIR / f"{a}.csv"
         if data_path.is_file():
             print(f"Dados encontrados para {a}")
             continue
@@ -88,13 +89,13 @@ def main():  # noqa: C901
             df["Return"] = None
         # Salva dados em .csv
         # Garantir que o diretório exista e salvar
-        Path("dados").mkdir(parents=True, exist_ok=True)
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
         df.to_csv(data_path)
 
     for a in ativos:
         # Abre o arquivo de dados
         try:
-            df = pd.read_csv(f"dados/{a}.csv")
+            df = pd.read_csv(DATA_DIR / f"{a}.csv")
         except Exception as e:
             print(f"Dados para {a} não encontrados: {e}")
             continue

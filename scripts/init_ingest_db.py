@@ -9,9 +9,10 @@ from __future__ import annotations
 import argparse
 import sqlite3
 from pathlib import Path
+from src.paths import DATA_DIR
 
 
-def init_db(db_path: Path | str = "dados/data.db") -> None:
+def init_db(db_path: Path | str = DATA_DIR / "data.db") -> None:
     db_path = Path(db_path)
     db_path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(db_path))
@@ -46,7 +47,7 @@ if __name__ == "__main__":
 
     parser.add_argument(
         "--db",
-        default="dados/data.db",
+        default=str(DATA_DIR / "data.db"),
         help=("Caminho para o arquivo .db"),
     )
 

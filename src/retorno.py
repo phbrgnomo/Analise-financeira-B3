@@ -3,6 +3,7 @@ from typing import Tuple, Union
 
 import numpy as np
 import pandas as pd
+from src.paths import DATA_DIR
 
 
 def r_linear(
@@ -69,7 +70,8 @@ def correlacao(ativos: list[str]) -> pd.DataFrame:
     new_df = pd.DataFrame()
     for a in ativos:
         try:
-            df1 = pd.read_csv(f"dados/{a}.csv")
+            fp = DATA_DIR / f"{a}.csv"
+            df1 = pd.read_csv(fp)
         except (FileNotFoundError, OSError) as e:
             print(f"Dados de {a} não encontrados: {e}")
             continue

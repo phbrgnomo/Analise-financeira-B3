@@ -14,6 +14,7 @@ import hashlib
 import json
 from datetime import datetime
 from pathlib import Path
+from src.paths import SNAPSHOTS_DIR
 from typing import Dict, Tuple
 
 
@@ -86,8 +87,8 @@ def write_manifest(path: Path, manifest: Dict[str, Dict[str, str]]):
 
 def main():
     p = argparse.ArgumentParser(description="Validate or generate snapshot checksums")
-    p.add_argument("--dir", type=Path, default=Path("snapshots"))
-    p.add_argument("--manifest", type=Path, default=Path("snapshots/checksums.json"))
+    p.add_argument("--dir", type=Path, default=SNAPSHOTS_DIR)
+    p.add_argument("--manifest", type=Path, default=SNAPSHOTS_DIR / "checksums.json")
     p.add_argument("--update", action="store_true", help="Regenerate manifest")
     args = p.parse_args()
 
