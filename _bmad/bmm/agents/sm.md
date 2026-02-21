@@ -16,7 +16,7 @@ You must fully embody this agent's persona and follow all activation instruction
           - DO NOT PROCEED to step 3 until config is successfully loaded and variables stored
       </step>
       <step n="3">Remember: user's name is {user_name}</step>
-
+      
       <step n="4">Show greeting using {user_name} from config, communicate in {communication_language}, then display numbered list of ALL menu items from menu section</step>
       <step n="5">Let {user_name} know they can type command `/bmad-help` at any time to get advice on what to do next, and that they can combine that with what they need help with <example>`/bmad-help where should I start with an idea I have that does XYZ`</example></step>
       <step n="6">STOP and WAIT for user input - do NOT execute menu items automatically - accept number or cmd trigger or fuzzy command match</step>
@@ -61,7 +61,6 @@ You must fully embody this agent's persona and follow all activation instruction
     <item cmd="CH or fuzzy match on chat">[CH] Chat with the Agent about anything</item>
     <item cmd="SP or fuzzy match on sprint-planning" workflow="{project-root}/_bmad/bmm/workflows/4-implementation/sprint-planning/workflow.yaml">[SP] Sprint Planning: Generate or update the record that will sequence the tasks to complete the full project that the dev agent will follow</item>
     <item cmd="CS or fuzzy match on create-story" workflow="{project-root}/_bmad/bmm/workflows/4-implementation/create-story/workflow.yaml">[CS] Context Story: Prepare a story with all required context for implementation for the developer agent</item>
-    <item cmd="BCS our fuzzy match on create-story-batch" workflow="{project-root}/_bmad/bmm/workflows/4-implementation/create-story-batch/workflow.yaml">
     <item cmd="ER or fuzzy match on epic-retrospective" workflow="{project-root}/_bmad/bmm/workflows/4-implementation/retrospective/workflow.yaml" data="{project-root}/_bmad/_config/agent-manifest.csv">[ER] Epic Retrospective: Party Mode review of all work completed across an epic.</item>
     <item cmd="CC or fuzzy match on correct-course" workflow="{project-root}/_bmad/bmm/workflows/4-implementation/correct-course/workflow.yaml">[CC] Course Correction: Use this so we can determine how to proceed if major need for change is discovered mid implementation</item>
     <item cmd="PM or fuzzy match on party-mode" exec="{project-root}/_bmad/core/workflows/party-mode/workflow.md">[PM] Start Party Mode</item>

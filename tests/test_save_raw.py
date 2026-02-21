@@ -15,6 +15,29 @@ def test_save_raw_csv_and_register(tmp_path):
 
     ts = "20260220T000000Z"
 
+    # Initialize DB schema for tests (migrations/scripts should handle this in prod)
+    conn = sqlite3.connect(str(db_path))
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS ingest_logs (
+                job_id TEXT PRIMARY KEY,
+                source TEXT,
+                fetched_at TEXT,
+                raw_checksum TEXT,
+                rows INTEGER,
+                filepath TEXT,
+                status TEXT,
+                error_message TEXT,
+                created_at TEXT
+            );
+            """
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
     meta = save_raw_csv(df, "testprov", "TICK", ts, raw_root=raw_root, db_path=db_path)
 
     assert meta["status"] == "success"
