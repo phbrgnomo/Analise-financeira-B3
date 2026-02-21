@@ -18,8 +18,8 @@ so that unit and integration tests can run deterministically and quickly.
 
 ## Tasks / Subtasks
 
-- [x] Add sample CSV: `tests/fixtures/sample_ticker.csv` (AC: #1, #2)
-  - [x] Ensure CSV has canonical columns: `ticker,date,open,high,low,close,adj_close,volume,source`
+  - [x] Add sample CSV: `tests/fixtures/sample_ticker.csv` (AC: #1, #2)
+  - [x] Ensure CSV has canonical columns consistent with `docs/schema.json` (ex.: `ticker,date,open,high,low,close,volume,source`)
 - [x] Add `tests/fixtures/README.md` documenting the fixture and usage (AC: #2)
 - [x] Add `tests/conftest.py` with `sample_db` fixture to load CSV into in-memory SQLite (AC: #3)
 - [x] Add a simple example test that uses `sample_db` (optional follow-up task)

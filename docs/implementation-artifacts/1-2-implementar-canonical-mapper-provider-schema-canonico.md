@@ -10,9 +10,9 @@ so that downstream modules can rely on a consistent format for persistence and p
 
 ## Acceptance Criteria
 
-1. Given a raw `DataFrame` from a provider adapter (e.g., `yfinance`), when the canonical mapper is executed, then it returns a `DataFrame` with canonical columns: `ticker`, `date`, `open`, `high`, `low`, `close`, `adj_close`, `volume`, `source`, `fetched_at`.
+1. Given a raw `DataFrame` from a provider adapter (e.g., `yfinance`), when the canonical mapper is executed, then it returns a `DataFrame` with canonical columns that match the persisted schema defined in `docs/schema.json` (for example: `ticker`, `date`, `open`, `high`, `low`, `close`, `volume`, `source`, `fetched_at`, `raw_checksum`).
 
-  **Nota de persistência:** `adj_close` pode aparecer na saída canônica do mapper para suporte a cálculos (ex.: retornos), mas por decisão de design `adj_close` não faz parte do esquema persistido por padrão. O arquivo `docs/schema.json` é a fonte de verdade para o esquema persistido; se `adj_close` precisar ser persistido no futuro, atualize `docs/schema.json` e gere migração/versão apropriada.
+  **Nota de persistência:** O mapper pode opcionalmente emitir uma coluna `adj_close` para uso interno (por exemplo, cálculos de retornos ajustados). PORÉM, por decisão de projeto essa coluna **não é persistida** na forma CSV/DB por padrão. `docs/schema.json` é a fonte de verdade para o esquema persistido; para persistir `adj_close` no futuro atualize `docs/schema.json` e siga o processo de versionamento/migração.
 2. The mapper computes `raw_checksum` (SHA256) for the raw payload and includes it in metadata persisted alongside canonical rows.
 3. `fetched_at` is normalized to UTC ISO8601 and time zone handling is documented.
 4. The mapper provides a lightweight `pandera` schema used to validate canonical `DataFrame` in unit tests and CI.

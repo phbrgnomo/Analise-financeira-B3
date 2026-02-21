@@ -92,7 +92,7 @@ jobs:
       - name: Run tests (pytest)
         run: |
           mkdir -p reports
-          poetry run pytest -q --maxfail=1 --junitxml=reports/junit.xml
+          NETWORK_MODE=playback poetry run pytest -q --maxfail=1 --junitxml=reports/junit.xml
 
       - name: Upload test artifacts on failure
         if: failure()
@@ -190,7 +190,7 @@ jobs:
       - name: Run integration tests (mocked quickstart)
         run: |
           mkdir -p "$RUNNER_TEMP/snapshots_test"
-          poetry run pytest -q tests/integration -k quickstart_mocked --maxfail=1
+          NETWORK_MODE=playback poetry run pytest -q tests/integration -k quickstart_mocked --maxfail=1
 
       - name: Expose snapshot dir as step output
         id: snapshot_dir

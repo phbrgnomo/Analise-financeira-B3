@@ -111,7 +111,12 @@ class Adapter(ABC):
         Levanta `ValidationError` com mensagens compatíveis com os testes existentes.
         """
         if required_columns is None:
-            required_columns = ["Open", "High", "Low", "Close", "Adj Close", "Volume"]
+            # If the adapter class defines REQUIRED_COLUMNS, prefer that contract
+            # (tests and some adapters rely on this). Otherwise, use the
+            # default primary OHLCV columns. `Adj Close` is optional.
+            required_columns = getattr(self, "REQUIRED_COLUMNS", None)
+            if required_columns is None:
+                required_columns = ["Open", "High", "Low", "Close", "Volume"]
 
         if df.empty:
             raise ValidationError(

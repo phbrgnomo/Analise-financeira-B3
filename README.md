@@ -41,6 +41,25 @@ poetry run pytest -q
 ./examples/run_quickstart_example.sh
 ```
 
+### Modo de testes de rede (NETWORK_MODE)
+
+Para reduzir flakiness em CI, os testes que dependem de chamadas de rede rodam
+por padrão em modo `playback`, usando fixtures determinísticas.
+
+- Execução local (playback, padrão):
+
+```bash
+poetry run pytest
+```
+
+- Atualizar gravações/usar rede (modo `record`) — execute apenas em ambiente controlado:
+
+```bash
+NETWORK_MODE=record poetry run pytest tests/adapters/test_adapters.py::TestYFinanceAdapter::test_fetch
+```
+
+As instruções completas e o playbook estão em `docs/playbooks/testing-network-fixtures.md`.
+
 ## Uso e convenções
 - Ao coletar ativos da B3 via Yahoo, adicione o sufixo `.SA` (ex.: `PETR4.SA`).
 - Dados persistidos ficam na pasta `dados/` em CSV com coluna `Return` para retornos diários.

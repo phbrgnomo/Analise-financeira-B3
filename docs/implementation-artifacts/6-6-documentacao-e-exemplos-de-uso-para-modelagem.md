@@ -36,7 +36,8 @@ so that contributors can run the model and understand typical results.
 ## Dev Notes
 
 - Source material: docs/planning-artifacts/epics.md (Epic 6, Story 6.6)
-- Expected inputs: canonical `prices` or `returns` DataFrame with columns: `ticker`, `date`, `open`, `high`, `low`, `close`, `adj_close`, `volume` or precomputed `returns` with `date`, `ticker`, `return`
+- Expected inputs: canonical `prices` or `returns` DataFrame with columns that follow `docs/schema.json` (e.g.: `ticker`, `date`, `open`, `high`, `low`, `close`, `volume`).
+  Note: `adj_close` may be emitted by the mapper for internal calculations (e.g., returns), but it is not persisted by default — update `docs/schema.json` to persist it if needed.
 - Recommended implementation location: `src/modeling.py` (function `portfolio.generate(prices_df, params)`) and a thin CLI wrapper in `src/main.py` (`--model`) to call it.
 - Example output locations: `results/portfolio-<run_id>.csv` and `results/portfolio-<run_id>.json` with companion `<run_id>.checksum` (SHA256 of CSV)
 - Minimal library recommendations: `numpy`, `pandas`, `scipy` (optional), keep dependencies minimal; prefer deterministic RNG seed handling if any stochastic methods used

@@ -72,9 +72,19 @@ def main():
             print(f"Mapper produced {len(canonical)} canonical rows for {a}")
         except Exception as e:
             print(f"Mapper failed for {a}: {e}")
-        # Calcula o retorno
+        # Calcula o retorno (usa coluna ajustada quando disponível, senão `close`)
         print(f"Calculado retornos de {a}")
-        df["Return"] = rt.r_log(df["Adj Close"], df["Adj Close"].shift(1))
+        price_candidates = (
+            "Adj Close",
+            "adj_close",
+            "Close",
+            "close",
+        )
+        price_col = next((c for c in price_candidates if c in df.columns), None)
+        if price_col is not None:
+            df["Return"] = rt.r_log(df[price_col], df[price_col].shift(1))
+        else:
+            df["Return"] = None
         # Salva dados em .csv
         df.to_csv(f"dados/{a}.csv")
 

@@ -19,7 +19,18 @@ def r_log(p_fin, p_ini):
 # Retorna: (retorno total, retorno médio diário, desvio) entre os dias d_ini e d_fim.
 def retorno_periodo(_df):
     df = _df
-    df["Retorno dia"] = r_log(df["Adj Close"], df["Adj Close"].shift(1))
+    # Prefer `adj_close` when available; otherwise fall back to `close`.
+    price_col = None
+    for c in ("adj_close", "Adj Close", "close", "Close"):
+        if c in df.columns:
+            price_col = c
+            break
+    if price_col is None:
+        raise KeyError(
+            "Nenhuma coluna de preço encontrada (esperado 'close' ou 'adj_close')"
+        )
+
+    df["Retorno dia"] = r_log(df[price_col], df[price_col].shift(1))
     ret_periodo = df["Retorno dia"].sum()
     ret_medio = df["Retorno dia"].mean()
     desvio = df["Retorno dia"].std()

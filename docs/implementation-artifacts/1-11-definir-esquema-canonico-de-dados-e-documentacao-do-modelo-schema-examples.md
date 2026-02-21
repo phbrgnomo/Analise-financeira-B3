@@ -25,9 +25,11 @@ so that downstream consumers (notebooks, metrics) have a stable contract.
 - [x] Update `docs/implementation-artifacts/sprint-status.yaml` status for this story to `ready-for-dev` (persisted).
 - [x] Documentar o que foi implantado nessa etapa em `docs/sprint-reports` conforme definido no FR28 (`docs/planning-artifacts/prd.md`) (arquivo docs/sprint-reports/1-11-implantacao.md adicionado).
 
-## Dev Notes
+# Dev Notes
 
-- Canonical columns (recommended): `ticker, date, open, high, low, close, adj_close, volume, source, fetched_at, raw_checksum`.
+- Canonical columns (recommended persisted schema): `ticker, date, open, high, low, close, volume, source, fetched_at, raw_checksum`.
+
+- Nota: o mapper pode opcionalmente emitir `adj_close` para uso interno (ex.: cálculos de retornos). PORÉM, por decisão de projeto essa coluna **não é persistida** por padrão; `docs/schema.json` é a fonte de verdade do esquema persistido — atualize-o para persistir `adj_close` e siga versão/migração apropriada.
 - `date` should be ISO date (`YYYY-MM-DD`) stored as text in SQLite; `fetched_at` as UTC ISO8601 datetime.
 - `raw_checksum` is SHA256 hex of raw provider payload or CSV for auditability.
 - Use `schema_version` in snapshot metadata and in the header of `docs/schema.json` for migration tracking.

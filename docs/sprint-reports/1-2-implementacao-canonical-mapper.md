@@ -13,7 +13,8 @@ Implementação completa do canonical mapper que normaliza DataFrames de provedo
 ### 1. Implementação do Mapper (`src/etl/mapper.py`)
 
 - ✅ Função `to_canonical(df, provider_name, ticker)` implementada
-- ✅ Retorna DataFrame com colunas canônicas: ticker, date, open, high, low, close, adj_close, volume, source, fetched_at
+-- ✅ Retorna DataFrame com colunas canônicas (persistidas): ticker, date, open, high, low, close, volume, source, fetched_at
+--   Observação: o mapper pode incluir `adj_close` para cálculos internos (ex.: retornos), mas essa coluna **não é persistida** por padrão; `docs/schema.json` é a fonte de verdade para o esquema persistido.
 - ✅ Cálculo de `raw_checksum` (SHA256) do payload bruto
 - ✅ Normalização de `fetched_at` para UTC ISO8601 (formato: 2026-02-17T12:34:56Z)
 - ✅ Validação com pandera `DataFrameSchema` canônico
@@ -55,7 +56,7 @@ CanonicalSchema = DataFrameSchema(
         "high": Column(float, nullable=False),
         "low": Column(float, nullable=False),
         "close": Column(float, nullable=False),
-        "adj_close": Column(float, nullable=False),
+        "adj_close": Column(float, nullable=True),  # opcional: não persistido por padrão
         "volume": Column(int, nullable=False, coerce=True),
         "source": Column(str, nullable=False),
         "fetched_at": Column(str, nullable=False),

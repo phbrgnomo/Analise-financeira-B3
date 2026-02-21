@@ -11,7 +11,9 @@ Campos:
 - fetched_at (datetime, não-nulo): timestamp UTC ISO8601 de coleta
 - raw_checksum (string, não-nulo): SHA256 hexdigest do payload original (CSV ou provider payload)
 
-- Observação: `adj_close` pode aparecer na saída canônica para cálculos (ex.: retornos), porém não faz parte do esquema persistido por padrão. Consulte `docs/schema.json` como fonte de verdade do esquema persistido.
+- Observação: `adj_close` pode aparecer na saída do mapper para uso em cálculos internos (ex.: retornos), porém POR DECISÃO DE PROJETO **não é persistido** na forma CSV/DB por padrão.
+
+	O arquivo `docs/schema.json` é a fonte de verdade do esquema persistido. Se for necessário persistir `adj_close` no futuro, atualize `docs/schema.json` e siga o processo de versionamento/migração descrito abaixo.
 
 Versionamento:
 - `schema_version` em `docs/schema.json` identifica mudanças.

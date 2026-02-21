@@ -9,12 +9,15 @@ Ações Prioritárias (ordenadas)
 1. Corrigir cálculo de retornos e tratar divisão por zero
    - Owner: `dev` (Amelia)
    - Esforço: S
+   - Status: done
 2. Adicionar testes unitários críticos para `retorno` e `dados_b3`
    - Owner: `qa` (Quinn) com suporte `dev`
    - Esforço: M
+   - Status: done
 3. Implementar checksums e job CI para validar snapshots
    - Owner: `pm` (John) / implementação: `quick-flow-solo-dev` (Barry)
    - Esforço: M
+   - Status: done
 4. Criar fixtures/mocks para testes de rede (reduzir flakiness)
    - Owner: `tea` (Murat) + `qa`
    - Esforço: M

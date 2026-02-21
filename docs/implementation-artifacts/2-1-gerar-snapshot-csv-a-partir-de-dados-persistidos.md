@@ -31,7 +31,7 @@ so that I can export a stable copy of the data for analysis and archival.
 - Data source: canonical `prices` table in `dados/data.db` (SQLite). Path: `dados/data.db` relative to repo root.
 - Output path: `snapshots/` folder in repo root. Ensure folder exists and is documented in README.
 - Use `pandas` to export DataFrame to CSV (`df.to_csv(...)`) and `sqlalchemy` or existing DB layer for queries.
-- Respect upsert semantics and canonical schema established in Epic 1 (`ticker`, `date`, `open`, `high`, `low`, `close`, `adj_close`, `volume`).
+- Respect upsert semantics and canonical schema established in Epic 1 (see `docs/schema.json` for persisted columns: `ticker`, `date`, `open`, `high`, `low`, `close`, `volume`).
 - Keep CSV header stable and documented; include canonical columns and optionally metadata header section in a separate `.meta` file if needed (see Story 2.2 for checksum/metadata details).
 - CLI behavior: return non-zero exit code on errors; provide informative messages (rows found, rows exported, output path).
 - Permissions: DB file `dados/data.db` should be owner-only by default; snapshots can be world-readable but document recommended perms.

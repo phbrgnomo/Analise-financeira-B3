@@ -39,7 +39,8 @@ so that new provider implementations can be added without changing core logic.
 ## Dev Notes
 
 - Technical constraints: follow existing project stack (Python, `pandas`, `sqlalchemy`, `typer`). See `docs/planning-artifacts/epics.md` (Epic 5) for context.
-- Interface must return canonical-compatible DataFrame (columns: `ticker`, `date`, `open`, `high`, `low`, `close`, `adj_close`, `volume`, `source`, `fetched_at`) or raw provider DataFrame alongside metadata.
+-- Interface must return at minimum provider OHLCV as a `pandas.DataFrame` (columns: `Open`, `High`, `Low`, `Close`, `Volume`) with index `Date` and populate `DataFrame.attrs` for metadata (`source`, `fetched_at`, `raw_checksum`).
+-- Adapters MAY also expose an adjusted-price column (`Adj Close` / `adj_close`) when the provider supplies it; this column is optional for persistence and should be documented in `docs/planning-artifacts/adapter-mappings.md`. The persisted schema is authoritative in `docs/schema.json`.
 - Metadata contract: include `source` (str), `fetched_at` (UTC ISO8601), `raw_checksum` (SHA256 hex), and a machine-readable `error_code` when failing.
 - Retry behaviour: honor provider `Retry-After` headers when present; apply exponential backoff with jitter; log attempts to `ingest_logs` with fields (`provider`, `attempt`, `status_code`, `retry_after`, `job_id`).
 

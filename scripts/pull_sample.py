@@ -74,7 +74,9 @@ def to_canonical(df: pd.DataFrame, ticker: str) -> tuple[pd.DataFrame, str]:
         "High": "high",
         "Low": "low",
         "Close": "close",
-        "Adj Close": "adj_close",
+        # Provider may expose "Adj Close", but the persisted schema
+        # does not include it.
+        # We keep raw checksum but do not persist `adj_close` in the CSV.
         "Volume": "volume",
     }
 
@@ -99,7 +101,7 @@ def to_canonical(df: pd.DataFrame, ticker: str) -> tuple[pd.DataFrame, str]:
     raw_checksum = hashlib.sha256(raw_csv).hexdigest()
     out["raw_checksum"] = raw_checksum
 
-    # Reordenar colunas para o canonical schema
+    # Reordenar colunas para o esquema persistido (docs/schema.json)
     cols = [
         "ticker",
         "date",
@@ -107,12 +109,18 @@ def to_canonical(df: pd.DataFrame, ticker: str) -> tuple[pd.DataFrame, str]:
         "high",
         "low",
         "close",
-        "adj_close",
         "volume",
         "source",
         "fetched_at",
         "raw_checksum",
     ]
+
+    # Garantir que existam as colunas esperadas; se o provider expôs "Adj Close"
+    # mantemos o valor internamente, mas não persistimos a coluna `adj_close`.
+    for c in cols:
+        if c not in out.columns:
+            out[c] = None
+
     out = out[cols]
     return out, raw_checksum
 

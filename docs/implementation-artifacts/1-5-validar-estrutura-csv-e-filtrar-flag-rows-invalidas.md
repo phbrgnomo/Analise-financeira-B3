@@ -21,7 +21,8 @@ so that only valid rows enter the canonical pipeline and invalid rows are tracea
 ## Tasks / Subtasks
 
 - [ ] Implement `validation` module with `validate_dataframe(df, schema) -> (valid_df, invalid_df, summary)`
-  - [ ] Define `pandera` schema (or equivalent) for canonical columns: `ticker, date, open, high, low, close, adj_close, volume, source, fetched_at`
+  - [ ] Define `pandera` schema (or equivalent) for canonical columns as persisted in `docs/schema.json` (e.g.: `ticker, date, open, high, low, close, volume, source, fetched_at`).
+    - Nota: `adj_close` é opcional no mapper para cálculos internos; atualize `docs/schema.json` e a validação se for necessário persistir `adj_close`.
   - [ ] Map provider raw columns to canonical names prior to validation (use existing `canonical mapper` when available)
 - [ ] Implement logging into `ingest_logs` for invalid rows with fields: `ticker, source, raw_file, row_index, reason_code, reason_message, job_id, created_at`
 - [ ] Persist invalid rows to `raw/<provider>/invalid-<ticker>-<ts>.csv` (or a dedicated `invalid/` folder) with checksum and reference in `ingest_logs`
