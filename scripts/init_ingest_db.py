@@ -6,9 +6,9 @@ Uso: python scripts/init_ingest_db.py --db dados/data.db
 """
 from __future__ import annotations
 
-from pathlib import Path
-import sqlite3
 import argparse
+import sqlite3
+from pathlib import Path
 
 
 def init_db(db_path: Path | str = "dados/data.db") -> None:
@@ -38,8 +38,18 @@ def init_db(db_path: Path | str = "dados/data.db") -> None:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Inicializa o banco de ingest_logs")
-    parser.add_argument("--db", default="dados/data.db", help="Caminho para o arquivo .db")
+    parser = argparse.ArgumentParser(
+        description=(
+            "Inicializa o banco de ingest_logs"
+        )
+    )
+
+    parser.add_argument(
+        "--db",
+        default="dados/data.db",
+        help=("Caminho para o arquivo .db"),
+    )
+
     args = parser.parse_args()
     init_db(args.db)
     print(f"Banco de ingest inicializado em: {args.db}")
