@@ -188,7 +188,10 @@ class Adapter(ABC):
     def _is_retryable_exception(self, e: Exception, status_code) -> bool:
         """Decide se uma exceção é elegível para retry."""
         if status_code is not None and hasattr(self, "retry_config"):
-            if status_code in self.retry_config.retry_on_status_codes:
+            if (
+                status_code
+                in self.retry_config.retry_on_status_codes
+            ):
                 return True
         return self._is_network_error(e)
 
@@ -216,6 +219,65 @@ class Adapter(ABC):
         msg = f"Aguardando {wait_time}s antes de retry"
         logger.debug(msg, extra=log_context)
         time.sleep(wait_time)
+
+    def _handle_retryable_error(
+        self,
+        e: Exception,
+        status_code,
+        attempt: int,
+        effective_max_retries: int,
+        metrics,
+        log_context: dict,
+        backoff_factor: float,
+        ticker: str,
+    ) -> None:
+        """Lida com exceções retryable: log, métricas e retry/raise."""
+        log_context["status"] = "retryable_error"
+        log_context["error_message"] = str(e)
+        if status_code is not None:
+            log_context["http_status"] = status_code
+        msg = f"Erro retryable na tentativa {attempt}"
+        logger.warning(msg, extra=log_context)
+
+        if attempt >= effective_max_retries:
+            metrics.record_permanent_failure()
+            msg = (
+                f"Falha de rede ao buscar {ticker} "
+                f"após {effective_max_retries} tentativas"
+            )
+            raise NetworkError(msg, original_exception=e) from e
+
+        self._do_retry_procedure(
+            metrics, log_context, attempt, backoff_factor
+        )
+
+    def _handle_non_retryable_error(
+        self,
+        e: Exception,
+        attempt: int,
+        effective_max_retries: int,
+        metrics,
+        log_context: dict,
+        backoff_factor: float,
+        ticker: str,
+    ) -> None:
+        """Lida com exceções não-retryable: log, métricas e retry/raise."""
+        log_context["status"] = "fetch_error"
+        log_context["error_message"] = str(e)
+        log_context["error_type"] = type(e).__name__
+        msg = f"Erro ao buscar dados na tentativa {attempt}"
+        logger.error(msg, extra=log_context)
+
+        if attempt >= effective_max_retries:
+            metrics.record_permanent_failure()
+            raise FetchError(
+                f"Erro ao buscar dados de {ticker}: {str(e)}",
+                original_exception=e,
+            ) from e
+
+        self._do_retry_procedure(
+            metrics, log_context, attempt, backoff_factor
+        )
 
     def _fetch_with_retries(  # noqa: C901
         self,
@@ -285,42 +347,27 @@ class Adapter(ABC):
 
                 status_code = self._extract_status_code(e)
                 if self._is_retryable_exception(e, status_code):
-                    log_context["status"] = "retryable_error"
-                    log_context["error_message"] = str(e)
-                    if status_code is not None:
-                        log_context["http_status"] = status_code
-                    msg = f"Erro retryable na tentativa {attempt}"
-                    logger.warning(msg, extra=log_context)
-
-                    if attempt >= effective_max_retries:
-                        metrics.record_permanent_failure()
-                        msg = (
-                            f"Falha de rede ao buscar {ticker} "
-                            f"após {effective_max_retries} tentativas"
-                        )
-                        raise NetworkError(msg, original_exception=e) from e
-
-                    self._do_retry_procedure(
-                        metrics, log_context, attempt, backoff_factor
+                    self._handle_retryable_error(
+                        e,
+                        status_code,
+                        attempt,
+                        effective_max_retries,
+                        metrics,
+                        log_context,
+                        backoff_factor,
+                        ticker,
                     )
                     continue
 
                 # Outros erros: tratar como fetch error
-                log_context["status"] = "fetch_error"
-                log_context["error_message"] = str(e)
-                log_context["error_type"] = type(e).__name__
-                msg = f"Erro ao buscar dados na tentativa {attempt}"
-                logger.error(msg, extra=log_context)
-
-                if attempt >= effective_max_retries:
-                    metrics.record_permanent_failure()
-                    raise FetchError(
-                        f"Erro ao buscar dados de {ticker}: {str(e)}",
-                        original_exception=e,
-                    ) from e
-
-                self._do_retry_procedure(
-                    metrics, log_context, attempt, backoff_factor
+                self._handle_non_retryable_error(
+                    e,
+                    attempt,
+                    effective_max_retries,
+                    metrics,
+                    log_context,
+                    backoff_factor,
+                    ticker,
                 )
 
         msg = (

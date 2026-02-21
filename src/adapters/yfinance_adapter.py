@@ -190,6 +190,7 @@ class YFinanceAdapter(Adapter):
         backoff_factor: Optional[float] = None,
         timeout: Optional[float] = None,
         required_columns: Optional[list] = None,
+        idempotent: bool = True,
         **kwargs,
     ) -> pd.DataFrame:
         """
@@ -214,6 +215,7 @@ class YFinanceAdapter(Adapter):
             ),
             timeout=(self.timeout if timeout is None else timeout),
             required_columns=required_columns,
+            idempotent=idempotent,
             **kwargs,
         )
 
