@@ -111,7 +111,7 @@ class Adapter(ABC):
         Levanta `ValidationError` com mensagens compatíveis com os testes existentes.
         """
         if required_columns is None:
-            required_columns = getattr(self, "REQUIRED_COLUMNS", None)
+            required_columns = ["Open", "High", "Low", "Close", "Adj Close", "Volume"]
 
         if df.empty:
             raise ValidationError(
@@ -119,31 +119,10 @@ class Adapter(ABC):
                 "Verifique se o ticker é válido e se há dados para o período."
             )
 
-        # Normalize MultiIndex columns dynamically
-        with contextlib.suppress(Exception):
-            if isinstance(df.columns, pd.MultiIndex):
-                if df.columns.nlevels >= 2:
-                    # Look for the level that contains standard price fields
-                    target_level = 0
-                    for i in range(df.columns.nlevels):
-                        level_vals = set(df.columns.get_level_values(i))
-                        if "Close" in level_vals or "Open" in level_vals:
-                            target_level = i
-                            break
-
-                    # Flatten using the detected level
-                    df.columns = [c[target_level] for c in df.columns]
-                else:
-                    df.columns = ["_".join(map(str, c)) for c in df.columns]
-        # Ensure column labels are strings for reliable comparisons
-        with contextlib.suppress(Exception):
-            df.columns = [str(c) for c in df.columns]
-        # If a required_columns list is defined, enforce presence of those columns.
-        if required_columns:
-            if missing_columns := set(required_columns) - set(df.columns):
-                raise ValidationError(
-                    f"Colunas obrigatórias ausentes para {ticker}: {missing_columns}"
-                )
+        if missing_columns := set(required_columns) - set(df.columns):
+            raise ValidationError(
+                f"Colunas obrigatórias ausentes para {ticker}: {missing_columns}"
+            )
 
         if not isinstance(df.index, pd.DatetimeIndex):
             raise ValidationError(
@@ -174,24 +153,20 @@ class Adapter(ABC):
             return backoff_factor ** attempt
         except Exception:
             # fallback seguro
-            return backoff_factor * attempt
+            return float(backoff_factor) * attempt
 
     def _extract_status_code(self, e: Exception):
         """Extrai código HTTP se presente na exceção."""
-        # Use getattr to avoid static analyzers complaining about
-        # attribute access on the base Exception type.
-        resp = getattr(e, "response", None)
-        if resp is not None:
-            return getattr(resp, "status_code", None)
-        return getattr(e, "status_code", None)
+        if hasattr(e, "response"):
+            return getattr(e.response, "status_code", None)
+        if hasattr(e, "status_code"):
+            return getattr(e, "status_code", None)
+        return None
 
     def _is_retryable_exception(self, e: Exception, status_code) -> bool:
         """Decide se uma exceção é elegível para retry."""
         if status_code is not None and hasattr(self, "retry_config"):
-            if (
-                status_code
-                in self.retry_config.retry_on_status_codes
-            ):
+            if status_code in self.retry_config.retry_on_status_codes:
                 return True
         return self._is_network_error(e)
 
@@ -205,80 +180,6 @@ class Adapter(ABC):
             delay_ms = int(wait * 1000)
         return wait, delay_ms
 
-    def _do_retry_procedure(
-        self,
-        metrics,
-        log_context: dict,
-        attempt: int,
-        backoff_factor: float,
-    ) -> None:
-        """Procedimento comum para registrar retry, definir delay e esperar."""
-        wait_time, delay_ms = self._compute_wait(attempt, backoff_factor)
-        metrics.record_retry()
-        log_context["next_delay_ms"] = delay_ms
-        msg = f"Aguardando {wait_time}s antes de retry"
-        logger.debug(msg, extra=log_context)
-        time.sleep(wait_time)
-
-    def _handle_retryable_error(
-        self,
-        e: Exception,
-        status_code,
-        attempt: int,
-        effective_max_retries: int,
-        metrics,
-        log_context: dict,
-        backoff_factor: float,
-        ticker: str,
-    ) -> None:
-        """Lida com exceções retryable: log, métricas e retry/raise."""
-        log_context["status"] = "retryable_error"
-        log_context["error_message"] = str(e)
-        if status_code is not None:
-            log_context["http_status"] = status_code
-        msg = f"Erro retryable na tentativa {attempt}"
-        logger.warning(msg, extra=log_context)
-
-        if attempt >= effective_max_retries:
-            metrics.record_permanent_failure()
-            msg = (
-                f"Falha de rede ao buscar {ticker} "
-                f"após {effective_max_retries} tentativas"
-            )
-            raise NetworkError(msg, original_exception=e) from e
-
-        self._do_retry_procedure(
-            metrics, log_context, attempt, backoff_factor
-        )
-
-    def _handle_non_retryable_error(
-        self,
-        e: Exception,
-        attempt: int,
-        effective_max_retries: int,
-        metrics,
-        log_context: dict,
-        backoff_factor: float,
-        ticker: str,
-    ) -> None:
-        """Lida com exceções não-retryable: log, métricas e retry/raise."""
-        log_context["status"] = "fetch_error"
-        log_context["error_message"] = str(e)
-        log_context["error_type"] = type(e).__name__
-        msg = f"Erro ao buscar dados na tentativa {attempt}"
-        logger.error(msg, extra=log_context)
-
-        if attempt >= effective_max_retries:
-            metrics.record_permanent_failure()
-            raise FetchError(
-                f"Erro ao buscar dados de {ticker}: {str(e)}",
-                original_exception=e,
-            ) from e
-
-        self._do_retry_procedure(
-            metrics, log_context, attempt, backoff_factor
-        )
-
     def _fetch_with_retries(  # noqa: C901
         self,
         ticker: str,
@@ -291,7 +192,7 @@ class Adapter(ABC):
         required_columns: Optional[List[str]] = None,
         idempotent: bool = True,
         **kwargs,
-    ) -> pd.DataFrame:    # noqa: C901
+    ) -> pd.DataFrame:  # noqa: C901
         """
         Loop de retry/backoff que chama `_fetch_once` e aplica validações genéricas.
         Mapeia exceções para `NetworkError` / `FetchError`.
@@ -309,7 +210,7 @@ class Adapter(ABC):
         metrics = getattr(self, "_metrics", get_global_metrics())
 
         effective_max_retries = max_retries
-        if not idempotent and effective_max_retries > 1:
+        if not idempotent and max_retries > 1:
             logger.warning(
                 "Operação não-idempotente; desabilitando retries",
                 extra={**log_context, "idempotent": False},
@@ -347,28 +248,47 @@ class Adapter(ABC):
 
                 status_code = self._extract_status_code(e)
                 if self._is_retryable_exception(e, status_code):
-                    self._handle_retryable_error(
-                        e,
-                        status_code,
-                        attempt,
-                        effective_max_retries,
-                        metrics,
-                        log_context,
-                        backoff_factor,
-                        ticker,
-                    )
+                    log_context["status"] = "retryable_error"
+                    log_context["error_message"] = str(e)
+                    if status_code is not None:
+                        log_context["http_status"] = status_code
+                    msg = f"Erro retryable na tentativa {attempt}"
+                    logger.warning(msg, extra=log_context)
+
+                    if attempt >= effective_max_retries:
+                        metrics.record_permanent_failure()
+                        msg = (
+                            f"Falha de rede ao buscar {ticker} "
+                            f"após {effective_max_retries} tentativas"
+                        )
+                        raise NetworkError(msg, original_exception=e) from e
+
+                    wait_time, delay_ms = self._compute_wait(attempt, backoff_factor)
+                    metrics.record_retry()
+                    log_context["next_delay_ms"] = delay_ms
+                    msg = f"Aguardando {wait_time}s antes de retry"
+                    logger.debug(msg, extra=log_context)
+                    time.sleep(wait_time)
                     continue
 
                 # Outros erros: tratar como fetch error
-                self._handle_non_retryable_error(
-                    e,
-                    attempt,
-                    effective_max_retries,
-                    metrics,
-                    log_context,
-                    backoff_factor,
-                    ticker,
-                )
+                log_context["status"] = "fetch_error"
+                log_context["error_message"] = str(e)
+                log_context["error_type"] = type(e).__name__
+                msg = f"Erro ao buscar dados na tentativa {attempt}"
+                logger.error(msg, extra=log_context)
+
+                if attempt >= effective_max_retries:
+                    metrics.record_permanent_failure()
+                    raise FetchError(
+                        f"Erro ao buscar dados de {ticker}: {str(e)}",
+                        original_exception=e,
+                    ) from e
+
+                wait_time, delay_ms = self._compute_wait(attempt, backoff_factor)
+                metrics.record_retry()
+                log_context["next_delay_ms"] = delay_ms
+                time.sleep(wait_time)
 
         msg = (
             f"Falha ao buscar dados de {ticker} "

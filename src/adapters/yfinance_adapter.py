@@ -16,7 +16,7 @@ from typing import Dict, Optional
 import pandas as pd
 
 from src.adapters.base import Adapter
-from src.adapters.errors import FetchError, ValidationError
+from src.adapters.errors import FetchError
 
 # Configuração de logging estruturado
 logger = logging.getLogger(__name__)
@@ -94,10 +94,6 @@ class YFinanceAdapter(Adapter):
                 self.backoff_factor = self.retry_config.backoff_factor
             if timeout is None:
                 self.timeout = self.retry_config.timeout_seconds
-
-        # Provider-specific required columns (yfinance may omit 'Adj Close')
-        # Keep as an instance attribute so base adapter can pick it up.
-        self.REQUIRED_COLUMNS = ["Open", "High", "Low", "Close", "Volume"]
 
     def fetch(
         self,
@@ -190,7 +186,6 @@ class YFinanceAdapter(Adapter):
         backoff_factor: Optional[float] = None,
         timeout: Optional[float] = None,
         required_columns: Optional[list] = None,
-        idempotent: bool = True,
         **kwargs,
     ) -> pd.DataFrame:
         """
@@ -215,7 +210,6 @@ class YFinanceAdapter(Adapter):
             ),
             timeout=(self.timeout if timeout is None else timeout),
             required_columns=required_columns,
-            idempotent=idempotent,
             **kwargs,
         )
 
@@ -231,19 +225,16 @@ class YFinanceAdapter(Adapter):
         Returns:
             Ticker normalizado
         """
-        if ticker := ticker.strip().upper():
-                # Match básico para tickers alfanuméricos que terminam em dígito (B3)
-            return (
-                f"{ticker}.SA"
-                if (
-                    re.match(r"^[A-Z0-9]+$", ticker)
-                    and ticker[-1].isdigit()
-                    and not ticker.endswith(".SA")
-                )
-                else ticker
-            )
-        else:
-            raise ValidationError("Ticker inválido ou vazio")
+        ticker = ticker.strip().upper()
+        # Match básico para tickers alfanuméricos que terminam em dígito (B3)
+        if (
+            re.match(r"^[A-Z0-9]+$", ticker)
+            and ticker[-1].isdigit()
+            and not ticker.endswith(".SA")
+        ):
+            return f"{ticker}.SA"
+
+        return ticker
 
     # _normalize_date and _validate_dataframe are inherited from Adapter base
 
@@ -266,8 +257,7 @@ class YFinanceAdapter(Adapter):
 
         # Detectar disponibilidade da biblioteca yfinance
         library = "yfinance"
-        # use getattr to avoid static analyzers reporting unknown attributes
-        if getattr(yf, "__is_stub__", False):
+        if hasattr(yf, "__is_stub__") and yf.__is_stub__:
             version = "unknown"
             library_available = "no"
         else:
