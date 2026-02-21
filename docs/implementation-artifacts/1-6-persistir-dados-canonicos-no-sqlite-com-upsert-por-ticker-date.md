@@ -1,6 +1,6 @@
 ## Story 1.6: Persistir dados canônicos no SQLite com upsert por (ticker, date)
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -17,14 +17,14 @@ so that repeated ingests do not create duplicate records and the database remain
 
 ## Tasks / Subtasks
 
-- [ ] Implementar módulo `src.db` com funções `write_prices(df: pd.DataFrame, ticker: str)` e `read_prices(ticker, start=None, end=None)`
-  - [ ] Definir esquema da tabela `prices` com PK (`ticker`, `date`) e colunas: `open, high, low, close, volume, source, fetched_at, raw_checksum`
+- [x] Implementar módulo `src.db` com funções `write_prices(df: pd.DataFrame, ticker: str)` e `read_prices(ticker, start=None, end=None)`
+  - [x] Definir esquema da tabela `prices` com PK (`ticker`, `date`) e colunas: `open, high, low, close, volume, source, fetched_at, raw_checksum`
   - [ ] Nota: `adj_close` pode ser emitido pelo mapper para uso em cálculos (ex.: retornos), mas não é persistido por padrão. Se for necessário persistir `adj_close`, atualize `docs/schema.json` e introduza versão/migração apropriada.
-  - [ ] Implementar upsert por `(ticker, date)` usando SQLAlchemy/Core ou `pandas.to_sql` + `ON CONFLICT` raw SQL
-  - [ ] Gravar/atualizar `schema_version` na tabela `metadata` a cada alteração importante do esquema
+  - [x] Implementar upsert por `(ticker, date)` usando SQLAlchemy/Core ou `pandas.to_sql` + `ON CONFLICT` raw SQL
+  - [x] Gravar/atualizar `schema_version` na tabela `metadata` a cada alteração importante do esquema
   - [ ] Adicionar permissões recomendadas (documentar `chmod 600` para `dados/data.db`)
-  - [ ] Escrever testes unitários usando SQLite in-memory que validem idempotência (inserir 2x → mesma contagem)
-- [ ] Documentar o que foi implantado nessa etapa em `docs/sprint-reports` conforme definido no FR28 (`docs/planning-artifacts/prd.md`)
+  - [x] Escrever testes unitários usando SQLite in-memory que validem idempotência (inserir 2x → mesma contagem)
+- [x] Documentar o que foi implantado nessa etapa em `docs/sprint-reports` conforme definido no FR28 (`docs/planning-artifacts/prd.md`)
 
 ## Dev Notes
 
@@ -64,12 +64,20 @@ GPT-5 mini
 
 ### Completion Notes List
 
-- Story file generated from `template.md` and epics/prd analysis.
-- Acceptance criteria and tasks populated from `docs/planning-artifacts/epics.md` Story 1.6.
-- Dev guardrails added: SQLAlchemy + pandas guidance, upsert patterns, testing notes.
+- Implementado `src/db.py` com funções `create_tables_if_not_exists`, `write_prices` e `read_prices` usando SQLAlchemy Core e `ON CONFLICT` (upsert por `(ticker, date)`).
+- `write_prices` calcula `raw_checksum` (SHA256) e grava `fetched_at` (UTC ISO) por linha.
+- Registro de `schema_version` em `metadata` implementado e testado.
+- Testes unitários adicionados em `tests/test_db_write.py` (in-memory SQLite): escrita, leitura, upsert idempotente e metadata.
+- Adicionado `tests/__init__.py` para permitir imports relativos dos fixtures durante execução local de testes.
+- Documentação da estratégia criada em `docs/sprint-reports/1-6-implementacao-upsert.md` (limitações e recomendações de permissão).
+- Testes locais executados com sucesso para os cenários adicionados.
 
 ### File List
 
+- src/db.py
+- tests/test_db_write.py
+- tests/__init__.py
+- docs/sprint-reports/1-6-implementacao-upsert.md
 - docs/planning-artifacts/epics.md (source)
 - docs/planning-artifacts/prd.md (source)
 
