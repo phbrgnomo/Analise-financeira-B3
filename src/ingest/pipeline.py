@@ -3,10 +3,15 @@
 Functions to save provider raw responses to CSV and register ingest metadata
 in a local SQLite database (dados/data.db) and optional checksum files.
 """
+
 from __future__ import annotations
 
+import contextlib
+import json
 import logging
+import os
 import sqlite3
+import tempfile
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -18,7 +23,9 @@ from src.utils.checksums import sha256_file
 
 logger = logging.getLogger(__name__)
 
+# Legacy DB var kept for compatibility; metadata will be written to JSON
 DEFAULT_DB = Path("dados/data.db")
+DEFAULT_METADATA = Path("metadata/ingest_logs.json")
 
 
 def _db_initialized(db_path: Union[str, Path]) -> bool:
@@ -45,6 +52,20 @@ def _db_initialized(db_path: Union[str, Path]) -> bool:
         return False
 
 
+def _ensure_metadata_file(metadata_path: Union[str, Path]) -> None:
+    """Ensure metadata directory exists and file is initialized as JSON array.
+
+    The file is created with an empty JSON array if it does not exist.
+    """
+    metadata_path = Path(metadata_path)
+    metadata_path.parent.mkdir(parents=True, exist_ok=True)
+    if not metadata_path.exists():
+        # create an empty JSON array atomically
+        tmp = metadata_path.with_suffix(".json.tmp")
+        tmp.write_text("[]")
+        os.replace(str(tmp), str(metadata_path))
+
+
 def save_raw_csv(
     df: pd.DataFrame,
     provider: str,
@@ -52,6 +73,8 @@ def save_raw_csv(
     ts: Union[str, datetime] = None,
     raw_root: Union[str, Path] = Path("raw"),
     db_path: Union[str, Path] = DEFAULT_DB,
+    metadata_path: Union[str, Path] = DEFAULT_METADATA,
+    set_permissions: bool = False,
 ) -> Dict[str, Any]:
     """Save DataFrame to raw/<provider>/<ticker>-<ts>.csv and register metadata.
 
@@ -88,15 +111,11 @@ def save_raw_csv(
     rows = len(df_to_save)
 
     try:
-        # write CSV
-        df_to_save.to_csv(file_path, index=True)
+        _write_csv_atomic(df_to_save, file_path)
+        checksum = _write_checksum(file_path)
 
-        # compute checksum
-        checksum = sha256_file(file_path)
-
-        # write checksum file next to CSV (e.g. file.csv.checksum)
-        checksum_path = Path(f"{str(file_path)}.checksum")
-        checksum_path.write_text(checksum)
+        if set_permissions:
+            _apply_posix_permissions([file_path, Path(f"{str(file_path)}.checksum")])
 
         metadata = {
             "job_id": job_id,
@@ -109,46 +128,10 @@ def save_raw_csv(
             "created_at": created_at,
         }
 
-        # attempt to persist metadata only if DB/schema initialized
-        if _db_initialized(db_path):
-            try:
-                conn = sqlite3.connect(str(db_path))
-                try:
-                    cur = conn.cursor()
-                    sql = (
-                        "INSERT INTO ingest_logs ("
-                        "job_id, source, fetched_at, raw_checksum, "
-                        "rows, filepath, status, error_message, created_at"
-                        ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
-                    )
-                    cur.execute(
-                        sql,
-                        (
-                            job_id,
-                            provider,
-                            fetched_at,
-                            checksum,
-                            rows,
-                            str(file_path),
-                            "success",
-                            None,
-                            created_at,
-                        ),
-                    )
-                    conn.commit()
-                    metadata["db_recorded"] = True
-                finally:
-                    conn.close()
-            except Exception as e_db:
-                logger.exception("Falha ao registrar ingest_log: %s", e_db)
-                metadata["db_recorded"] = False
-                metadata["db_error_message"] = str(e_db)
-        else:
-            metadata["db_recorded"] = False
-            metadata["db_message"] = (
-                "Database not initialized; run scripts/init_ingest_db.py to "
-                "create ingest_logs table"
-            )
+        try:
+            _persist_metadata(metadata, metadata_path)
+        except Exception as e_meta:
+            _log_metadata_error("Falha ao gravar metadados em JSON", e_meta, metadata)
 
         return metadata
 
@@ -165,46 +148,76 @@ def save_raw_csv(
             "status": "error",
             "error_message": str(e),
             "created_at": created_at,
-            "db_recorded": False,
+            "metadata_recorded": False,
         }
 
-        # try to record the error if DB/schema initialized
-        if _db_initialized(db_path):
-            try:
-                conn = sqlite3.connect(str(db_path))
-                try:
-                    cur = conn.cursor()
-                    sql = (
-                        "INSERT INTO ingest_logs ("
-                        "job_id, source, fetched_at, raw_checksum, "
-                        "rows, filepath, status, error_message, created_at"
-                        ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
-                    )
-                    cur.execute(
-                        sql,
-                        (
-                            job_id,
-                            provider,
-                            fetched_at,
-                            None,
-                            rows,
-                            str(file_path),
-                            "error",
-                            str(e),
-                            created_at,
-                        ),
-                    )
-                    conn.commit()
-                    metadata["db_recorded"] = True
-                finally:
-                    conn.close()
-            except Exception as e_db:
-                logger.exception("Falha ao registrar ingest_log de erro: %s", e_db)
-                metadata["db_db_error"] = str(e_db)
-        else:
-            metadata["db_message"] = (
-                "Database not initialized; run scripts/init_ingest_db.py to "
-                "create ingest_logs table"
-            )
-
+        # attempt to persist error metadata to JSON as best-effort
+        try:
+            _persist_metadata(metadata, metadata_path)
+        except Exception as e_meta:
+            _log_metadata_error("Falha ao gravar metadados de erro em JSON", e_meta,
+                                metadata)
         return metadata
+
+
+# TODO Rename this here and in `save_raw_csv`
+def _log_metadata_error(msg: str, e_meta: Exception, metadata: Dict[str, Any]) -> None:
+    logger.exception("%s: %s", msg, e_meta)
+    metadata["metadata_recorded"] = False
+    metadata["metadata_error_message"] = str(e_meta)
+
+
+# TODO Rename this here and in `save_raw_csv`
+def _persist_metadata(
+    metadata: Dict[str, Any], metadata_path: Union[str, Path] = DEFAULT_METADATA
+) -> None:
+    _ensure_metadata_file(metadata_path)
+    metadata_path = Path(metadata_path)
+
+    try:
+        existing = json.loads(metadata_path.read_text())
+        if not isinstance(existing, list):
+            existing = []
+    except Exception:
+        existing = []
+
+    existing.append(metadata)
+
+    tmp = metadata_path.with_suffix(".tmp")
+    tmp.write_text(json.dumps(existing, ensure_ascii=False, indent=2))
+    os.replace(str(tmp), str(metadata_path))
+    metadata["metadata_recorded"] = True
+    metadata["metadata_path"] = str(metadata_path)
+
+
+def _write_csv_atomic(df: pd.DataFrame, file_path: Union[str, Path]) -> None:
+    file_path = Path(file_path)
+    filename = file_path.name
+    provider_dir = file_path.parent
+    fd, tmp = tempfile.mkstemp(prefix=filename + ".", dir=str(provider_dir))
+    os.close(fd)
+    tmp = Path(tmp)
+    try:
+        df.to_csv(tmp, index=False)
+        os.replace(str(tmp), str(file_path))
+    finally:
+        if tmp.exists() and tmp != file_path:
+            with contextlib.suppress(Exception):
+                tmp.unlink()
+
+
+def _write_checksum(file_path: Union[str, Path]) -> str:
+    file_path = Path(file_path)
+    checksum = sha256_file(file_path)
+    checksum_path = Path(f"{str(file_path)}.checksum")
+    checksum_path.write_text(checksum)
+    return checksum
+
+
+def _apply_posix_permissions(paths: list[Union[str, Path]]) -> None:
+    try:
+        if hasattr(os, "chmod"):
+            for p in paths:
+                os.chmod(str(p), 0o600)
+    except Exception:
+        logger.exception("Falha ao aplicar permissões aos arquivos")

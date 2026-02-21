@@ -1,4 +1,4 @@
-import sqlite3
+import json
 from pathlib import Path
 
 import pandas as pd
@@ -11,34 +11,19 @@ def test_save_raw_csv_and_register(tmp_path):
     df = pd.DataFrame({"col1": [1, 2], "col2": [3, 4]})
 
     raw_root = tmp_path / "raw"
-    db_path = tmp_path / "data.db"
-
     ts = "20260220T000000Z"
 
-    # Initialize DB schema for tests (migrations/scripts should handle this in prod)
-    conn = sqlite3.connect(str(db_path))
-    try:
-        cur = conn.cursor()
-        cur.execute(
-            """
-            CREATE TABLE IF NOT EXISTS ingest_logs (
-                job_id TEXT PRIMARY KEY,
-                source TEXT,
-                fetched_at TEXT,
-                raw_checksum TEXT,
-                rows INTEGER,
-                filepath TEXT,
-                status TEXT,
-                error_message TEXT,
-                created_at TEXT
-            );
-            """
-        )
-        conn.commit()
-    finally:
-        conn.close()
+    # use default metadata file under tmp_path/metadata by patching cwd via raw_root
+    metadata_dir = tmp_path / "metadata"
 
-    meta = save_raw_csv(df, "testprov", "TICK", ts, raw_root=raw_root, db_path=db_path)
+    meta = save_raw_csv(
+        df,
+        "testprov",
+        "TICK",
+        ts,
+        raw_root=raw_root,
+        metadata_path=metadata_dir / "ingest_logs.json",
+    )
 
     assert meta["status"] == "success"
     csv_path = Path(meta["filepath"])
@@ -51,13 +36,12 @@ def test_save_raw_csv_and_register(tmp_path):
     # checksum value matches content
     computed = sha256_file(csv_path)
     assert computed == meta["raw_checksum"]
-
-    # DB entry exists
-    conn = sqlite3.connect(str(db_path))
-    try:
-        assert_ingest_log_entry(conn, meta)
-    finally:
-        conn.close()
+    # metadata JSON file exists and contains entry
+    metadata_path = metadata_dir / "ingest_logs.json"
+    assert metadata_path.exists()
+    content = json.loads(metadata_path.read_text())
+    found = [m for m in content if m.get("job_id") == meta["job_id"]]
+    assert len(found) == 1
 
 
 # TODO Rename this here and in `test_save_raw_csv_and_register`
