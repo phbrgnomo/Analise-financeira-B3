@@ -97,6 +97,22 @@ O script calcula o SHA256 do arquivo de exemplo `snapshots/PETR4_snapshot_test.c
 - Guia de implementação de adaptadores: [docs/modules/adapter-guidelines.md](docs/modules/adapter-guidelines.md)
 - Checklist de PR para adaptadores: [docs/modules/adapter-pr-checklist.md](docs/modules/adapter-pr-checklist.md)
 
+## Operational Notes: Raw files & metadata
+
+- Raw CSV files are written to `raw/<provider>/` with pattern `<ticker>-YYYYMMDDTHHMMSSZ.csv`.
+- A SHA256 checksum is written alongside each CSV as `*.checksum`.
+- In this implementation metadados de ingestão são persistidos em `metadata/ingest_logs.json` (JSON array).
+- Recomenda-se proteger artefatos sensíveis com permissões owner-only. Para aplicar localmente:
+
+```bash
+# tornar arquivos de metadados e raw inacessíveis a outros usuários
+chmod -R 600 metadata dados/raw
+```
+
+Se quiser que o pipeline aplique permissões automaticamente, a função `save_raw_csv` aceita o parâmetro `set_permissions=True` (aplica `chmod 600` em sistemas POSIX).
+
+Nota: a gravação de metadados em JSON é uma escolha inicial; uma migração para SQLite/Postgres pode ser feita posteriormente quando for necessário transacionamento/concorrência.
+
 ---
 
 Se você quiser, eu posso: gerar badges adicionais (coverage, PyPI quando aplicável), adicionar exemplos de uso com parâmetros do `src.main`, ou abrir um PR com pré-commit configurado. Qual próximo passo prefere?
