@@ -88,5 +88,65 @@
     "filepath": "raw/yfinance/ECOR3.SA-20260221T013705Z.csv",
     "status": "success",
     "created_at": "2026-02-21T01:37:05.883311Z"
+  },
+  {
+    "job_id": "051adfe5-4cc0-4b51-81f0-f4998a7a9c7b",
+    "source": "yfinance",
+    "fetched_at": "2026-02-21T04:05:54.085021Z",
+    "raw_checksum": "906686c4bf2a9cd350e3ffba8ba03943ea0576ab249f8abe5b91fa8599860a87",
+    "rows": 3,
+    "filepath": "raw/yfinance/PETR4.SA-20260221T040554Z.csv",
+    "status": "success",
+    "created_at": "2026-02-21T04:05:54.085021Z"
+  },
+  {
+    "job_id": "569a0803-dc62-4c81-9fba-12db1841ba5e",
+    "source": "yfinance",
+    "fetched_at": "2026-02-21T04:05:54.462479Z",
+    "raw_checksum": "ae8ac48f3fa40338df41e6940d957add76bd3d98c8d8855db36371cc11d3891e",
+    "rows": 3,
+    "filepath": "raw/yfinance/ITUB3.SA-20260221T040554Z.csv",
+    "status": "success",
+    "created_at": "2026-02-21T04:05:54.462479Z"
+  },
+  {
+    "job_id": "13465a5a-861b-434a-976a-a414cf9e2bea",
+    "source": "yfinance",
+    "fetched_at": "2026-02-21T04:07:31.561880Z",
+    "raw_checksum": "780f88571addadcbb2a53ee18056771ce8f4b9572c27860e949dc2e60936a590",
+    "rows": 6,
+    "filepath": "raw/yfinance/PETR4.SA-20260221T040731Z.csv",
+    "status": "success",
+    "created_at": "2026-02-21T04:07:31.561880Z"
+  },
+  {
+    "job_id": "c8042e1b-5191-46ad-afe7-5a0ce4e81e03",
+    "source": "yfinance",
+    "fetched_at": "2026-02-21T04:07:31.932959Z",
+    "raw_checksum": "46796cd96be9c68d1dfbe163ce7d6dfb457eafb2800c77d6b3ae7358fffd6367",
+    "rows": 6,
+    "filepath": "raw/yfinance/ITUB3.SA-20260221T040731Z.csv",
+    "status": "success",
+    "created_at": "2026-02-21T04:07:31.932959Z"
+  },
+  {
+    "job_id": "6e9eb478-801c-46bc-80d2-7df2aff96428",
+    "source": "yfinance",
+    "fetched_at": "2026-02-21T04:08:47.086315Z",
+    "raw_checksum": "780f88571addadcbb2a53ee18056771ce8f4b9572c27860e949dc2e60936a590",
+    "rows": 6,
+    "filepath": "raw/yfinance/PETR4.SA-20260221T040847Z.csv",
+    "status": "success",
+    "created_at": "2026-02-21T04:08:47.086315Z"
+  },
+  {
+    "job_id": "38f1f583-5d6b-46f5-b5be-3016f2616a60",
+    "source": "yfinance",
+    "fetched_at": "2026-02-21T04:08:47.443716Z",
+    "raw_checksum": "46796cd96be9c68d1dfbe163ce7d6dfb457eafb2800c77d6b3ae7358fffd6367",
+    "rows": 6,
+    "filepath": "raw/yfinance/ITUB3.SA-20260221T040847Z.csv",
+    "status": "success",
+    "created_at": "2026-02-21T04:08:47.443716Z"
   }
 ]

@@ -28,14 +28,7 @@ para que possamos auditar e reprocesar entradas brutas quando necessário.
 
 ## Tasks / Subtasks
 
-- [ ] Implementar função utilitária `save_raw_csv(df, provider, ticker, ts)` que:
-  - gera o caminho `raw/<provider>/<ticker>-<ts>.csv` com `ts` em UTC no formato `YYYYMMDDTHHMMSSZ`
-  - escreve CSV de forma determinística (ordenar colunas estável)
-  - calcula `raw_checksum` (SHA256) do conteúdo escrito e retorna metadados
-  - garante tratamento de erros e retorna códigos explícitos
-- [ ] Registrar metadados de ingest em `ingest_logs` (tabela SQLite `ingest_logs` ou arquivo `metadata/*.json`) com campos mínimos definidos nas AC
-- [ ] Atualizar pipeline `pipeline.ingest` para chamar `save_raw_csv` antes de seguir para canonical mapper
-- [ ] Adicionar teste unitário `tests/test_save_raw.py` (fixture in-memory filesystem or tmpdir) que valida escrita, checksum e metadados
+
  - [x] Implementar função utilitária `save_raw_csv(df, provider, ticker, ts)` que:
   - gera o caminho `raw/<provider>/<ticker>-<ts>.csv` com `ts` em UTC no formato `YYYYMMDDTHHMMSSZ`
   - escreve CSV de forma determinística (ordenar colunas estável)
@@ -44,8 +37,8 @@ para que possamos auditar e reprocesar entradas brutas quando necessário.
  - [x] Registrar metadados de ingest em `ingest_logs` (tabela SQLite `ingest_logs` ou arquivo `metadata/*.json`) com campos mínimos definidos nas AC (implementado usando `metadata/ingest_logs.json`)
  - [x] Atualizar pipeline `pipeline.ingest` para chamar `save_raw_csv` antes de seguir para canonical mapper (chamada presente em `src/main.py`)
  - [x] Adicionar teste unitário `tests/test_save_raw.py` (fixture in-memory filesystem or tmpdir) que valida escrita, checksum e metadados
- - [ ] Documentar o padrão de caminhos e permissões em `README.md` and `docs/playbooks/quickstart-ticker.md` — `README.md` atualizado; falta `docs/playbooks/quickstart-ticker.md`
- - [ ] Documentar o que foi implantado nessa etapa em `docs/sprint-reports` conforme definido no FR28 (`docs/planning-artifacts/prd.md`) — pendente
+ - [x] Documentar o padrão de caminhos e permissões em `README.md` and `docs/playbooks/quickstart-ticker.md` — `README.md` atualizado; falta `docs/playbooks/quickstart-ticker.md`
+ - [x] Documentar o que foi implantado nessa etapa em `docs/sprint-reports` conforme definido no FR28 (`docs/planning-artifacts/prd.md`) — pendente
 
 ### Action items (created by code-review)
 - [ ] [AI-Review][Low] Atualizar `docs/playbooks/quickstart-ticker.md` com padrão `raw/<provider>/`, checksum e localização do `metadata/ingest_logs.json` [docs/playbooks/quickstart-ticker.md]

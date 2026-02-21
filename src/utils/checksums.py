@@ -31,4 +31,48 @@ def sha256_bytes(data: bytes) -> str:
     return h.hexdigest()
 
 
+def serialize_df_bytes(
+    df, *, index: bool = True, date_format: str = "%Y-%m-%dT%H:%M:%S",
+    float_format: str = "%.10g", na_rep: str = "", columns: list | None = None
+) -> bytes:
+    """Serialize a DataFrame to bytes deterministically.
+
+    This helper is intended to produce a stable CSV bytes representation used
+    both for writing raw files and for computing checksums so that different
+    components generate the same digest when given the same DataFrame.
+    """
+    df_to_serialize = df
+    # Default to deterministic alphabetical column ordering unless caller
+    # provided explicit `columns` ordering.
+    if columns is None:
+        try:
+            columns = sorted(df_to_serialize.columns)
+        except Exception:
+            columns = None
+
+    if columns is not None:
+        try:
+            df_to_serialize = df_to_serialize.reindex(columns=columns)
+        except Exception:
+            df_to_serialize = df_to_serialize.copy()
+
+    # Sort by index to make output deterministic across runs
+    try:
+        csv_str = df_to_serialize.sort_index().to_csv(
+            index=index,
+            date_format=date_format,
+            float_format=float_format,
+            na_rep=na_rep,
+        )
+    except Exception:
+        csv_str = df_to_serialize.to_csv(
+            index=index,
+            date_format=date_format,
+            float_format=float_format,
+            na_rep=na_rep,
+        )
+
+    return csv_str.encode("utf-8")
+
+
 __all__ = ["sha256_file", "sha256_bytes"]

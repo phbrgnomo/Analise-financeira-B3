@@ -57,6 +57,21 @@ def main():
         if save_meta.get("status") != "success":
             print(f"Falha ao salvar raw para {a}: {save_meta.get('error_message')}")
             continue
+
+        # Map to canonical using the checksum and fetched_at produced when saving raw
+        try:
+            from src.etl.mapper import to_canonical
+
+            canonical = to_canonical(
+                df,
+                provider_name="yfinance",
+                ticker=f"{a}.SA",
+                raw_checksum=save_meta.get("raw_checksum"),
+                fetched_at=save_meta.get("fetched_at"),
+            )
+            print(f"Mapper produced {len(canonical)} canonical rows for {a}")
+        except Exception as e:
+            print(f"Mapper failed for {a}: {e}")
         # Calcula o retorno
         print(f"Calculado retornos de {a}")
         df["Return"] = rt.r_log(df["Adj Close"], df["Adj Close"].shift(1))

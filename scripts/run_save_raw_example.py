@@ -65,7 +65,7 @@ def main() -> None:
     Exemplos incluídos: `PETR4.SA`, `ITUB3.SA` (últimos 5 dias).
     """
     examples = ["PETR4.SA", "ITUB3.SA"]
-    days = 5
+    days = 10
     provider = "yfinance"
 
     # import local para reduzir custo até o uso

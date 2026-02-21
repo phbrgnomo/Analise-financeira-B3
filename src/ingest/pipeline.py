@@ -15,11 +15,11 @@ import tempfile
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Union
+from typing import Any, Dict, Optional, Union
 
 import pandas as pd
 
-from src.utils.checksums import sha256_file
+from src.utils.checksums import serialize_df_bytes, sha256_bytes, sha256_file
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +70,7 @@ def save_raw_csv(
     df: pd.DataFrame,
     provider: str,
     ticker: str,
-    ts: Union[str, datetime] = None,
+    ts: Optional[Union[str, datetime]] = None,
     raw_root: Union[str, Path] = Path("raw"),
     db_path: Union[str, Path] = DEFAULT_DB,
     metadata_path: Union[str, Path] = DEFAULT_METADATA,
@@ -111,8 +111,23 @@ def save_raw_csv(
     rows = len(df_to_save)
 
     try:
-        _write_csv_atomic(df_to_save, file_path)
-        checksum = _write_checksum(file_path)
+        # Serialize dataframe deterministically and write the same bytes
+        df_bytes = serialize_df_bytes(
+            df_to_save,
+            index=True,
+            date_format="%Y-%m-%dT%H:%M:%S",
+            float_format="%.10g",
+            na_rep="",
+        )
+
+        _write_bytes_atomic(file_path, df_bytes)
+
+        # Compute checksum from the exact bytes written
+        checksum = sha256_bytes(df_bytes)
+
+        # write .checksum file
+        checksum_path = Path(f"{str(file_path)}.checksum")
+        checksum_path.write_text(checksum)
 
         if set_permissions:
             _apply_posix_permissions([file_path, Path(f"{str(file_path)}.checksum")])
@@ -199,6 +214,23 @@ def _write_csv_atomic(df: pd.DataFrame, file_path: Union[str, Path]) -> None:
     tmp = Path(tmp)
     try:
         df.to_csv(tmp, index=False)
+        os.replace(str(tmp), str(file_path))
+    finally:
+        if tmp.exists() and tmp != file_path:
+            with contextlib.suppress(Exception):
+                tmp.unlink()
+
+
+def _write_bytes_atomic(file_path: Union[str, Path], data: bytes) -> None:
+    file_path = Path(file_path)
+    filename = file_path.name
+    provider_dir = file_path.parent
+    fd, tmp = tempfile.mkstemp(prefix=f"{filename}.", dir=str(provider_dir))
+    os.close(fd)
+    tmp = Path(tmp)
+    try:
+        with open(tmp, "wb") as fh:
+            fh.write(data)
         os.replace(str(tmp), str(file_path))
     finally:
         if tmp.exists() and tmp != file_path:

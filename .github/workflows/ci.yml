@@ -43,7 +43,8 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install poetry
-          poetry lock
+          python -m pip install --upgrade pip
+          python -m pip install poetry
           poetry install --no-interaction
 
       - name: Run pre-commit (all files)
@@ -86,7 +87,6 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install poetry
           poetry config virtualenvs.in-project true
-          poetry lock
           poetry install --no-interaction
 
       - name: Run tests (pytest)
@@ -140,7 +140,6 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install poetry
           poetry config virtualenvs.in-project true
-          poetry lock
           poetry install --only main --no-interaction
           # Install pytest into the poetry-managed venv so `poetry run` can use it
           poetry run pip install pytest
@@ -186,7 +185,6 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install poetry
           poetry config virtualenvs.in-project true
-          poetry lock
           poetry install --no-interaction
 
       - name: Run integration tests (mocked quickstart)

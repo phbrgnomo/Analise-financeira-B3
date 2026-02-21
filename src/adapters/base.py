@@ -99,7 +99,7 @@ class Adapter(ABC):
         Levanta `ValidationError` com mensagens compatíveis com os testes existentes.
         """
         if required_columns is None:
-            required_columns = ["Open", "High", "Low", "Close", "Adj Close", "Volume"]
+            required_columns = getattr(self, "REQUIRED_COLUMNS", None)
 
         if df.empty:
             raise ValidationError(
@@ -107,10 +107,31 @@ class Adapter(ABC):
                 "Verifique se o ticker é válido e se há dados para o período."
             )
 
-        if missing_columns := set(required_columns) - set(df.columns):
-            raise ValidationError(
-                f"Colunas obrigatórias ausentes para {ticker}: {missing_columns}"
-            )
+        # Normalize MultiIndex columns dynamically
+        with contextlib.suppress(Exception):
+            if isinstance(df.columns, pd.MultiIndex):
+                if df.columns.nlevels >= 2:
+                    # Look for the level that contains standard price fields
+                    target_level = 0
+                    for i in range(df.columns.nlevels):
+                        level_vals = set(df.columns.get_level_values(i))
+                        if "Close" in level_vals or "Open" in level_vals:
+                            target_level = i
+                            break
+
+                    # Flatten using the detected level
+                    df.columns = [c[target_level] for c in df.columns]
+                else:
+                    df.columns = ["_".join(map(str, c)) for c in df.columns]
+        # Ensure column labels are strings for reliable comparisons
+        with contextlib.suppress(Exception):
+            df.columns = [str(c) for c in df.columns]
+        # If a required_columns list is defined, enforce presence of those columns.
+        if required_columns:
+            if missing_columns := set(required_columns) - set(df.columns):
+                raise ValidationError(
+                    f"Colunas obrigatórias ausentes para {ticker}: {missing_columns}"
+                )
 
         if not isinstance(df.index, pd.DatetimeIndex):
             raise ValidationError(
@@ -141,7 +162,7 @@ class Adapter(ABC):
             return backoff_factor ** attempt
         except Exception:
             # fallback seguro
-            return float(backoff_factor) * attempt
+            return backoff_factor * attempt
     def _fetch_with_retries(
         self,
         ticker: str,

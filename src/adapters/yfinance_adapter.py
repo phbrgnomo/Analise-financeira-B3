@@ -16,7 +16,7 @@ from typing import Dict, Optional
 import pandas as pd
 
 from src.adapters.base import Adapter
-from src.adapters.errors import FetchError
+from src.adapters.errors import FetchError, ValidationError
 
 # Configuração de logging estruturado
 logger = logging.getLogger(__name__)
@@ -77,6 +77,9 @@ class YFinanceAdapter(Adapter):
         self.max_retries = max_retries
         self.backoff_factor = backoff_factor
         self.timeout = timeout
+        # Provider-specific required columns (yfinance may omit 'Adj Close')
+        # Keep as an instance attribute so base adapter can pick it up.
+        self.REQUIRED_COLUMNS = ["Open", "High", "Low", "Close", "Volume"]
 
     def fetch(
         self,
@@ -208,16 +211,19 @@ class YFinanceAdapter(Adapter):
         Returns:
             Ticker normalizado
         """
-        ticker = ticker.strip().upper()
-        # Match básico para tickers alfanuméricos que terminam em dígito (B3)
-        if (
-            re.match(r"^[A-Z0-9]+$", ticker)
-            and ticker[-1].isdigit()
-            and not ticker.endswith(".SA")
-        ):
-            return f"{ticker}.SA"
-
-        return ticker
+        if ticker := ticker.strip().upper():
+                # Match básico para tickers alfanuméricos que terminam em dígito (B3)
+            return (
+                f"{ticker}.SA"
+                if (
+                    re.match(r"^[A-Z0-9]+$", ticker)
+                    and ticker[-1].isdigit()
+                    and not ticker.endswith(".SA")
+                )
+                else ticker
+            )
+        else:
+            raise ValidationError("Ticker inválido ou vazio")
 
     # _normalize_date and _validate_dataframe are inherited from Adapter base
 
@@ -240,7 +246,8 @@ class YFinanceAdapter(Adapter):
 
         # Detectar disponibilidade da biblioteca yfinance
         library = "yfinance"
-        if hasattr(yf, "__is_stub__") and yf.__is_stub__:
+        # use getattr to avoid static analyzers reporting unknown attributes
+        if getattr(yf, "__is_stub__", False):
             version = "unknown"
             library_available = "no"
         else:

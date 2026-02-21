@@ -29,7 +29,6 @@ class TestToCanonical:
                 "High": [105.0, 106.0, 107.0],
                 "Low": [99.0, 100.0, 101.0],
                 "Close": [104.0, 105.0, 106.0],
-                "Adj Close": [103.5, 104.5, 105.5],
                 "Volume": [1000000, 1100000, 1200000],
             },
             index=dates,
@@ -46,7 +45,6 @@ class TestToCanonical:
             "high",
             "low",
             "close",
-            "adj_close",
             "volume",
             "source",
             "fetched_at",
@@ -58,7 +56,6 @@ class TestToCanonical:
         assert result["ticker"].iloc[0] == "PETR4.SA"
         assert result["source"].iloc[0] == "yfinance"
         assert result["open"].iloc[0] == 100.0
-        assert result["adj_close"].iloc[0] == 103.5
 
         # Assert: fetched_at is a datetime-like (schema defines datetime)
         fetched_at = result["fetched_at"].iloc[0]

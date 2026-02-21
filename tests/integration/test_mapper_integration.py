@@ -51,7 +51,6 @@ class TestCanonicalMapperIntegration:
             "high",
             "low",
             "close",
-            "adj_close",
             "volume",
             "source",
             "fetched_at",
@@ -66,7 +65,6 @@ class TestCanonicalMapperIntegration:
         assert pd.api.types.is_float_dtype(canonical_df["high"])
         assert pd.api.types.is_float_dtype(canonical_df["low"])
         assert pd.api.types.is_float_dtype(canonical_df["close"])
-        assert pd.api.types.is_float_dtype(canonical_df["adj_close"])
         assert pd.api.types.is_integer_dtype(canonical_df["volume"])
         assert canonical_df["source"].dtype == object  # string
         # fetched_at should be a datetime dtype per canonical schema

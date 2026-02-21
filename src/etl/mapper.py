@@ -26,8 +26,8 @@ from pathlib import Path
 from typing import Union
 
 import pandas as pd
-import pandera as pa
 from pandera import Check
+from pandera.errors import SchemaError
 from pandera.pandas import Column, DataFrameSchema
 
 logger = logging.getLogger(__name__)
@@ -94,17 +94,11 @@ def load_canonical_schema_from_json(path_or_dict: Union[Path, dict]) -> DataFram
 
 def _determine_schema_cols() -> list:
     """Return schema columns list with adj_close inserted if necessary."""
-    schema_cols = [c.get("name") for c in _SCHEMA_JSON.get("columns", [])]
-    if "adj_close" not in schema_cols:
-        try:
-            close_idx = schema_cols.index("close")
-        except ValueError:
-            close_idx = None
-        if close_idx is not None:
-            schema_cols.insert(close_idx + 1, "adj_close")
-        else:
-            schema_cols.append("adj_close")
-    return schema_cols
+    # Respect the canonical schema defined in docs/schema.json strictly.
+    # Do not inject additional columns (e.g., adj_close) that are not present
+    # in the schema JSON. The schema file is the source of truth for columns
+    # persisted/stable across the pipeline.
+    return [c.get("name") for c in _SCHEMA_JSON.get("columns", [])]
 
 
 def _col_lookup_in_df(df: pd.DataFrame, columns_map: dict, candidate: str):
@@ -200,7 +194,11 @@ def _fill_special_values(df: pd.DataFrame, name: str, meta: dict, nrows: int):
 
 
 def to_canonical(
-    df: pd.DataFrame, provider_name: str, ticker: str
+    df: pd.DataFrame,
+    provider_name: str,
+    ticker: str,
+    raw_checksum: str | None = None,
+    fetched_at: str | None = None,
 ) -> pd.DataFrame:
     """
     Convert a raw provider DataFrame to the canonical schema.
@@ -243,22 +241,23 @@ def to_canonical(
             f"Available columns: {list(df.columns)}"
         )
 
-    # Compute raw_checksum (SHA256 of a deterministic CSV representation)
-    # Sort by index and use fixed date/float formats to reduce environment differences
-    raw_csv = (
-        df.sort_index()
-        .to_csv(
-            index=True,
-            date_format="%Y-%m-%dT%H:%M:%S",
-            float_format="%.10g",
-            na_rep="",
+    # Compute or reuse raw_checksum (SHA256 of a deterministic CSV representation)
+    if raw_checksum is None:
+        raw_csv = (
+            df.sort_index()
+            .to_csv(
+                index=True,
+                date_format="%Y-%m-%dT%H:%M:%S",
+                float_format="%.10g",
+                na_rep="",
+            )
+            .encode("utf-8")
         )
-        .encode("utf-8")
-    )
-    raw_checksum = hashlib.sha256(raw_csv).hexdigest()
+        raw_checksum = hashlib.sha256(raw_csv).hexdigest()
 
-    # Generate fetched_at timestamp (UTC ISO8601 with 'Z')
-    fetched_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    # Generate fetched_at timestamp (UTC ISO8601 with 'Z') if not provided
+    if fetched_at is None:
+        fetched_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
     # Build canonical DataFrame using the canonical schema JSON for column
     # order and names. This avoids duplicating the canonical contract in code.
@@ -284,7 +283,7 @@ def to_canonical(
     # Validate with pandera schema
     try:
         validated_df = CanonicalSchema.validate(canonical_df)
-    except pa.errors.SchemaError as e:
+    except SchemaError as e:
         raise MappingError(
             f"Canonical schema validation failed for {ticker}: {e}"
         ) from e
