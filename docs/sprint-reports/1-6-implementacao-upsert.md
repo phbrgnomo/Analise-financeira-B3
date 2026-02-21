@@ -1,5 +1,18 @@
 # Sprint Report — Story 1.6: Persistir dados canônicos no SQLite com upsert por (ticker, date)
 
+Justificativa das decisões
+
+- Uso de SQLAlchemy Core + `ON CONFLICT`: fornece abstração de esquema e SQL parametrizado; o `ON CONFLICT` permite um upsert atômico no SQLite, reduzindo risco de duplicação e condições de corrida simples.
+- Upsert por linha (INSERT ... ON CONFLICT DO UPDATE) em vez de `pandas.to_sql`: `to_sql` facilita cargas em lote, mas não dá controle fino de upserts; usar Core/`executemany` permite atualizar apenas colunas necessárias, preservar campos e calcular checksums por linha.
+- `fetched_at` em UTC ISO8601: padroniza timestamps, evitando ambiguidades de fuso horário e facilitando comparações entre fontes e sessões.
+- `raw_checksum` (SHA256): permite detectar alterações no payload original independentemente de timestamps, útil para auditoria e reprocessamento incremental.
+- `schema_version` em `metadata`: traz rastreabilidade da versão do esquema aplicada aos dados, facilitando diagnósticos e migrações futuras; somente gravado quando fornecido para evitar sobrescritas indesejadas.
+- Testes com SQLite in-memory: rápidos, isolados e determinísticos; reproduzem o comportamento do engine SQLite usado localmente sem criar artefatos no disco, adequado para CI.
+- `create_tables_if_not_exists` via SQLAlchemy metadata: centraliza definição do esquema, facilita manutenção e minimiza discrepâncias entre ambientes.
+- Permissões (`chmod 600` em dados/data.db): mitigação operacional básica para proteger dados locais sensíveis.
+
+
+
 Resumo da implementação
 
 - Implementado o módulo `src/db.py` com funções públicas:
