@@ -1,8 +1,8 @@
 from datetime import date, timedelta
-from pathlib import Path
-from src.paths import DATA_DIR
 
 import typer
+
+from src.paths import DATA_DIR
 
 # Instância principal da aplicação de linha de comando usando Typer
 app = typer.Typer()

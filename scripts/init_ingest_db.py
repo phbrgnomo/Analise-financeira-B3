@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import sqlite3
 from pathlib import Path
+
 from src.paths import DATA_DIR
 
 

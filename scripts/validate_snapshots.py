@@ -14,8 +14,9 @@ import hashlib
 import json
 from datetime import datetime
 from pathlib import Path
-from src.paths import SNAPSHOTS_DIR
 from typing import Dict, Tuple
+
+from src.paths import SNAPSHOTS_DIR
 
 
 def sha256_of_file(path: Path) -> str:
