@@ -3,7 +3,7 @@
 Este playbook descreve os passos mínimos para reproduzir o fluxo ingest→persist→snapshot→notebook usando um ticker de amostra.
 
 Pré-requisitos
-- Python 3.14+ (virtual env/poetry recomendado)
+- Python 3.12+ (virtual env/poetry recomendado)
 - Dependências instaladas: `poetry install` (ou conforme `pyproject.toml`)
 - Banco local SQLite em `dados/data.db` (o projeto cria quando necessário)
 

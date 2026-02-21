@@ -12,7 +12,7 @@ so that pull requests verify project health automatically.
 
 ## Acceptance Criteria
 
-1. Given a push or PR to any branch, the `ci.yml` runs a lightweight CI matrix (Python 3.14) with steps:
+1. Given a push or PR to any branch, the `ci.yml` runs a lightweight CI matrix (Python 3.12) with steps:
    - `poetry install --no-dev` (install runtime deps for quick smoke)
    - `poetry install` (install dev deps)
    - `poetry run pytest -q --maxfail=1`
@@ -27,7 +27,7 @@ so that pull requests verify project health automatically.
   - [x] `lint` job: run `ruff` and `black --check` on codebase
   - [x] `test` job: install deps and run `pytest -q --maxfail=1`
   - [x] `smoke` job: `poetry install --no-dev` + quick smoke tests
-  - [x] Matrix for Python 3.14 (single axis) and OS `ubuntu-latest`
+  - [x] Matrix for Python 3.12 (single axis) and OS `ubuntu-latest`
   - [x] Upload artifacts on failure (pytest junit, logs, snapshots)
   - [x] Use cache for Poetry/venv to speed up CI where applicable
   - [x] Ensure secrets are referenced only via GitHub Secrets and `.env` is not committed
@@ -66,7 +66,7 @@ TBD
 
 ### Completion Notes List
 
-- Implementação inicial do CI aplicada: jobs `lint`, `test`, `smoke`; cache de Poetry; upload de artifacts em falhas; matrix Python 3.14.
+- Implementação inicial do CI aplicada: jobs `lint`, `test`, `smoke`; cache de Poetry; upload de artifacts em falhas; matrix Python 3.12.
 
 - Documentado em `docs/sprint-reports/epic0-story0-4-ci-implementation.md` (reproduzível, comandos e paths de snapshot)
 

@@ -1,0 +1,31 @@
+name: Checksums for snapshots
+
+on:
+  push:
+    branches: [ master, epic-1, '**' ]
+  pull_request:
+    branches: [ master, epic-1 ]
+
+jobs:
+  validate-snapshots:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install test deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest
+
+      - name: Validate snapshots manifest
+        run: |
+          python scripts/validate_snapshots.py --dir snapshots --manifest snapshots/checksums.json
+
+      - name: Run tests
+        run: |
+          pytest -q

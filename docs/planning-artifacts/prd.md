@@ -206,7 +206,7 @@ Escopo do documento: define requisitos funcionais e não‑funcionais, jornadas 
 - Objetivo do Step 07: traduzir escolhas de implementação em requisitos técnicos acionáveis e lista de artefatos de documentação.
 
 ### Implementação — decisões do usuário
-- Linguagem: Python 3.14
+- Linguagem: Python 3.12
 - Gerenciador de pacotes/build: poetry
 - IDE preferida: VSCode
 - Banco de dados: SQLite

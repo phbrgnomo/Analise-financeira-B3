@@ -176,7 +176,7 @@ So that I can reproduce the quickstart experiment in ≤ 30 minutes.
 
 **Acceptance Criteria:**
 
-**Given** a developer on a fresh machine with Python 3.14 and Poetry
+**Given** a developer on a fresh machine with Python 3.12 and Poetry
 **When** they follow the README quickstart steps
 **Then** they can run `poetry install` and `poetry run main --help` and execute a sample quickstart command
 **And** the README lists example tickers and expected output locations (`snapshots/`, `dados/`).
@@ -204,7 +204,7 @@ So that pull requests verify project health automatically.
 
 **Given** a push or PR to any branch
 **When** GitHub Actions runs the `ci.yml`
-**Then** it runs a lightweight CI matrix (Python 3.14) with steps:
+**Then** it runs a lightweight CI matrix (Python 3.12) with steps:
 
 - `poetry install --no-dev` (install runtime deps for quick smoke)
 - `poetry install` (install dev deps)

@@ -10,7 +10,7 @@ so that I can reproduce the quickstart experiment in ≤ 30 minutes.
 
 ## Acceptance Criteria
 
-1. Given a developer on a fresh machine with Python 3.14 and Poetry
+1. Given a developer on a fresh machine with Python 3.12 and Poetry
    - When they follow the README quickstart steps
    - Then they can run `poetry install` and `poetry run main --help` and execute a sample quickstart command
 2. README lists example tickers and expected output locations (`snapshots/`, `dados/`).
