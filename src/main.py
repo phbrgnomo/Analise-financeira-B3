@@ -25,7 +25,7 @@ def main():
     # data_fim = input("Data de fim (MM-DD-AAAA): ")
 
     # Define ativos a serem pesquisados
-    ativos = ["PETR4", "ITUB3", "BBDC4", "VALE3", "WIZS3", "ECOR3"]
+    ativos = ["PETR4", "ITUB3", "BBDC4"]
 
     periodo_dados = 52  # Periodo total dos dados em semanas
     time_skew = timedelta(weeks=periodo_dados)
@@ -47,6 +47,31 @@ def main():
         except Exception as e:
             print(f"Problemas baixando dados: {e}")
             continue
+        # Persistir raw provider e registrar metadados
+        from datetime import datetime  # import local para minimizar impacto no startup
+        from datetime import timezone as _tz
+
+        from src.ingest.pipeline import save_raw_csv
+        ts_raw = datetime.now(_tz.utc).strftime("%Y%m%dT%H%M%SZ")
+        save_meta = save_raw_csv(df, "yfinance", f"{a}.SA", ts_raw)
+        if save_meta.get("status") != "success":
+            print(f"Falha ao salvar raw para {a}: {save_meta.get('error_message')}")
+            continue
+
+        # Map to canonical using the checksum and fetched_at produced when saving raw
+        try:
+            from src.etl.mapper import to_canonical
+
+            canonical = to_canonical(
+                df,
+                provider_name="yfinance",
+                ticker=f"{a}.SA",
+                raw_checksum=save_meta.get("raw_checksum"),
+                fetched_at=save_meta.get("fetched_at"),
+            )
+            print(f"Mapper produced {len(canonical)} canonical rows for {a}")
+        except Exception as e:
+            print(f"Mapper failed for {a}: {e}")
         # Calcula o retorno
         print(f"Calculado retornos de {a}")
         df["Return"] = rt.r_log(df["Adj Close"], df["Adj Close"].shift(1))

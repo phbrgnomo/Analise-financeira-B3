@@ -427,6 +427,16 @@ class TestYFinanceAdapter:
 
         def test_validate_dataframe_missing_required_columns_mentions_them(self):
             class TestAdapter(Adapter):
+                # define provider-specific required columns for the test
+                REQUIRED_COLUMNS = [
+                    "Open",
+                    "High",
+                    "Low",
+                    "Close",
+                    "Adj Close",
+                    "Volume",
+                ]
+
                 def fetch(self, ticker: str, **kwargs) -> pd.DataFrame:
                     return pd.DataFrame()
 

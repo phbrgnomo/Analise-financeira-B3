@@ -38,12 +38,6 @@
       "semantic": "Preço de fechamento"
     },
     {
-      "name": "adj_close",
-      "type": "float",
-      "nullable": true,
-      "semantic": "Preço ajustado"
-    },
-    {
       "name": "volume",
       "type": "int",
       "nullable": true,
