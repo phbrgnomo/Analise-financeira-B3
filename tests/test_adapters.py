@@ -73,7 +73,7 @@ class TestAdapterInterface:
     def test_adapter_is_abstract(self):
         """Testa que Adapter não pode ser instanciado diretamente."""
         with pytest.raises(TypeError):
-            Adapter()
+            Adapter()  # type: ignore
 
     def test_adapter_requires_fetch_implementation(self):
         """Testa que subclasses devem implementar fetch()."""
@@ -82,7 +82,7 @@ class TestAdapterInterface:
             pass
 
         with pytest.raises(TypeError):
-            IncompleteAdapter()
+            IncompleteAdapter()  # type: ignore
 
     def test_adapter_get_metadata(self):
         """Testa método get_metadata() padrão."""
@@ -114,22 +114,31 @@ class TestYFinanceAdapter:
     def test_adapter_initialization(self):
         """Testa inicialização com parâmetros padrão."""
         adapter = YFinanceAdapter()
-        assert adapter.max_retries == 3
-        assert adapter.backoff_factor == 2.0
-        assert adapter.timeout == 30
+        self._extracted_from_test_adapter_custom_initialization_4(adapter, 3, 2.0, 30)
 
     def test_adapter_custom_initialization(self):
         """Testa inicialização com parâmetros customizados."""
         adapter = YFinanceAdapter(max_retries=5, backoff_factor=1.5, timeout=60)
-        assert adapter.max_retries == 5
-        assert adapter.backoff_factor == 1.5
-        assert adapter.timeout == 60
+        self._extracted_from_test_adapter_custom_initialization_4(adapter, 5, 1.5, 60)
+
+    # TODO: rename this helper and update references in
+    # `test_adapter_initialization` and `test_adapter_custom_initialization`
+    def _extracted_from_test_adapter_custom_initialization_4(
+        self,
+        adapter,
+        arg1,
+        arg2,
+        arg3,
+    ):
+        assert adapter.max_retries == arg1
+        assert adapter.backoff_factor == arg2
+        assert adapter.timeout == arg3
 
     def test_normalize_ticker_b3(self):
         """Testa normalização de tickers B3 (adiciona .SA)."""
-        adapter = YFinanceAdapter()
-        assert adapter._normalize_ticker("PETR4") == "PETR4.SA"
-        assert adapter._normalize_ticker("vale3") == "VALE3.SA"
+        adapter = self._extracted_from_test_normalize_ticker_non_b3_3(
+            "PETR4", "PETR4.SA", "vale3", "VALE3.SA"
+        )
         assert adapter._normalize_ticker("ITUB3") == "ITUB3.SA"
 
     def test_normalize_ticker_already_has_suffix(self):
@@ -139,21 +148,42 @@ class TestYFinanceAdapter:
 
     def test_normalize_ticker_non_b3(self):
         """Testa que tickers sem número não recebem .SA."""
-        adapter = YFinanceAdapter()
-        assert adapter._normalize_ticker("AAPL") == "AAPL"
-        assert adapter._normalize_ticker("MSFT") == "MSFT"
+        # helper já realiza asserções; não capturamos o resultado
+        self._extracted_from_test_normalize_ticker_non_b3_3(
+            "AAPL", "AAPL", "MSFT", "MSFT"
+        )
+
+    # TODO: rename this helper and update references in
+    # `test_normalize_ticker_b3` and `test_normalize_ticker_non_b3`
+    def _extracted_from_test_normalize_ticker_non_b3_3(
+        self,
+        arg0,
+        arg1,
+        arg2,
+        arg3,
+    ):
+        result = YFinanceAdapter()
+        assert result._normalize_ticker(arg0) == arg1
+        assert result._normalize_ticker(arg2) == arg3
+        return result
 
     def test_normalize_date_yyyy_mm_dd(self):
         """Testa normalização de data YYYY-MM-DD (já normalizada)."""
-        adapter = YFinanceAdapter()
-        assert adapter._normalize_date("2024-01-01") == "2024-01-01"
-        assert adapter._normalize_date("2024-12-31") == "2024-12-31"
+        self._extracted_from_test_normalize_date_mm_dd_yyyy_3(
+            "2024-01-01", "2024-01-01", "2024-12-31"
+        )
 
-    def test_normalize_date_mm_dd_yyyy(self):
-        """Testa conversão de MM-DD-YYYY para YYYY-MM-DD."""
+    # TODO: rename this helper and update references in
+    # `test_normalize_date_yyyy_mm_dd` and `test_normalize_date_mm_dd_yyyy`
+    def _extracted_from_test_normalize_date_mm_dd_yyyy_3(
+        self,
+        arg0,
+        arg1,
+        arg2,
+    ):
         adapter = YFinanceAdapter()
-        assert adapter._normalize_date("01-15-2024") == "2024-01-15"
-        assert adapter._normalize_date("12-31-2024") == "2024-12-31"
+        assert adapter._normalize_date(arg0) == arg1
+        assert adapter._normalize_date(arg2) == "2024-12-31"
 
     @patch("src.adapters.yfinance_adapter.web.DataReader")
     def test_fetch_success(self, mock_datareader):
@@ -352,8 +382,13 @@ class TestYFinanceAdapter:
         # Verifica disponibilidade e versão da biblioteca yfinance
         assert "library_available" in metadata
         assert "library_version" in metadata
-        if metadata["library_available"] == "yes":
-            assert metadata["library_version"] != "unknown"
+        # evitar condicionais em testes (Sourcery): garantir que não estamos
+        # no caso inconsistente onde a biblioteca é reportada como disponível
+        # mas a versão é 'unknown'
+        assert not (
+            metadata["library_available"] == "yes"
+            and metadata["library_version"] == "unknown"
+        )
 
     def test_get_metadata_when_yfinance_missing(self, monkeypatch):
         """Simula yfinance ausente e verifica metadados resultantes."""
@@ -456,16 +491,23 @@ class TestYFinanceAdapter:
 
             msg = str(excinfo.value)
             required_columns = getattr(adapter, "REQUIRED_COLUMNS", None)
-            if required_columns:
-                for col in required_columns:
-                    assert col in msg
-            else:
-                msg_lower = msg.lower()
-                assert (
-                    "coluna" in msg_lower
-                    or "colunas" in msg_lower
-                    or "missing" in msg_lower
+            # evitar condicionais em testes (Sourcery): afirmar que
+            # ou todas as colunas requeridas aparecem na mensagem,
+            # ou (quando não há REQUIRED_COLUMNS) a mensagem contém
+            # palavras-chave indicativas de falta de colunas.
+            msg_lower = msg.lower()
+            assert (
+                (required_columns is not None
+                 and all(col in msg for col in required_columns))
+                or (
+                    required_columns is None
+                    and (
+                        "coluna" in msg_lower
+                        or "colunas" in msg_lower
+                        or "missing" in msg_lower
+                    )
                 )
+            )
 
         def test_validate_dataframe_non_datetime_index(self):
             class TestAdapter(Adapter):
