@@ -11,7 +11,7 @@ d_atual = date.today()
 
 
 @app.command()
-def main():  # noqa: C901
+def main(validation_tolerance: float | None = typer.Option(None, "--validation-tolerance", help="Tolerância de inválidas (ex: 0.10)")):  # noqa: C901
     # importações locais para evitar exigir dependências apenas para `--help`
     import pandas as pd
 
@@ -72,6 +72,31 @@ def main():  # noqa: C901
                 fetched_at=save_meta.get("fetched_at"),
             )
             print(f"Mapper produced {len(canonical)} canonical rows for {a}")
+            # Validation step: run validator, persist invalid rows and log them
+            try:
+                from src.validation import validate_and_handle, ValidationError
+
+                valid_df, invalid_df, summary, details = validate_and_handle(
+                    canonical,
+                    provider="yfinance",
+                    ticker=f"{a}.SA",
+                    raw_file=save_meta.get("filepath"),
+                    ts=save_meta.get("fetched_at"),
+                    raw_root="raw",
+                    metadata_path="metadata/ingest_logs.json",
+                    threshold=validation_tolerance,
+                    abort_on_exceed=True,
+                    persist_invalid=True,
+                )
+                print(
+                    f"Validation summary for {a}: rows_total={summary.rows_total}, rows_valid={summary.rows_valid}, rows_invalid={summary.rows_invalid}, invalid_percent={summary.invalid_percent:.4f}"
+                )
+            except ValidationError as e:
+                print(f"Ingest aborted for {a} due to validation threshold: {e}")
+                continue
+            except Exception as e:
+                print(f"Validation step failed for {a}: {e}")
+
         except Exception as e:
             print(f"Mapper failed for {a}: {e}")
         # Calcula o retorno (usa coluna ajustada quando disponível, senão `close`)
