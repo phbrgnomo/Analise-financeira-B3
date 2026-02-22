@@ -18,6 +18,13 @@ def test_init_db_creates_default(tmp_path, monkeypatch):
 
 
 def test_init_db_refuses_outside_and_allows_with_flag(tmp_path, monkeypatch):
+    """Verifica comportamento de `init_db` quanto a caminhos externos.
+
+    Confirma que, por padrão, `init_db` recusa inicializar um banco fora do
+    `DATA_DIR` (lançando `ValueError`), e que ao chamar com
+    `allow_external=True` a função permite criar o arquivo de banco fora do
+    diretório protegido.
+    """
     monkeypatch.setattr(
         "scripts.init_ingest_db.DATA_DIR",
         tmp_path / "dados",
