@@ -122,10 +122,11 @@ class Adapter(ABC):
             )
 
         # Make the type explicit for static checkers: ensure we have a concrete
-        # List[str] here. Some type checkers cannot infer that
-        # `required_columns` is not None after the assignment above — add an
-        # assert so tools like Pylance recognize the non-None guarantee.
-        assert required_columns is not None
+        # List[str] here. Replace the runtime `assert` with an explicit
+        # runtime check so we don't risk an unexpected AssertionError in
+        # production when Python is run without -O.
+        if required_columns is None:
+            raise TypeError("required_columns unexpectedly None")
         required_columns_list: List[str] = list(required_columns)
 
         if df.empty:
@@ -250,10 +251,12 @@ class Adapter(ABC):
         metrics,
         status_code,
         ticker: str,
-    ) -> bool:
+    ) -> None:
         """Handle retryable exceptions.
 
-        Log the error, wait according to backoff, and return True to indicate a retry.
+        Log the error, wait according to backoff, and perform retry-related
+        actions. This helper no longer returns a boolean — callers should
+        always continue after invocation when a retry is desired.
         """
         log_context["status"] = "retryable_error"
         log_context["error_message"] = str(e)
@@ -276,7 +279,7 @@ class Adapter(ABC):
         msg = f"Aguardando {wait_time}s antes de retry"
         logger.debug(msg, extra=log_context)
         time.sleep(wait_time)
-        return True
+        return None
 
     def _handle_non_retryable_fetch_error(
         self,
@@ -388,7 +391,7 @@ class Adapter(ABC):
                 status_code = self._extract_status_code(e)
                 # Retryable errors: network/timeouts or configured status codes
                 if self._is_retryable_exception(e, status_code):
-                    handled = self._handle_retryable_exception(
+                    self._handle_retryable_exception(
                         e=e,
                         attempt=attempt,
                         effective_max_retries=effective_max_retries,
@@ -398,8 +401,7 @@ class Adapter(ABC):
                         status_code=status_code,
                         ticker=ticker,
                     )
-                    if handled:
-                        continue
+                    continue
 
                 # Non-retryable fetch errors
                 self._handle_non_retryable_fetch_error(

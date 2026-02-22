@@ -23,21 +23,31 @@ def _normalize_input(p: str) -> tuple[str, bool]:
     return (os.path.normpath(p), os.path.isabs(p))
 
 
-def _ensure_absolute_within_data(real_path: str) -> str:
-    """Ensure an absolute real path is inside DATA_DIR, return canonical string."""
+def _ensure_absolute_within_data(
+    real_path: str, *, error_suffix: str | None = None
+) -> str:
+    """Ensure an absolute real path is inside DATA_DIR, return canonical string.
+
+    error_suffix can be provided by callers (e.g. CLI) to append contextual
+    guidance such as flag-specific override instructions. When omitted a
+    generic message without CLI-specific hints is used.
+    """
     data_dir_str = str(Path(DATA_DIR).resolve())
+    if error_suffix is None:
+        error_suffix = ""
+    elif error_suffix and not error_suffix.startswith(" "):
+        error_suffix = f" {error_suffix}"
+
     try:
         common = os.path.commonpath([real_path, data_dir_str])
     except ValueError:
-        raise ValueError(
-            "Refusing to initialize database outside of DATA_DIR. "
-            "Pass --allow-external to override (use with caution)."
-        ) from None
+        base_msg = "Refusing to initialize database outside of DATA_DIR."
+        raise ValueError(f"{base_msg}{error_suffix}") from None
+
     if common != data_dir_str:
-        raise ValueError(
-            "Refusing to initialize database outside of DATA_DIR. "
-            "Pass --allow-external to override (use with caution)."
-        )
+        base_msg = "Refusing to initialize database outside of DATA_DIR."
+        raise ValueError(f"{base_msg}{error_suffix}")
+
     return real_path
 
 
