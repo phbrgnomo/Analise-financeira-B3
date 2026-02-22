@@ -243,6 +243,24 @@ def _process_schema_exception(
     if isinstance(exc, SchemaErrors):
         invalid_df, error_records = _extract_invalid_rows_from_schema_errors(df, exc)
 
+        # If failure_cases didn't provide row indices but the error is a
+        # missing-column type, mark all rows invalid (legacy behaviour).
+        if invalid_df.empty:
+            reason_code = _categorize_error(str(exc))
+            if reason_code == "MISSING_COL":
+                error_records = []
+                for idx in df.index:
+                    error_records.append(
+                        {
+                            "row_index": idx,
+                            "column": None,
+                            "reason_code": reason_code,
+                            "reason_message": str(exc)[:200],
+                            "failure_value": None,
+                        }
+                    )
+                invalid_df = df.copy()
+
         # Ensure generic error_records when failure_cases didn't provide details
         if not error_records and not invalid_df.empty:
             reason_code = _categorize_error(str(exc))
