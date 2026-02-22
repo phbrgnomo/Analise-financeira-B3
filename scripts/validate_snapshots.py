@@ -140,7 +140,7 @@ def write_manifest(
     # Validate target path to avoid path traversal from untrusted inputs
     # only when called from the CLI with `allow_external=False`.
     if not allow_external:
-        _extracted_from_write_manifest_7(path)
+        _validate_manifest_path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         # Use timezone-aware UTC datetime to avoid DeprecationWarning on Python 3.12+
@@ -152,7 +152,7 @@ def write_manifest(
 
 
 # TODO Rename this here and in `write_manifest`
-def _extracted_from_write_manifest_7(path):
+def _validate_manifest_path(path):
     raw = str(path)
     if "\x00" in raw:
         raise ValueError("Invalid manifest path: contains null byte")
