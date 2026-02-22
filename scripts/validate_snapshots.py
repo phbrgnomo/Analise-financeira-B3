@@ -13,11 +13,23 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from pathlib import Path as _Path
 from typing import Any, Dict, Tuple, cast
 
-from src.paths import SNAPSHOTS_DIR
+# Ensure repo root is on sys.path so `from src...` imports work when the
+# script is executed directly (e.g. `python scripts/validate_snapshots.py`).
+# scripts/ is at repo_root/scripts, so repo_root is two parents up from here.
+_REPO_ROOT = _Path(__file__).resolve().parent.parent
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
+# Note: avoid importing from `src` at module import time because some CI
+# linting hooks require imports to be at the top of the file. We import
+# `SNAPSHOTS_DIR` dynamically inside `main()` after ensuring the repo root
+# is on `sys.path`.
 
 
 def sha256_of_file(path: Path) -> str:
@@ -90,10 +102,19 @@ def write_manifest(path: Path, manifest: Dict[str, Dict[str, str]]):
 
 def main():
     p = argparse.ArgumentParser(description="Validate or generate snapshot checksums")
-    p.add_argument("--dir", type=Path, default=SNAPSHOTS_DIR)
-    p.add_argument("--manifest", type=Path, default=SNAPSHOTS_DIR / "checksums.json")
+    p.add_argument("--dir", type=Path, default=None)
+    p.add_argument("--manifest", type=Path, default=None)
     p.add_argument("--update", action="store_true", help="Regenerate manifest")
     args = p.parse_args()
+
+    # Resolve defaults from `src.paths` only after sys.path has been updated
+    # so running the script directly works in CI and locally.
+    if args.dir is None or args.manifest is None:
+        from src.paths import SNAPSHOTS_DIR as _SNAP
+        if args.dir is None:
+            args.dir = _SNAP
+        if args.manifest is None:
+            args.manifest = _SNAP / "checksums.json"
 
     # For validation we only consider CSV snapshot files; keep the helper
     # flexible so tests or other callers can request different patterns.
