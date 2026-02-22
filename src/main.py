@@ -98,18 +98,23 @@ def _fetch_and_prepare_asset(
             print(f"Validation step failed for {a}: {e}")
 
     # Calcula o retorno (usa coluna ajustada quando disponível, senão `close`)
+    # Preferir o DataFrame `canonical` (já mapeado/validado) quando disponível.
     import src.retorno as rt
 
-    price_candidates = ("Adj Close", "adj_close", "Close", "close")
-    price_col = next((c for c in price_candidates if c in df.columns), None)
-    if price_col is not None:
-        df["Return"] = rt.r_log(df[price_col], df[price_col].shift(1))
-    else:
-        df["Return"] = None
+    target_df = canonical if "canonical" in locals() and canonical is not None else df
 
-    # Save CSV for later stats
+    price_candidates = ("Adj Close", "adj_close", "Close", "close")
+    price_col = next((c for c in price_candidates if c in target_df.columns), None)
+    if price_col is not None:
+        target_df["Return"] = rt.r_log(
+            target_df[price_col], target_df[price_col].shift(1)
+        )
+    else:
+        target_df["Return"] = None
+
+    # Save CSV for later stats (save the validated/mapped frame when possible)
     DATA_DIR.mkdir(parents=True, exist_ok=True)
-    df.to_csv(DATA_DIR / f"{a}.csv")
+    target_df.to_csv(DATA_DIR / f"{a}.csv")
 
 
 def _compute_and_print_stats(a: str) -> None:
