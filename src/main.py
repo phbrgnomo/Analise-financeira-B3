@@ -37,6 +37,7 @@ def _fetch_and_prepare_asset(
         print(f"Falha ao salvar raw para {a}: {save_meta.get('error_message')}")
         return
 
+    # Mapping: keep failures local and return early if mapper fails
     try:
         from src.etl.mapper import to_canonical
 
@@ -48,13 +49,22 @@ def _fetch_and_prepare_asset(
             fetched_at=save_meta.get("fetched_at"),
         )
         print(f"Mapper produced {len(canonical)} canonical rows for {a}")
-        # provide a fallback so the `except ValidationError` clause is valid
-        # even if the import fails during static analysis or runtime
-        ValidationError = Exception
-        try:
-            from src.validation import ValidationError, validate_and_handle
+    except Exception as e:
+        print(f"Mapper failed for {a}: {e}")
+        return
 
-            valid_df, invalid_df, summary, details = validate_and_handle(
+    # Validation: import helpers if available and run validation separately
+    try:
+        from src.validation import ValidationError, validate_and_handle
+    except Exception:
+        validate_and_handle = None
+        ValidationError = None
+
+    if validate_and_handle is None:
+        print("Validation module not available; skipping validation step")
+    else:
+        try:
+            _valid_df, _invalid_df, summary, _details = validate_and_handle(
                 canonical,
                 provider="yfinance",
                 ticker=f"{a}.SA",
@@ -78,14 +88,14 @@ def _fetch_and_prepare_asset(
                     summary.invalid_percent,
                 )
             )
-        except ValidationError as e:
-            print(f"Ingest aborted for {a} due to validation threshold: {e}")
-            return
         except Exception as e:
+            # Avoid using `except ValidationError` when `ValidationError` may
+            # be None (not imported). Distinguish validation-threshold
+            # failures when we have the specific exception class available.
+            if ValidationError is not None and isinstance(e, ValidationError):
+                print(f"Ingest aborted for {a} due to validation threshold: {e}")
+                return
             print(f"Validation step failed for {a}: {e}")
-
-    except Exception as e:
-        print(f"Mapper failed for {a}: {e}")
 
     # Calcula o retorno (usa coluna ajustada quando disponível, senão `close`)
     import src.retorno as rt

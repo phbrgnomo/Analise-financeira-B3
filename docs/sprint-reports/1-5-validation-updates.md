@@ -4,14 +4,14 @@ Resumo das alterações implementadas para a história "Validar estrutura CSV e 
 
 - `src/validation.py`
   - `validate_and_handle`: integração de validação + persistência + logging + threshold.
-  - Normalização: conversão de `date` para timezone-aware, coercion de `open/high/low/close` para numérico e `volume` para `Int64`.
+  - Normalização: conversão de `date` para timezone-aware, coerção de `open/high/low/close` para numérico e `volume` para `Int64`.
   - Extração de falhas: heurística para mapear checagens DataFrame (ex.: `high > low`) às linhas específicas quando possível.
   - Persistência: `persist_invalid_rows` escreve CSVs em `raw/<provider>/invalid-<ticker>-<ts>.csv`.
   - Logging: `log_invalid_rows` append em `metadata/ingest_logs.json` com detalhes e contagem.
 
-- Tests adicionados:
+- Testes adicionados:
   - `tests/test_validation_persistence.py` — valida persistência e log em `tmp_path`.
-  - `tests/test_validation_normalize.py` — valida coercion de tipos e normalização de datas.
+  - `tests/test_validation_normalize.py` — valida coerção de tipos e normalização de datas.
 
 Como usar:
 

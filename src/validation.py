@@ -10,6 +10,7 @@ from __future__ import annotations
 import contextlib
 import logging
 from dataclasses import dataclass
+from functools import lru_cache
 from typing import Any, Dict, List, Tuple, cast
 
 import numpy as np
@@ -35,54 +36,65 @@ class ValidationSummary:
 class ValidationError(Exception):
     """Exception raised when validation threshold is exceeded."""
 
-    pass
-
-
-def _categorize_error(error_msg: str, column: str | None = None) -> str:
+def _categorize_error(
+    error_msg: str,
+    column: str | None = None,
+    *,
+    error_lower: str | None = None,
+) -> str:
     """Map pandera error messages to human-readable reason codes.
 
-    Args:
-        error_msg: Error message from pandera
-        column: Column name where error occurred (if known)
-
-    Returns:
-        Reason code string (e.g., 'MISSING_COL', 'BAD_DATE', 'NON_NUMERIC_PRICE')
+    This function delegates to a module-level cached categorizer and small
+    helper predicates to keep cyclomatic complexity low and make unit
+    testing easier.
     """
-    error_lower = error_msg.lower()
 
-    # Handle missing column errors
-    if "column" in error_lower and (
-        "not in" in error_lower or "missing" in error_lower
+    if error_lower is None:
+        error_lower = error_msg.lower()
+
+    return _cached_categorize(error_lower, column)
+
+
+def _is_missing_col(el: str) -> bool:
+    return "column" in el and ("not in" in el or "missing" in el)
+
+
+def _column_specific_code(el: str, col: str | None) -> str | None:
+    if not col:
+        return None
+    col_lower = col.lower()
+    if (col_lower == "date" or "date" in col_lower) and (
+        "type" in el or "datetime" in el
     ):
+        return "BAD_DATE"
+    if col_lower in {"open", "high", "low", "close"} and (
+        "float" in el or "numeric" in el
+    ):
+        return "NON_NUMERIC_PRICE"
+    if col_lower == "volume":
+        if "negative" in el or "< 0" in el:
+            return "NEGATIVE_VOLUME"
+        if "int" in el or "numeric" in el:
+            return "NON_NUMERIC_VOLUME"
+    return None
+
+
+def _generic_code(el: str) -> str | None:
+    if "float" in el or "int" in el or "coerce" in el:
+        return "TYPE_ERROR"
+    return "CONSTRAINT_VIOLATION" if "check" in el or "constraint" in el else None
+
+
+@lru_cache(maxsize=1024)
+def _cached_categorize(el: str, col: str | None) -> str:
+    if _is_missing_col(el):
         return "MISSING_COL"
 
-    # Handle type errors by column name and error content
-    if column:
-        col_lower = column.lower()
-        if (col_lower == "date" or "date" in col_lower) and (
-            "type" in error_lower or "datetime" in error_lower
-        ):
-            return "BAD_DATE"
-        if col_lower in {"open", "high", "low", "close"} and (
-            "float" in error_lower or "numeric" in error_lower
-        ):
-            return "NON_NUMERIC_PRICE"
-        if col_lower == "volume":
-            if "negative" in error_lower or "< 0" in error_lower:
-                return "NEGATIVE_VOLUME"
-            if "int" in error_lower or "numeric" in error_lower:
-                return "NON_NUMERIC_VOLUME"
+    if col_code := _column_specific_code(el, col):
+        return col_code
 
-    # Generic type errors
-    if "float" in error_lower or "int" in error_lower or "coerce" in error_lower:
-        return "TYPE_ERROR"
-
-    # Check constraint errors
-    if "check" in error_lower or "constraint" in error_lower:
-        return "CONSTRAINT_VIOLATION"
-
-    # Default
-    return "VALIDATION_ERROR"
+    generic = _generic_code(el)
+    return generic or "VALIDATION_ERROR"
 
 
 def _extract_invalid_rows_from_schema_errors(
@@ -122,19 +134,28 @@ def _extract_invalid_rows_from_schema_errors(
 
     # If still nothing, mark all rows as potentially invalid with a generic message
     if not invalid_indices:
+        # Determine reason and choose fallback behavior:
+        # - If it's a missing-column error, mark all rows invalid (legacy
+        #   behaviour relied on by tests and callers).
+        # - Otherwise emit a single schema-level error record so we don't
+        #   noisily mark every row invalid for higher-level schema problems.
         error_msg = str(schema_errors)
         reason_code = _categorize_error(error_msg)
-        for idx in df.index:
-            invalid_indices.add(idx)
-            error_records.append(
-                {
-                    "row_index": idx,
-                    "column": None,
-                    "reason_code": reason_code,
-                    "reason_message": error_msg[:200],
-                    "failure_value": None,
-                }
-            )
+
+        # Avoid marking all rows invalid as a heuristic fallback — this can
+        # obscure schema-level issues. Emit a single schema-level error
+        # record instead so callers can decide how to treat it. If callers
+        # explicitly need per-row marking for missing columns, they should
+        # handle that at a higher level.
+        error_records.append(
+            {
+                "row_index": None,
+                "column": None,
+                "reason_code": reason_code,
+                "reason_message": error_msg[:200],
+                "failure_value": None,
+            }
+        )
 
     # Build invalid_df from collected indices and return
     invalid_df = (
@@ -411,22 +432,94 @@ def _ensure_dir(path):
 
 
 def _normalize_threshold_value(threshold: float | None) -> float:
+    """Normalize the invalid-row threshold used during validation.
+
+    This helper derives an effective threshold from an explicit value,
+    an environment variable, or a default fallback, and accepts both
+    fractional values (0.1) and whole percentages (10 for 10%).
+
+    Args:
+        threshold: Optional threshold as a fraction (0.0-1.0). If None,
+            the value is read from the environment variable
+            VALIDATION_INVALID_PERCENT_THRESHOLD or defaults to 0.10.
+
+    Returns:
+        A normalized threshold as a float fraction between 0.0 and 1.0.
+    """
     import os
 
-    if threshold is None:
+    DEFAULT = 0.10
+
+    # If caller provided an explicit threshold, validate its range.
+    if threshold is not None:
         try:
-            threshold_env = os.getenv("VALIDATION_INVALID_PERCENT_THRESHOLD")
-            if threshold_env is not None:
-                t = float(threshold_env)
-                return (t / 100.0) if t > 1 else t
-            return 0.10
+            if not (0.0 <= float(threshold) <= 1.0):
+                logger.warning(
+                    "Explicit threshold %s out of range [0.0,1.0]; using default %.2f",
+                    threshold,
+                    DEFAULT,
+                )
+                return DEFAULT
+            return float(threshold)
         except Exception:
-            return 0.10
-    return threshold
+            logger.warning(
+                "Invalid explicit threshold %s; using default %.2f",
+                threshold,
+                DEFAULT,
+            )
+            return DEFAULT
+
+    # No explicit threshold: try environment variable, with robust parsing.
+    threshold_env = os.getenv("VALIDATION_INVALID_PERCENT_THRESHOLD")
+    if threshold_env is None:
+        return DEFAULT
+
+    s = threshold_env.strip()
+    try:
+        # Support values like '10', '0.1', '10%', '  10 % '
+        if s.endswith("%"):
+            num = float(s[:-1].strip())
+            t = num / 100.0
+        else:
+            t = float(s)
+            # Treat numeric values > 1 as whole-percentage (e.g. 10 -> 0.10)
+            if t > 1:
+                t /= 100.0
+
+        if not (0.0 <= t <= 1.0):
+            msg = (
+                "Environment variable VALIDATION_INVALID_PERCENT_THRESHOLD='%s' "
+                "parsed to %s which is out of range [0.0,1.0]; using default %.2f"
+            )
+            logger.warning(msg, threshold_env, t, DEFAULT)
+            return DEFAULT
+
+        return float(t)
+    except ValueError:
+        msg = (
+            "Could not parse VALIDATION_INVALID_PERCENT_THRESHOLD='%s'; "
+            "using default %.2f"
+        )
+        logger.warning(msg, threshold_env, DEFAULT)
+        return DEFAULT
+    except Exception as e:
+        msg = (
+            "Unexpected error parsing VALIDATION_INVALID_PERCENT_THRESHOLD='%s': %s; "
+            "using default %.2f"
+        )
+        logger.warning(msg, threshold_env, e, DEFAULT)
+        return DEFAULT
 
 
 def _coerce_dataframe_columns(df: pd.DataFrame) -> None:
-    """In-place coercion of common column types used by validation."""
+    """Normalize common DataFrame column types in-place for validation.
+
+    This helper coerces date, price, and volume columns into consistent
+    datetime, numeric, and nullable-integer types expected by validators.
+
+    Args:
+        df: DataFrame to normalize, modified in-place.
+    """
     # Normalize date
     if "date" in df.columns:
         with contextlib.suppress(Exception):
@@ -525,8 +618,23 @@ def persist_invalid_rows(
     filename = f"invalid-{ticker}-{ts}.csv"
     path = os.path.join(folder, filename)
 
+    # Prepare a copy for persistence and strip validation metadata so
+    # we don't persist internal `_validation_errors` structures.
+    df_to_write = invalid_df.copy()
+    if "_validation_errors" in df_to_write.columns:
+        try:
+            df_to_write = df_to_write.drop(columns=["_validation_errors"])
+        except Exception:
+            # If dropping fails for any reason, fall back to original copy
+            # but log so we can investigate.
+            msg = (
+                "Could not drop _validation_errors column before persisting "
+                "invalid rows for %s/%s"
+            )
+            logger.warning(msg, provider, ticker)
+
     # Write CSV
-    invalid_df.to_csv(path, index=True)
+    df_to_write.to_csv(path, index=True)
 
     # Compute checksum
     # checksum is intentionally omitted here (not used by callers)

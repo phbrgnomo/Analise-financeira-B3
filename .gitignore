@@ -90,3 +90,7 @@ snapshots_test/
 
 # Snyk Security Extension - AI Rules (auto-generated)
 .github/instructions/snyk_rules.instructions.md
+
+
+#Ignore vscode AI rules
+.github/instructions/codacy.instructions.md

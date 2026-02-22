@@ -111,12 +111,22 @@ class Adapter(ABC):
         Levanta `ValidationError` com mensagens compatíveis com os testes existentes.
         """
         if required_columns is None:
-            # If the adapter class defines REQUIRED_COLUMNS, prefer that contract
-            # (tests and some adapters rely on this). Otherwise, use the
-            # default primary OHLCV columns. `Adj Close` is optional.
-            required_columns = getattr(self, "REQUIRED_COLUMNS", None)
-        if required_columns is None:
-            required_columns = ["Open", "High", "Low", "Close", "Volume"]
+            # If the caller didn't pass `required_columns`, prefer an
+            # adapter-specific `REQUIRED_COLUMNS` attribute when present.
+            # If the adapter explicitly defines `REQUIRED_COLUMNS = []`,
+            # respect that (do not fall back to defaults). Only when the
+            # attribute is absent (None) do we use the library default.
+            attr = getattr(self, "REQUIRED_COLUMNS", None)
+            required_columns = (
+                attr if attr is not None else ["Open", "High", "Low", "Close", "Volume"]
+            )
+
+        # Make the type explicit for static checkers: ensure we have a concrete
+        # List[str] here. Some type checkers cannot infer that
+        # `required_columns` is not None after the assignment above — add an
+        # assert so tools like Pylance recognize the non-None guarantee.
+        assert required_columns is not None
+        required_columns_list: List[str] = list(required_columns)
 
         if df.empty:
             raise ValidationError(
@@ -124,7 +134,7 @@ class Adapter(ABC):
                 "Verifique se o ticker é válido e se há dados para o período."
             )
 
-        if missing_columns := set(required_columns) - set(df.columns):
+        if missing_columns := set(required_columns_list) - set(df.columns):
             raise ValidationError(
                 f"Colunas obrigatórias ausentes para {ticker}: {missing_columns}"
             )
@@ -260,7 +270,7 @@ class Adapter(ABC):
             )
             raise NetworkError(msg, original_exception=e) from e
 
-        wait_time = self._extracted_from__handle_non_retryable_fetch_error_28(
+        wait_time = self._compute_and_record_backoff(
             attempt, backoff_factor, metrics, log_context
         )
         msg = f"Aguardando {wait_time}s antes de retry"
@@ -292,14 +302,14 @@ class Adapter(ABC):
                 original_exception=e,
             ) from e
 
-        wait_time = self._extracted_from__handle_non_retryable_fetch_error_28(
+        wait_time = self._compute_and_record_backoff(
             attempt, backoff_factor, metrics, log_context
         )
         time.sleep(wait_time)
 
     # TODO: Rename this helper and update references in
     # `_handle_retryable_exception` and `_handle_non_retryable_fetch_error`.
-    def _extracted_from__handle_non_retryable_fetch_error_28(
+    def _compute_and_record_backoff(
         self, attempt, backoff_factor, metrics, log_context
     ):
         result, delay_ms = self._compute_wait(attempt, backoff_factor)
