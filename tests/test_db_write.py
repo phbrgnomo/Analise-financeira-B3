@@ -1,6 +1,6 @@
 import pandas as pd
-import sqlalchemy
 import pytest
+import sqlalchemy
 
 from src import db
 

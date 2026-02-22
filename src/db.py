@@ -7,19 +7,19 @@ Fornece funções:
 
 Implementação usa SQLAlchemy Core e upsert (`ON CONFLICT`) no SQLite.
 """
-from typing import Optional
 import datetime
+from typing import Optional
 
 from sqlalchemy import (
-    create_engine,
-    MetaData,
-    Table,
     Column,
-    String,
     Date,
+    DateTime,
     Float,
     Integer,
-    DateTime,
+    MetaData,
+    String,
+    Table,
+    create_engine,
     select,
 )
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
@@ -75,8 +75,9 @@ def write_prices(df, ticker: str, engine=None, schema_version: Optional[str] = N
     - engine: SQLAlchemy Engine (opcional)
     - schema_version: valor para gravar/atualizar em metadata.key == 'schema_version'
     """
-    import pandas as pd
     import hashlib
+
+    import pandas as pd
 
     eng = _get_engine(engine, db_path)
 
