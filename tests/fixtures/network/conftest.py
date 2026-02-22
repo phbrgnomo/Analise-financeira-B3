@@ -12,6 +12,7 @@ Uso:
   - pytest (padrão): `NETWORK_MODE` não definido → `playback` (isolado)
   - Para atualizar gravações: `NETWORK_MODE=record pytest tests/..`
 """
+
 from __future__ import annotations
 
 import os
@@ -27,14 +28,14 @@ def _load_sample_dataframe(ticker: str, start=None, end=None, **kwargs) -> pd.Da
     df = pd.read_csv(path, parse_dates=[1], header=None)
     # Arquivo sample_ticker.csv: ticker,date,open,high,low,close,volume,provider
     columns = [
-      "ticker_col",
-      "Date",
-      "Open",
-      "High",
-      "Low",
-      "Close",
-      "Volume",
-      "provider",
+        "ticker_col",
+        "Date",
+        "Open",
+        "High",
+        "Low",
+        "Close",
+        "Volume",
+        "provider",
     ]
     df.columns = columns
     df = df.set_index("Date")
@@ -42,8 +43,8 @@ def _load_sample_dataframe(ticker: str, start=None, end=None, **kwargs) -> pd.Da
     # Não expor 'Adj Close' nos dados de playback.
     # Garantir colunas esperadas
     for col in ["Open", "High", "Low", "Close", "Volume"]:
-      if col not in df.columns:
-        df[col] = None
+        if col not in df.columns:
+            df[col] = None
     return df[["Open", "High", "Low", "Close", "Volume"]]
 
 

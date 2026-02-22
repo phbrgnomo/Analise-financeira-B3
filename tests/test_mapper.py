@@ -182,18 +182,14 @@ class TestToCanonical:
 
     def test_timezone_normalization_to_utc(self):
         """Verify fetched_at is normalized to UTC ISO8601."""
-        result = self._extracted_from_test_metadata_preserved_in_attrs_4(
-            "test", "TEST"
-        )
+        result = self._create_canonical_df("test", "TEST")
         # Assert: fetched_at should be a datetime-like UTC value per schema
         fetched_at = result["fetched_at"].iloc[0]
         assert isinstance(fetched_at, pd.Timestamp)
 
     def test_metadata_preserved_in_attrs(self):
         """Verify metadata (raw_checksum, provider, ticker) is stored in attrs."""
-        result = self._extracted_from_test_metadata_preserved_in_attrs_4(
-            "alphavantage", "AAPL"
-        )
+        result = self._create_canonical_df("alphavantage", "AAPL")
         # Assert: attrs should contain metadata
         assert "raw_checksum" in result.attrs
         assert "provider" in result.attrs
@@ -201,9 +197,8 @@ class TestToCanonical:
         assert result.attrs["provider"] == "alphavantage"
         assert result.attrs["ticker"] == "AAPL"
 
-    # TODO Rename this here and in `test_timezone_normalization_to_utc` and
-    # `test_metadata_preserved_in_attrs`
-    def _extracted_from_test_metadata_preserved_in_attrs_4(self, provider_name, ticker):
+    # TODO Rename helper to `_create_canonical_df` in other tests if needed
+    def _create_canonical_df(self, provider_name, ticker):
         dates = pd.date_range("2026-01-01", periods=1, freq="D")
         raw_df = pd.DataFrame(
             {

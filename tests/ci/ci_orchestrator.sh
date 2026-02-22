@@ -13,21 +13,26 @@ function _err() {
 
 trap _err ERR
 
+
 echo "CI Orchestrator: starting at $(date -u)"
 
-echo "[1/4] Lint"
+echo "[1/5] Lint"
 bash tests/ci/lint.sh
 
-echo "[2/4] Unit tests"
+echo "[2/5] Unit tests"
 bash tests/ci/test.sh
 
-echo "[3/4] Smoke"
+echo "[3/5] Smoke"
 bash tests/ci/smoke.sh
 
-echo "[4/4] Integration"
+echo "[4/5] Integration"
 # Ensure SNAPSHOT_DIR is exported for the integration step (mirrors workflow)
 export SNAPSHOT_DIR="${SNAPSHOT_DIR:-$(mktemp -d)}"
 bash tests/ci/integration.sh
+
+echo "[5/5] Validate snapshots"
+# Validate committed repository snapshots (do not validate temp SNAPSHOT_DIR)
+SNAPSHOT_DIR="snapshots" bash tests/ci/validate_snapshots.sh
 
 echo "CI Orchestrator: all stages passed at $(date -u)"
 

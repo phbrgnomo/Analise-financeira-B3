@@ -7,6 +7,8 @@ import hashlib
 from pathlib import Path
 from typing import Union
 
+import pandas as pd
+
 
 def sha256_file(path: Union[str, Path]) -> str:
     """Calculate SHA256 checksum for a file and return the hex digest.
@@ -32,8 +34,13 @@ def sha256_bytes(data: bytes) -> str:
 
 
 def serialize_df_bytes(
-    df, *, index: bool = True, date_format: str = "%Y-%m-%dT%H:%M:%S",
-    float_format: str = "%.10g", na_rep: str = "", columns: list | None = None
+    df: pd.DataFrame,
+    *,
+    index: bool = True,
+    date_format: str = "%Y-%m-%dT%H:%M:%S",
+    float_format: str = "%.10g",
+    na_rep: str = "",
+    columns: list | None = None,
 ) -> bytes:
     """Serialize a DataFrame to bytes deterministically.
 
@@ -75,4 +82,4 @@ def serialize_df_bytes(
     return csv_str.encode("utf-8")
 
 
-__all__ = ["sha256_file", "sha256_bytes"]
+__all__ = ["sha256_file", "sha256_bytes", "serialize_df_bytes"]
