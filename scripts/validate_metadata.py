@@ -59,10 +59,7 @@ def main():  # noqa: C901
         print("Invalid path: contains null byte")
         sys.exit(2)
 
-    try:
-        normalized = os.path.normpath(raw)
-    except Exception:
-        normalized = raw
+    normalized = os.path.normpath(raw)
 
     is_abs = os.path.isabs(raw)
 
