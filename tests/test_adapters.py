@@ -405,7 +405,6 @@ class TestYFinanceAdapter:
         assert metadata["library_available"] == "no"
         assert metadata["library_version"] == "unknown"
 
-
     class TestAdapterBaseHelpers:
         """Testes para helpers centralizados em `Adapter` (normalize/validate)."""
 
@@ -497,15 +496,14 @@ class TestYFinanceAdapter:
             # palavras-chave indicativas de falta de colunas.
             msg_lower = msg.lower()
             assert (
-                (required_columns is not None
-                 and all(col in msg for col in required_columns))
-                or (
-                    required_columns is None
-                    and (
-                        "coluna" in msg_lower
-                        or "colunas" in msg_lower
-                        or "missing" in msg_lower
-                    )
+                required_columns is not None
+                and all(col in msg for col in required_columns)
+            ) or (
+                required_columns is None
+                and (
+                    "coluna" in msg_lower
+                    or "colunas" in msg_lower
+                    or "missing" in msg_lower
                 )
             )
 

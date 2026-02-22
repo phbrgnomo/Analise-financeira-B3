@@ -12,7 +12,6 @@ Comportamento:
 - Imprime resumo e opcionalmente salva CSV canônico
 """
 
-
 from __future__ import annotations
 
 import argparse
@@ -58,9 +57,9 @@ def main() -> int:
     def _normalize_provider_df(raw: pd.DataFrame) -> pd.DataFrame:
         # If columns are MultiIndex, try to pick the level with expected column names
         if getattr(raw.columns, "nlevels", 1) <= 1:
-                    # If first row contains a repeated ticker header (some CSV dumps),
-                    # try to detect and fix (e.g., header row with Unnamed or single
-                    # column with ticker as second line)
+            # If first row contains a repeated ticker header (some CSV dumps),
+            # try to detect and fix (e.g., header row with Unnamed or single
+            # column with ticker as second line)
             return raw if raw.columns.tolist()[0] == "Unnamed: 0" else raw
         lvl0 = list(raw.columns.get_level_values(0))
         lvl1 = list(raw.columns.get_level_values(1))
@@ -72,8 +71,7 @@ def main() -> int:
             return raw
         # fallback: join levels
         raw.columns = [
-            "_".join([str(x) for x in col if x is not None])
-            for col in raw.columns
+            "_".join([str(x) for x in col if x is not None]) for col in raw.columns
         ]
         return raw
 

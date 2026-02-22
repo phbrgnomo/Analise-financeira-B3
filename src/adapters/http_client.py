@@ -4,6 +4,7 @@ Este módulo fornece um protocolo simples e um adaptador baseado em
 `requests` quando disponível. Importações pesadas são feitas sob demanda
 para não causar falhas em ambientes de teste sem dependências.
 """
+
 from __future__ import annotations
 
 from typing import Any, Dict, Optional, Protocol
@@ -35,6 +36,7 @@ class RequestsHTTPClient:
             raise RuntimeError(
                 "requests library is required for RequestsHTTPClient"
             ) from exc
+
     def get(
         self,
         url: str,

@@ -170,8 +170,9 @@ def save_raw_csv(
         try:
             _persist_metadata(metadata, metadata_path)
         except Exception as e_meta:
-            _log_metadata_error("Falha ao gravar metadados de erro em JSON", e_meta,
-                                metadata)
+            _log_metadata_error(
+                "Falha ao gravar metadados de erro em JSON", e_meta, metadata
+            )
         return metadata
 
 

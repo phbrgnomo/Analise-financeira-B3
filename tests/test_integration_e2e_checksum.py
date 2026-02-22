@@ -1,4 +1,3 @@
-
 import pandas as pd
 
 from src.etl.mapper import to_canonical

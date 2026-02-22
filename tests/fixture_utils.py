@@ -24,18 +24,18 @@ def parse_fixture_csv(filename: str):
     with open(csv_path, newline="") as f:
         reader = csv.DictReader(f)
         rows.extend(
-                (
-                    r.get("ticker"),
-                    r.get("date"),
-                    float(r.get("open") or 0),
-                    float(r.get("high") or 0),
-                    float(r.get("low") or 0),
-                    float(r.get("close") or 0),
-                    int(r.get("volume") or 0),
-                    r.get("source"),
-                )
-                for r in reader
+            (
+                r.get("ticker"),
+                r.get("date"),
+                float(r.get("open") or 0),
+                float(r.get("high") or 0),
+                float(r.get("low") or 0),
+                float(r.get("close") or 0),
+                int(r.get("volume") or 0),
+                r.get("source"),
             )
+            for r in reader
+        )
     return rows
 
 

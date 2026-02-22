@@ -182,9 +182,7 @@ class TestToCanonical:
 
     def test_timezone_normalization_to_utc(self):
         """Verify fetched_at is normalized to UTC ISO8601."""
-        result = self._extracted_from_test_metadata_preserved_in_attrs_4(
-            "test", "TEST"
-        )
+        result = self._extracted_from_test_metadata_preserved_in_attrs_4("test", "TEST")
         # Assert: fetched_at should be a datetime-like UTC value per schema
         fetched_at = result["fetched_at"].iloc[0]
         assert isinstance(fetched_at, pd.Timestamp)

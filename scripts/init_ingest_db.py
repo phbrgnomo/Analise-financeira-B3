@@ -4,6 +4,7 @@
 Cria o arquivo .db e a tabela ingest_logs sem alterar o restante do pipeline.
 Uso: python scripts/init_ingest_db.py --db dados/data.db
 """
+
 from __future__ import annotations
 
 import argparse
@@ -40,11 +41,7 @@ def init_db(db_path: Path | str = DATA_DIR / "data.db") -> None:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description=(
-            "Inicializa o banco de ingest_logs"
-        )
-    )
+    parser = argparse.ArgumentParser(description=("Inicializa o banco de ingest_logs"))
 
     parser.add_argument(
         "--db",

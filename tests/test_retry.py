@@ -20,7 +20,6 @@ def test_retry_config_compute_delay_ms():
     assert rc.compute_delay_ms(10) == 2000
 
 
-
 @patch("src.adapters.yfinance_adapter.web.DataReader")
 @patch("src.adapters.base.time.sleep")
 def test_metrics_are_recorded_on_retries(mock_sleep, mock_datareader):

@@ -1,15 +1,18 @@
 """Optional pandera schema loader for the canonical CSVs.
 
-This module defines a function `get_pandera_schema()` that returns a pandera DataFrameSchema
-when `pandera` is installed, otherwise returns None. The canonical schema is persisted in
-`docs/schema.json` (authoritative documentation). This keeps imports lazy so runtime does not
-fail when pandera is not installed.
+This module defines a function `get_pandera_schema()` that returns a
+`pandera` DataFrameSchema when `pandera` is installed, otherwise returns
+None.
+
+The canonical schema is persisted in `docs/schema.json` (authoritative
+documentation). This keeps imports lazy so runtime does not fail when
+pandera is not installed.
 """
+
 from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Optional
 
 
 def get_pandera_schema():

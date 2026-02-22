@@ -5,8 +5,6 @@ Implementa busca de dados OHLCV com retry, logging estruturado
 e tratamento de erros padronizado.
 """
 
-
-
 import logging
 import re
 import types
@@ -101,7 +99,7 @@ class YFinanceAdapter(Adapter):
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
         **kwargs,
-    ) -> pd.DataFrame:    # noqa: C901
+    ) -> pd.DataFrame:  # noqa: C901
         """
         Busca dados OHLCV do Yahoo Finance para um ticker.
 
@@ -201,13 +199,9 @@ class YFinanceAdapter(Adapter):
             start,
             end,
             log_context=log_context,
-            max_retries=(
-                self.max_retries if max_retries is None else max_retries
-            ),
+            max_retries=(self.max_retries if max_retries is None else max_retries),
             backoff_factor=(
-                self.backoff_factor
-                if backoff_factor is None
-                else backoff_factor
+                self.backoff_factor if backoff_factor is None else backoff_factor
             ),
             timeout=(self.timeout if timeout is None else timeout),
             required_columns=required_columns,

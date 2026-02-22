@@ -68,9 +68,7 @@ class TestCanonicalMapperIntegration:
         assert pd.api.types.is_integer_dtype(canonical_df["volume"])
         assert canonical_df["source"].dtype == object  # string
         # fetched_at should be a datetime dtype per canonical schema
-        assert pd.api.types.is_datetime64_any_dtype(
-            canonical_df["fetched_at"]
-        )
+        assert pd.api.types.is_datetime64_any_dtype(canonical_df["fetched_at"])
 
         # Verify metadata for audit/provenance
         assert "raw_checksum" in canonical_df.attrs

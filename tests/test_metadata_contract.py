@@ -25,11 +25,7 @@ def test_example_metadata_matches_schema():
 def test_validate_script_returns_ok(tmp_path, capsys):
     pytest.importorskip("jsonschema")
 
-    script = (
-        Path(__file__).resolve().parents[1]
-        / "scripts"
-        / "validate_metadata.py"
-    )
+    script = Path(__file__).resolve().parents[1] / "scripts" / "validate_metadata.py"
     example = (
         Path(__file__).resolve().parents[1]
         / "examples"
@@ -42,7 +38,5 @@ def test_validate_script_returns_ok(tmp_path, capsys):
         capture_output=True,
         text=True,
     )
-    assert res.returncode == 0, (
-        f"Script failed: {res.stdout}\n{res.stderr}"
-    )
+    assert res.returncode == 0, f"Script failed: {res.stdout}\n{res.stderr}"
     assert "OK: metadata is valid" in res.stdout
