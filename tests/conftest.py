@@ -6,10 +6,14 @@ Define fixtures úteis para integração e playback de rede.
 from __future__ import annotations
 
 import os
+import sys
 from typing import Callable, Generator
 
 import pandas as pd
 import pytest
+
+# Ensure tests directory is importable when pytest runs the tests as a script
+sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 from fixture_utils import create_prices_db_from_csv, get_or_make_snapshot_dir
 
 

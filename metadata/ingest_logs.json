@@ -216,5 +216,141 @@
       }
     ],
     "created_at": "2026-02-21T20:57:07.788168"
+  },
+  {
+    "job_id": "",
+    "provider": "yahoo",
+    "ticker": "INVALID",
+    "raw_file": "",
+    "invalid_filepath": "",
+    "invalid_count": 1,
+    "error_details": [
+      {
+        "row_index": null,
+        "column": null,
+        "reason_code": "ADAPTER_VALIDATION",
+        "reason_message": "[VALIDATION_ERROR] DataFrame vazio retornado para INVALID. Verifique se o ticker é válido e se há dados para o período."
+      }
+    ],
+    "created_at": "2026-02-21T23:19:27.382562"
+  },
+  {
+    "job_id": "",
+    "provider": "yahoo",
+    "ticker": "PETR4.SA",
+    "raw_file": "",
+    "invalid_filepath": "",
+    "invalid_count": 1,
+    "error_details": [
+      {
+        "row_index": null,
+        "column": null,
+        "reason_code": "ADAPTER_VALIDATION",
+        "reason_message": "[VALIDATION_ERROR] Colunas obrigatórias ausentes para PETR4.SA: {'High', 'Low', 'Volume'}"
+      }
+    ],
+    "created_at": "2026-02-21T23:19:27.384268"
+  },
+  {
+    "job_id": "",
+    "provider": "yahoo",
+    "ticker": "INVALID",
+    "raw_file": "",
+    "invalid_filepath": "",
+    "invalid_count": 1,
+    "error_details": [
+      {
+        "row_index": null,
+        "column": null,
+        "reason_code": "ADAPTER_VALIDATION",
+        "reason_message": "[VALIDATION_ERROR] DataFrame vazio retornado para INVALID. Verifique se o ticker é válido e se há dados para o período."
+      }
+    ],
+    "created_at": "2026-02-21T23:22:08.073354"
+  },
+  {
+    "job_id": "",
+    "provider": "yahoo",
+    "ticker": "PETR4.SA",
+    "raw_file": "",
+    "invalid_filepath": "",
+    "invalid_count": 1,
+    "error_details": [
+      {
+        "row_index": null,
+        "column": null,
+        "reason_code": "ADAPTER_VALIDATION",
+        "reason_message": "[VALIDATION_ERROR] Colunas obrigatórias ausentes para PETR4.SA: {'Low', 'High', 'Volume'}"
+      }
+    ],
+    "created_at": "2026-02-21T23:22:08.079066"
+  },
+  {
+    "job_id": "",
+    "provider": "yahoo",
+    "ticker": "INVALID",
+    "raw_file": "",
+    "invalid_filepath": "",
+    "invalid_count": 1,
+    "error_details": [
+      {
+        "row_index": null,
+        "column": null,
+        "reason_code": "ADAPTER_VALIDATION",
+        "reason_message": "[VALIDATION_ERROR] DataFrame vazio retornado para INVALID. Verifique se o ticker é válido e se há dados para o período."
+      }
+    ],
+    "created_at": "2026-02-21T23:28:37.850819"
+  },
+  {
+    "job_id": "",
+    "provider": "yahoo",
+    "ticker": "PETR4.SA",
+    "raw_file": "",
+    "invalid_filepath": "",
+    "invalid_count": 1,
+    "error_details": [
+      {
+        "row_index": null,
+        "column": null,
+        "reason_code": "ADAPTER_VALIDATION",
+        "reason_message": "[VALIDATION_ERROR] Colunas obrigatórias ausentes para PETR4.SA: {'Volume', 'Low', 'High'}"
+      }
+    ],
+    "created_at": "2026-02-21T23:28:37.852668"
+  },
+  {
+    "job_id": "",
+    "provider": "yahoo",
+    "ticker": "INVALID",
+    "raw_file": "",
+    "invalid_filepath": "",
+    "invalid_count": 1,
+    "error_details": [
+      {
+        "row_index": null,
+        "column": null,
+        "reason_code": "ADAPTER_VALIDATION",
+        "reason_message": "[VALIDATION_ERROR] DataFrame vazio retornado para INVALID. Verifique se o ticker é válido e se há dados para o período."
+      }
+    ],
+    "created_at": "2026-02-21T23:29:12.811005"
+  },
+  {
+    "job_id": "",
+    "provider": "yahoo",
+    "ticker": "PETR4.SA",
+    "raw_file": "",
+    "invalid_filepath": "",
+    "invalid_count": 1,
+    "error_details": [
+      {
+        "row_index": null,
+        "column": null,
+        "reason_code": "ADAPTER_VALIDATION",
+        "reason_message": "[VALIDATION_ERROR] Colunas obrigatórias ausentes para PETR4.SA: {'High', 'Volume', 'Low'}"
+      }
+    ],
+    "created_at": "2026-02-21T23:29:12.813596"
   }
 ]

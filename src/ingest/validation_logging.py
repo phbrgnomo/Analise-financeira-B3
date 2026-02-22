@@ -206,7 +206,7 @@ def save_invalid_rows(
         df_to_save = df_to_save.drop(columns=["_validation_errors"])
 
     try:
-        return _extracted_from_save_invalid_rows_45(
+        return _write_invalid_rows_with_checksum(
             df_to_save, file_path, invalid_df, ticker
         )
     except Exception as e:
@@ -220,8 +220,22 @@ def save_invalid_rows(
         }
 
 
-# TODO Rename this here and in `save_invalid_rows`
-def _extracted_from_save_invalid_rows_45(df_to_save, file_path, invalid_df, ticker):
+def _write_invalid_rows_with_checksum(df_to_save, file_path, invalid_df, ticker):
+    """Persist invalid rows to a CSV file and generate a checksum sidecar.
+
+    This helper writes a deterministic CSV representation of invalid rows,
+    computes its checksum, and returns metadata about the persisted artifact.
+
+    Args:
+        df_to_save: DataFrame containing the invalid rows to be persisted.
+        file_path: Target path where the CSV file will be written.
+        invalid_df: Original invalid-rows DataFrame, used for row-count metadata.
+        ticker: Ticker symbol associated with the invalid rows.
+
+    Returns:
+        Dict with metadata about the saved file, including filepath, checksum,
+        number of rows, and a status string.
+    """
     # Serialize deterministically
     df_bytes = serialize_df_bytes(
         df_to_save,
