@@ -151,7 +151,6 @@ def write_manifest(
         json.dump(payload, f, indent=2, ensure_ascii=False)
 
 
-# TODO Rename this here and in `write_manifest`
 def _validate_manifest_path(path):
     raw = str(path)
     if "\x00" in raw:
