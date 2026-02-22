@@ -1,3 +1,5 @@
+from typing import Any, cast
+
 import pandas as pd
 import pytest
 
@@ -5,6 +7,14 @@ from src.validation import _coerce_dataframe_columns
 
 
 def test_coerce_date_mixed_and_invalid():
+    """Verifica coerção da coluna `date` com valores ISO válidos e um valor inválido.
+
+    Entradas válidas devem ser convertidas para datetime com timezone UTC
+    (timezone-aware) e a entrada inválida deve tornar-se NaT.
+
+    Asserções-chave: o `dtype` da coluna é `DatetimeTZDtype` e as checagens
+    `pd.isna` para as linhas 0–2 confirmam o comportamento esperado.
+    """
     df = pd.DataFrame(
         {
             # use ISO format for predictability under different pandas locales
@@ -49,8 +59,8 @@ def test_coerce_numeric_price_mixed_and_unconvertible():
     assert df["open"].dtype.kind == "f" or pd.api.types.is_float_dtype(df["open"].dtype)
     assert pd.isna(df.loc[1, "open"])  # 'bad' -> NaN
     assert pd.isna(df.loc[2, "open"])  # None -> NaN
-    assert float(df.loc[0, "open"]) == pytest.approx(1.23)
-    assert float(df.loc[3, "open"]) == pytest.approx(4.0)
+    assert float(cast(Any, df.loc[0, "open"])) == pytest.approx(1.23)
+    assert float(cast(Any, df.loc[3, "open"])) == pytest.approx(4.0)
 
     # high: last value 'x' should be coerced to NaN
     assert pd.isna(df.loc[3, "high"])
@@ -74,8 +84,8 @@ def test_coerce_volume_to_nullable_int():
     assert str(df["volume"].dtype) == "Int64"
 
     # Values: 100, 200, <NA>, <NA>
-    assert int(df.loc[0, "volume"]) == 100
-    assert int(df.loc[1, "volume"]) == 200
+    assert int(cast(Any, df.loc[0, "volume"])) == 100
+    assert int(cast(Any, df.loc[1, "volume"])) == 200
     assert pd.isna(df.loc[2, "volume"])  # None -> <NA>
     assert pd.isna(df.loc[3, "volume"])  # 'bad' -> <NA>
 

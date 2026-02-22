@@ -38,7 +38,45 @@ Recomendações futuras
 - Unificar as `reason_code` possíveis em um arquivo de referência (`docs/`) para
   facilitar mapeamento em dashboards/alertas.
 - Adicionar um pequeno utilitário CLI para consultar `ingest_logs` e filtrar por
-  `reason_code`, `ticker` e `created_at` (veja story 4.2).
+  `reason_code`, `ticker` e `created_at`. Abaixo um exemplo de uso e uma
+  sugestão de implementação mínima.
+
+Exemplos de uso rápido
+
+- Em Python, validar um DataFrame em memória:
+
+```python
+from src.validation import validate_dataframe
+
+valid_df, invalid_df, summary = validate_dataframe(df)
+```
+
+- Em Python, validar, persistir inválidos e registrar automaticamente:
+
+```python
+from src.validation import validate_and_handle
+
+valid_df, invalid_df, summary, details = validate_and_handle(
+    df,
+    provider="yfinance",
+    ticker="PETR4.SA",
+    raw_file="sample.csv",
+    ts="2026-02-21T00:00:00Z",
+)
+```
+
+- Consultar `ingest_logs` (arquivo JSONL onde cada linha é um objeto JSON)
+  e filtrar por `reason_code`, `ticker` e intervalo `created_at` (exemplo com
+  `jq`):
+
+```sh
+jq -c 'select(.reason_code=="ADAPTER_VALIDATION" and .ticker=="PETR4.SA")' metadata/ingest_logs.json
+```
+
+Sugestão de CLI mínima:
+
+- Um comando `ingest-logs query --reason ADAPTER_VALIDATION --ticker PETR4.SA --from 2026-02-01 --to 2026-02-28` que lê `metadata/ingest_logs.json`, aplica filtros e imprime ocorrências paginadas.
+
 
 Arquivo(s) relevantes
 - `src/adapters/base.py` — checks do adaptador e (novo) logging de falhas

@@ -1,12 +1,12 @@
-"""Optional pandera schema loader for the canonical CSVs.
+"""Carregador opcional de esquema do pandera para os CSVs canônicos.
 
-This module defines a function `get_pandera_schema()` that returns a
-`pandera` DataFrameSchema when `pandera` is installed, otherwise returns
-None.
+Este módulo define a função `get_pandera_schema()` que retorna um
+`pandera` DataFrameSchema quando `pandera` está instalado, caso contrário
+retorna None.
 
-The canonical schema is persisted in `docs/schema.json` (authoritative
-documentation). This keeps imports lazy so runtime does not fail when
-pandera is not installed.
+O esquema canônico é persistido em `docs/schema.json` (documentação
+autoritativa). Mantemos os imports de forma "lazy" para que o tempo de
+execução não falhe quando o pacote `pandera` não estiver instalado.
 """
 
 from __future__ import annotations
@@ -20,22 +20,21 @@ logger = logging.getLogger(__name__)
 
 
 def get_pandera_schema(base_path: Optional[Path] = None):  # noqa: C901
-    """Return a pandera DataFrameSchema if `pandera` is available.
+    """Retorna um DataFrameSchema do pandera se `pandera` estiver disponível.
 
-    `base_path` allows callers to control where `docs/schema.json` is
-    resolved from. When omitted the path is resolved relative to this
-    module's parent directory so library and CLI usage behave
-    consistently regardless of the current working directory.
+    `base_path` permite que o chamador controle onde `docs/schema.json`
+    será resolvido. Quando omitido, o caminho é resolvido em relação ao
+    diretório pai deste módulo, de forma que o uso em biblioteca e CLI
+    se comporte de maneira consistente independentemente do diretório de
+    trabalho corrente.
     """
     try:
         import pandera as pa
         from pandera import Column, DataFrameSchema
     except ImportError:
-        # Optional dependency not installed: caller can treat this as "no schema"
+        # Dependência opcional não instalada: o chamador pode tratar isso como
+        # "sem esquema" e prosseguir sem validação via pandera
         return None
-    except Exception:
-        logger.exception("Unexpected error while importing pandera")
-        raise
 
     if base_path is None:
         base_path = Path(__file__).resolve().parent.parent
@@ -79,8 +78,29 @@ def get_pandera_schema(base_path: Optional[Path] = None):  # noqa: C901
 
     try:
         return DataFrameSchema(mapping)
-    except Exception:
+    except Exception as err:
+        # Some schema construction errors are expected when the JSON is
+        # malformed for pandera; treat those as "no schema" (return None)
+        # while logging unexpected errors and re-raising them.
+        SchemaError = None
+        if "pa" in locals():
+            SchemaError = getattr(getattr(pa, "errors", None), "SchemaError", None)
+
+        is_expected_err = isinstance(err, (ValueError, TypeError))
+        if SchemaError and isinstance(err, SchemaError):
+            is_expected_err = True
+
+        if is_expected_err:
+            logger.warning(
+                "Failed to construct pandera DataFrameSchema from %s: %s",
+                schema_path,
+                err,
+            )
+            return None
+
         logger.exception(
-            "Failed to construct pandera DataFrameSchema from %s", schema_path
+            "Unexpected error while constructing pandera DataFrameSchema from %s: %s",
+            schema_path,
+            err,
         )
         raise

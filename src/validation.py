@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class ValidationSummary:
-    """Summary of DataFrame validation results."""
+    """Resumo dos resultados de validação do DataFrame."""
 
     rows_total: int
     rows_valid: int
@@ -40,7 +40,7 @@ class ValidationSummary:
 
 
 class ValidationError(Exception):
-    """Exception raised when validation threshold is exceeded."""
+    """Exceção lançada quando o limite de validação é excedido."""
 
 
 def _categorize_error(
@@ -229,8 +229,10 @@ def _heuristic_high_low_violations(
                             },
                         }
                     )
-    except Exception:
-        # Ignore heuristic failures and return empty
+    except Exception as exc:
+        # Registrar falhas do heurístico para facilitar o diagnóstico,
+        # retornando vazio como fallback resiliente.
+        logger.debug("Heuristic high/low check failed: %s", exc, exc_info=True)
         return set(), []
 
     return invalid_indices, error_records
@@ -358,12 +360,12 @@ def validate_dataframe(
         return valid_df, pd.DataFrame(), summary
 
     except SchemaErrors as e:
-        logger.warning(f"Schema validation failed with SchemaErrors: {str(e)[:200]}")
+        logger.warning("Schema validation failed with SchemaErrors: %s", str(e)[:200])
         invalid_df, error_records = _process_schema_exception(df, e)
         valid_df = df.copy() if invalid_df.empty else df.drop(index=invalid_df.index)
 
     except SchemaError as e:
-        logger.warning(f"Schema validation failed with SchemaError: {str(e)[:200]}")
+        logger.warning("Schema validation failed with SchemaError: %s", str(e)[:200])
         invalid_df, error_records = _process_schema_exception(df, e)
         valid_df = df.copy() if invalid_df.empty else df.drop(index=invalid_df.index)
 
@@ -682,7 +684,7 @@ def log_invalid_rows(
     """
     import json
     import os
-    from datetime import datetime
+    from datetime import datetime, timezone
 
     entry = {
         "job_id": job_id or "",
@@ -692,25 +694,39 @@ def log_invalid_rows(
         "invalid_filepath": invalid_filepath,
         "invalid_count": len(error_records) if error_records else 0,
         "error_details": error_records,
-        "created_at": datetime.now().isoformat(),
+        "created_at": datetime.now(timezone.utc).isoformat(),
     }
 
     if meta_dir := os.path.dirname(metadata_path):
         _ensure_dir(meta_dir)
 
-    # Read existing array or create
-    data = []
-    if os.path.exists(metadata_path):
+    # Append entry atomically using JSON Lines (one JSON object per line).
+    # This avoids read/modify/write races when multiple processes append
+    # concurrently. If append fails for any reason, fall back to the
+    # legacy read/modify/write with an atomic replace.
+    try:
+        with open(metadata_path, "a", encoding="utf-8") as fh:
+            fh.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    except Exception:
+        # Fallback: try legacy array write using a temp file + replace
+        data = []
+        if os.path.exists(metadata_path):
+            try:
+                with open(metadata_path, "r", encoding="utf-8") as fh:
+                    data = json.load(fh) or []
+            except Exception:
+                data = []
+
+        data.append(entry)
+        tmp_path = metadata_path + ".tmp"
+        with open(tmp_path, "w", encoding="utf-8") as fh:
+            json.dump(data, fh, ensure_ascii=False, indent=2)
         try:
-            with open(metadata_path, "r", encoding="utf-8") as fh:
-                data = json.load(fh) or []
+            os.replace(tmp_path, metadata_path)
         except Exception:
-            data = []
-
-    data.append(entry)
-
-    with open(metadata_path, "w", encoding="utf-8") as fh:
-        json.dump(data, fh, ensure_ascii=False, indent=2)
+            # If atomic replace fails, attempt a plain write as last resort
+            with open(metadata_path, "w", encoding="utf-8") as fh:
+                json.dump(data, fh, ensure_ascii=False, indent=2)
 
     return entry
 
@@ -757,10 +773,6 @@ def validate_and_handle(
     )
 
     # Enforce threshold
-    try:
-        check_threshold(summary, threshold=threshold, abort_on_exceed=abort_on_exceed)
-    except ValidationError:
-        # re-raise to caller
-        raise
+    check_threshold(summary, threshold=threshold, abort_on_exceed=abort_on_exceed)
 
     return valid_df, invalid_df, summary, details
