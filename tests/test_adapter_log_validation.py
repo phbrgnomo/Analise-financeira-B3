@@ -212,7 +212,4 @@ def test_log_adapter_validation_error_paths(
     # Assert
 
     # Assert the specific expected message depending on import behavior
-    if import_raises:
-        assert "Adapter validation logging helper not available" in caplog.text
-    else:
-        assert expected_debug_call_msg in caplog.text
+    assert expected_debug_call_msg in caplog.text
