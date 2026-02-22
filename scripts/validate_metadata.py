@@ -4,6 +4,7 @@
 Uso:
     python3 scripts/validate_metadata.py path/to/metadata.json
 """
+
 import json
 import sys
 from datetime import datetime

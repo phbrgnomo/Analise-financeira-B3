@@ -31,8 +31,7 @@ from src.adapters.errors import FetchError
 
 
 def fetch_yahoo(ticker: str, days: int = 5) -> pd.DataFrame:
-    """Busca dados históricos do Yahoo para o ticker nos últimos `days` dias.
-    """
+    """Busca dados históricos do Yahoo para o ticker nos últimos `days` dias."""
     end = datetime.now(timezone.utc).date()
     start = end - timedelta(days=days)
 

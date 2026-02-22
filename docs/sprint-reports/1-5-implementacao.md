@@ -1,6 +1,6 @@
 # Sprint Report - Story 1.5: Validação de Estrutura CSV e Flag de Linhas Inválidas
 
-Status: completed (implementation staged)
+Status: completed
 
 Resumo do que foi implementado:
 
@@ -20,6 +20,19 @@ Resumo do que foi implementado:
   - `src/validation_schema.py` adiciona loader opcional para `pandera`.
   - `docs/playbooks/quickstart-ticker.md` atualizado com instruções de uso e configuração da validação.
   - `docs/implementation-artifacts/1-5-validar-estrutura-csv-e-filtrar-flag-rows-invalidas.md` atualizado com progresso e arquivos modificados.
+
+  Testes e validação
+
+  - A suíte de testes unitários foi executada localmente após implementação: **75 passed**, 16 warnings (`poetry run pytest`).
+
+  Arquivos entregues / alterados
+
+  - `src/validation.py` (novo): validação, persistência e logging.
+  - `src/main.py` (modificado): flag `--validation-tolerance` integrada.
+  - `tests/test_validation_persistence.py`, `tests/test_validation_normalize.py` (novos): cobertura para persistência e normalização.
+  - `docs/implementation-artifacts/1-5-validar-estrutura-csv-e-filtrar-flag-rows-invalidas.md` (atualizado): story marcada como `done` e resumo de implementação.
+  - `docs/implementation-artifacts/1-5-validation-updates.md` (adicional): resumo técnico das mudanças.
+
 
 Arquivos modificados/criados:
 
@@ -43,12 +56,8 @@ Racional das decisões de implementação
 
 Observações e próximos passos:
 
-- Os testes unitários de validação (`tests/test_validation.py`) foram deixados presentes e a implementação procura satisfazê-los; executar a suíte completa requer instalar dependências do projeto (`poetry install`) no ambiente de desenvolvimento/CI.
-- Falta documentar mudanças menores no PRD e adicionar exemplos de fixtures inválidos (`tests/fixtures/invalid_sample.csv`) se desejado.
-- Recomenda-se rodar a suíte de integração em CI com dependências instaladas e `--no-network` quando aplicável.
 
+Próximos passos e observações
 
-- Os testes unitários de validação (`tests/test_validation.py`) foram deixados presentes e a implementação procura satisfazê-los; executar a suíte completa requer instalar dependências do projeto (poetry install) no ambiente de desenvolvimento/CI.
-- Falta documentar mudanças menores no PRD e adicionar exemplos de fixtures inválidos (`tests/fixtures/invalid_sample.csv`) se desejado.
-- Recomenda-se rodar a suíte de integração em CI com dependências instaladas e `--no-network` quando aplicável.
-
+- Opcional: adicionar fixtures inválidos para exemplos em `tests/fixtures/`.
+- Revisar e ajustar códigos de falha (`reason_code`) conforme necessidades de monitoramento/telemetria.

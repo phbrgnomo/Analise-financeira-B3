@@ -7,14 +7,15 @@ Usage:
     python scripts/validate_snapshots.py --dir snapshots \
         --manifest snapshots/checksums.json --update
 """
+
 from __future__ import annotations
 
 import argparse
 import hashlib
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, Tuple
+from typing import Any, Dict, Tuple, cast
 
 from src.paths import SNAPSHOTS_DIR
 
@@ -43,7 +44,7 @@ def generate_manifest(directory: Path, pattern: str = "*") -> Dict[str, Dict[str
     return out
 
 
-def load_manifest(path: Path) -> Dict[str, Dict[str, str]]:
+def load_manifest(path: Path) -> Dict[str, Any]:
     if not path.exists():
         return {}
     with path.open("r", encoding="utf-8") as f:
@@ -68,7 +69,7 @@ def compare_manifests(
             ok = False
 
     # Check for unexpected new files
-    for path in current.keys():
+    for path in current:
         if path not in expected:
             diffs[path] = (None, current[path].get("sha256"))
             ok = False
@@ -79,7 +80,8 @@ def compare_manifests(
 def write_manifest(path: Path, manifest: Dict[str, Dict[str, str]]):
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
-        "generated_at": datetime.utcnow().isoformat() + "Z",
+        # Use timezone-aware UTC datetime to avoid DeprecationWarning on Python 3.12+
+        "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "files": manifest,
     }
     with path.open("w", encoding="utf-8") as f:
@@ -103,9 +105,13 @@ def main():
         return 0
 
     expected_payload = load_manifest(args.manifest)
-    expected = expected_payload.get("files") if expected_payload else {}
+    expected_raw = expected_payload.get("files") if expected_payload else {}
 
-    ok, diffs = compare_manifests(expected or {}, current)
+    expected: Dict[str, Dict[str, str]] = cast(
+        Dict[str, Dict[str, str]], expected_raw or {}
+    )
+
+    ok, diffs = compare_manifests(expected, current)
     if ok:
         print("All snapshots match manifest.")
         return 0

@@ -32,8 +32,13 @@ def sha256_bytes(data: bytes) -> str:
 
 
 def serialize_df_bytes(
-    df, *, index: bool = True, date_format: str = "%Y-%m-%dT%H:%M:%S",
-    float_format: str = "%.10g", na_rep: str = "", columns: list | None = None
+    df,
+    *,
+    index: bool = True,
+    date_format: str = "%Y-%m-%dT%H:%M:%S",
+    float_format: str = "%.10g",
+    na_rep: str = "",
+    columns: list | None = None,
 ) -> bytes:
     """Serialize a DataFrame to bytes deterministically.
 

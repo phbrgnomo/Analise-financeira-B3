@@ -79,9 +79,7 @@ def load_canonical_schema_from_json(path_or_dict: Union[Path, dict]) -> DataFram
         df_checks.append(
             Check(
                 lambda df: (
-                    df["high"].isna()
-                    | df["low"].isna()
-                    | (df["high"] > df["low"])
+                    df["high"].isna() | df["low"].isna() | (df["high"] > df["low"])
                 ).all(),
                 element_wise=False,
             )
@@ -233,9 +231,7 @@ def to_canonical(
     # Note: 'Adj Close' is optional in provider responses; canonical schema allows
     # adj_close to be nullable. Require only the primary OHLCV columns here.
     required_cols_lower = ["open", "high", "low", "close", "volume"]
-    if missing_cols := [
-        col for col in required_cols_lower if col not in columns_map
-    ]:
+    if missing_cols := [col for col in required_cols_lower if col not in columns_map]:
         raise MappingError(
             f"Missing required columns for ticker {ticker}: {missing_cols}. "
             f"Available columns: {list(df.columns)}"

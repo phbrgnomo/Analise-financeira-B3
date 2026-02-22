@@ -34,6 +34,7 @@ def test_example_matches_schema_header():
         header = next(reader)
     assert header == expected
 
+
 def test_example_matches_schema():
     root = Path(__file__).resolve().parent.parent
     schema_path = root / "docs" / "schema.json"
