@@ -1,5 +1,5 @@
 import json
-import os
+from pathlib import Path
 
 import pandas as pd
 
@@ -48,7 +48,7 @@ def test_persist_and_log_invalid_rows(tmp_path):
     assert "ingest_log_entry" in details
     entry = details["ingest_log_entry"]
     invalid_filepath = entry.get("invalid_filepath")
-    assert invalid_filepath and os.path.exists(invalid_filepath)
+    assert invalid_filepath and Path(invalid_filepath).exists()
 
     # Assert: metadata file contains the entry
     assert metadata_path.exists()

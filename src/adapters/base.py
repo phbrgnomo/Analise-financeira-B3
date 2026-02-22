@@ -111,20 +111,22 @@ class Adapter(ABC):
         Levanta `ValidationError` com mensagens compatíveis com os testes existentes.
         """
         if required_columns is None:
-            # If the caller didn't pass `required_columns`, prefer an
-            # adapter-specific `REQUIRED_COLUMNS` attribute when present.
-            # If the adapter explicitly defines `REQUIRED_COLUMNS = []`,
-            # respect that (do not fall back to defaults). Only when the
-            # attribute is absent (None) do we use the library default.
+            # Se o chamador não passou `required_columns`, preferimos um
+            # atributo específico do adaptador `REQUIRED_COLUMNS` quando
+            # presente. Se o adaptador explicitamente definir
+            # `REQUIRED_COLUMNS = []`, respeitamos isso (não usamos os
+            # valores padrão). Só quando o atributo estiver ausente
+            # (None) usamos o padrão da biblioteca.
             attr = getattr(self, "REQUIRED_COLUMNS", None)
             required_columns = (
                 attr if attr is not None else ["Open", "High", "Low", "Close", "Volume"]
             )
 
-        # Make the type explicit for static checkers: ensure we have a concrete
-        # List[str] here. Replace the runtime `assert` with an explicit
-        # runtime check so we don't risk an unexpected AssertionError in
-        # production when Python is run without -O.
+        # Tornar o tipo explícito para os verificadores estáticos: garantir
+        # que temos um List[str] concreto aqui. Substituímos o `assert`
+        # em tempo de execução por uma verificação explícita para não
+        # correr o risco de um AssertionError inesperado em produção
+        # quando o Python for executado sem -O.
         if required_columns is None:
             raise TypeError("required_columns unexpectedly None")
         required_columns_list: List[str] = list(required_columns)
@@ -251,12 +253,15 @@ class Adapter(ABC):
         metrics,
         status_code,
         ticker: str,
-    ) -> None:
-        """Handle retryable exceptions.
+    ) -> bool:
+        """Lida com exceções retryable: registra o erro, aguarda segundo
+        backoff e retorna True para indicar retry.
 
-        Log the error, wait according to backoff, and perform retry-related
-        actions. This helper no longer returns a boolean — callers should
-        always continue after invocation when a retry is desired.
+        Atualiza `log_context` com informações da falha, registra métricas e,
+        quando o número de tentativas excede `effective_max_retries`, registra
+        falha permanente e lança `NetworkError`. Caso contrário, calcula o
+        tempo de backoff, aguarda e retorna True para indicar que o chamador
+        deve tentar novamente.
         """
         log_context["status"] = "retryable_error"
         log_context["error_message"] = str(e)
@@ -279,7 +284,7 @@ class Adapter(ABC):
         msg = f"Aguardando {wait_time}s antes de retry"
         logger.debug(msg, extra=log_context)
         time.sleep(wait_time)
-        return None
+        return True
 
     def _handle_non_retryable_fetch_error(
         self,
@@ -291,7 +296,8 @@ class Adapter(ABC):
         metrics,
         ticker: str,
     ) -> None:
-        """Handle non-retryable fetch errors: log and either raise or wait for retry."""
+        """Trata erros de fetch não retryable: registra e levanta exceção ou
+        aguarda para nova tentativa."""
         log_context["status"] = "fetch_error"
         log_context["error_message"] = str(e)
         log_context["error_type"] = type(e).__name__

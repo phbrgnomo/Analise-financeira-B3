@@ -12,9 +12,43 @@ class DummyAdapter(Adapter):
     """Minimal concrete Adapter to allow instantiation for tests."""
 
     def fetch(self, ticker: str, **kwargs):
+        """Fetch data for a given ticker.
+
+        Parameters
+        ----------
+        ticker:
+            Ticker symbol to fetch data for.
+        **kwargs:
+            Adapter-specific keyword arguments.
+
+        Returns
+        -------
+        Any
+            Implementation-specific fetched data.
+        """
+
         raise NotImplementedError
 
     def _fetch_once(self, ticker: str, start: str, end: str, **kwargs):
+        """Perform a single fetch window for the given ticker.
+
+        Parameters
+        ----------
+        ticker:
+            Ticker symbol.
+        start:
+            Start timestamp (ISO string).
+        end:
+            End timestamp (ISO string).
+        **kwargs:
+            Adapter-specific options.
+
+        Returns
+        -------
+        Any
+            Implementation-specific result for the fetch window.
+        """
+
         raise NotImplementedError
 
 
@@ -47,7 +81,17 @@ class DummyAdapter(Adapter):
 def test_log_adapter_validation_happy_path(
     exc, ticker, provider_name, expected_reason_message
 ):
-    # Arrange
+    """Verifica o fluxo feliz de `_log_adapter_validation`.
+
+    Cenário: recebe uma exceção `exc`, um `ticker` e `provider_name` via
+    `adapter.get_metadata`. Espera-se que a função construa um registro de
+    validação e chame `log_invalid_rows` com um único `error_record` cujo
+    `reason_message` corresponde à mensagem da exceção.
+
+    Pré-condições: o módulo `src.validation` é substituído por um mock que
+    expõe `log_invalid_rows` e `adapter.get_metadata` retorna um dicionário
+    contendo a chave `provider`.
+    """
 
     adapter = DummyAdapter()
     adapter.get_metadata = MagicMock(return_value={"provider": provider_name})
@@ -112,6 +156,13 @@ def test_log_adapter_validation_happy_path(
     ],
 )
 def test_log_adapter_validation_edge_cases(ticker, provider_name, error_message):
+    """Valida casos-limite para `_log_adapter_validation`.
+
+    Casos testados: `provider_name` vazio e `ticker` vazio. Garante que
+    `log_invalid_rows` é chamado e que o `reason_message` no registro
+    corresponde à `error_message` fornecida.
+    """
+
     # Arrange
 
     adapter = DummyAdapter()
@@ -178,11 +229,12 @@ def test_log_adapter_validation_error_paths(
     def fake_import(name, *args, **kwargs):
         def _raise_import(*a, **k):
             raise ImportError("cannot import")
+        # If the import requested is "src.validation" simulate ImportError,
+        # otherwise delegate to the real builtins.__import__ implementation.
+        if name == "src.validation":
+            return _raise_import(name, *args, **kwargs)
 
-        return (
-            builtins.__import__,
-            _raise_import,
-        )[name == "src.validation"](name, *args, **kwargs)
+        return builtins.__import__(name, *args, **kwargs)
 
     log_invalid_rows_mock = MagicMock()
     # set side_effect conditionally via expression to avoid branching
