@@ -23,9 +23,9 @@ def test_generate_and_compare(tmp_path: Path):
     mpath = tmp_path / "checks.json"
     write_manifest(mpath, manifest)
     loaded = load_manifest(mpath)
-    assert "files" in loaded
+    assert isinstance(loaded, dict)
 
-    ok, diffs = compare_manifests(loaded.get("files"), manifest)
+    ok, diffs = compare_manifests(loaded, manifest)
     assert ok is True
     assert diffs == {}
 
