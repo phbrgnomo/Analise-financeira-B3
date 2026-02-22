@@ -74,10 +74,7 @@ Como usar:
 1. Ajuste a variável de ambiente `VALIDATION_INVALID_PERCENT_THRESHOLD` (ex: `0.10` ou `10`) para mudar o threshold padrão.
 2. A CLI já expõe `--validation-tolerance` e será repassada ao pipeline.
 
-Observações e próximos passos:
-
-
-Próximos passos e observações
+Observações e próximos passos
 
 - Opcional: adicionar fixtures inválidos para exemplos em `tests/fixtures/`.
 - Revisar e ajustar códigos de falha (`reason_code`) conforme necessidades de monitoramento/telemetria.
