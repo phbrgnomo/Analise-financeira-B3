@@ -26,6 +26,16 @@ def test_coerce_date_mixed_and_invalid():
 
 
 def test_coerce_numeric_price_mixed_and_unconvertible():
+    """Verifica coerção numérica para colunas de preço mistas.
+
+    A função `_coerce_dataframe_columns` deve:
+    - converter strings numéricas para floats,
+    - transformar valores não convertíveis ou `None` em NaN,
+    - preservar valores numéricos já corretos.
+
+    Exemplo: `open` = ["1.23", "bad", None, 4] -> [1.23, NaN, NaN, 4.0].
+    """
+
     df = pd.DataFrame(
         {
             "open": ["1.23", "bad", None, 4],
