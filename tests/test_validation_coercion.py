@@ -81,6 +81,10 @@ def test_coerce_volume_to_nullable_int():
 
 
 def test_in_place_modification():
+    """Verifica que `_coerce_dataframe_columns` modifica o DataFrame in-place.
+
+    Garante que o id do objeto permanece o mesmo após a coerção.
+    """
     df = pd.DataFrame({"open": ["1"], "date": ["2021-01-01"]})
     obj_id = id(df)
     _coerce_dataframe_columns(df)
