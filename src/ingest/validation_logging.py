@@ -102,8 +102,8 @@ def log_invalid_rows(
             metadata_path,
         )
 
-    except Exception as e:
-        logger.exception(f"Failed to log invalid rows to {metadata_path}: {e}")
+    except Exception:
+        logger.exception("Failed to log invalid rows to %s", metadata_path)
         # Don't raise - logging failure shouldn't stop the pipeline
 
     return log_entries
