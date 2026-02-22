@@ -211,8 +211,8 @@ def test_log_adapter_validation_error_paths(
 
     # Assert
 
-    # Accept either the expected message or the generic import-fails message
-    assert (
-        expected_debug_call_msg in caplog.text
-        or "Adapter validation logging helper not available" in caplog.text
-    )
+    # Assert the specific expected message depending on import behavior
+    if import_raises:
+        assert "Adapter validation logging helper not available" in caplog.text
+    else:
+        assert expected_debug_call_msg in caplog.text
