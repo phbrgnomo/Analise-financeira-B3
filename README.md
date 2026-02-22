@@ -18,6 +18,26 @@ Ferramenta leve para coletar dados de mercados (B3), calcular retornos e métric
 - Python 3.12+ (recomendado)
 - poetry (para gerenciar ambiente e dependências)
 
+## Configuração (variáveis de ambiente)
+
+Algumas configurações podem ser alteradas via variáveis de ambiente. Um
+exemplo está em `.env.example` — copie para `.env` e ajuste conforme
+necessário.
+
+- **VALIDATION_INVALID_PERCENT_THRESHOLD**: limite percentual usado pelo
+  processo de validação para considerar uma operação como inválida. Valor
+  padrão: `0.1` (10%). Deve ser um número decimal entre `0` e `1` (por
+  exemplo `0.05` para 5%). Para sobrescrever localmente, adicione em
+  `.env`:
+
+```
+VALIDATION_INVALID_PERCENT_THRESHOLD=0.05
+```
+
+  Isso permite reduzir ou aumentar a sensibilidade da validação conforme o
+  contexto (ex.: aceitar até 5% de linhas inválidas antes de tratar como
+  falha).
+
 ## Quickstart
 
 1. Instale dependências (com `poetry`):
