@@ -11,13 +11,19 @@ import contextlib
 import logging
 from dataclasses import dataclass
 from functools import lru_cache
-from typing import Any, Dict, List, Tuple, cast
+from typing import Any, Dict, List, Set, Tuple, cast
 
 import numpy as np
 import pandas as pd
 from pandera.errors import SchemaError, SchemaErrors
 
 from src.etl.mapper import CanonicalSchema
+
+# Type aliases for common shapes used across this module
+ErrorRecord = Dict[str, Any]
+ErrorRecords = List[ErrorRecord]
+IndexSet = Set[Any]
+
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +41,7 @@ class ValidationSummary:
 
 class ValidationError(Exception):
     """Exception raised when validation threshold is exceeded."""
+
 
 def _categorize_error(
     error_msg: str,
@@ -99,7 +106,7 @@ def _cached_categorize(el: str, col: str | None) -> str:
 
 def _extract_invalid_rows_from_schema_errors(
     df: pd.DataFrame, schema_errors: SchemaErrors
-) -> Tuple[pd.DataFrame, List[Dict[str, Any]]]:
+) -> Tuple[pd.DataFrame, ErrorRecords]:
     """Extract invalid rows and their error details from SchemaErrors.
 
     Args:
@@ -165,10 +172,10 @@ def _extract_invalid_rows_from_schema_errors(
     return invalid_df, error_records
 
 
-def _parse_failure_cases(failure_cases) -> Tuple[set, List[Dict[str, Any]]]:
+def _parse_failure_cases(failure_cases) -> Tuple[IndexSet, ErrorRecords]:
     """Parse `failure_cases` DataFrame emitted by pandera into indices and records."""
-    invalid_indices = set()
-    error_records: List[Dict[str, Any]] = []
+    invalid_indices: IndexSet = set()
+    error_records: ErrorRecords = []
     for _, row in failure_cases.iterrows():
         index = row.get("index")
         column = row.get("column")
@@ -195,16 +202,14 @@ def _parse_failure_cases(failure_cases) -> Tuple[set, List[Dict[str, Any]]]:
 
 def _heuristic_high_low_violations(
     df: pd.DataFrame,
-) -> Tuple[set, List[Dict[str, Any]]]:
+) -> Tuple[IndexSet, ErrorRecords]:
     """Detect high/low constraint violations and return indices + records."""
     invalid_indices = set()
     error_records: List[Dict[str, Any]] = []
     try:
         if "high" in df.columns and "low" in df.columns:
             mask_violation = ~(
-                df["high"].isna()
-                | df["low"].isna()
-                | (df["high"] > df["low"])
+                df["high"].isna() | df["low"].isna() | (df["high"] > df["low"])
             )
             positions = np.nonzero(mask_violation.to_numpy())[0]
             vio_idx = df.index[positions]
@@ -233,7 +238,7 @@ def _heuristic_high_low_violations(
 
 def _process_schema_exception(
     df: pd.DataFrame, exc: Exception
-) -> Tuple[pd.DataFrame, List[Dict[str, Any]]]:
+) -> Tuple[pd.DataFrame, ErrorRecords]:
     """Normalize pandera SchemaErrors or SchemaError into (invalid_df, error_records).
 
     This centralizes the logic used by `validate_dataframe` to keep complexity low.
@@ -249,16 +254,16 @@ def _process_schema_exception(
             reason_code = _categorize_error(str(exc))
             if reason_code == "MISSING_COL":
                 error_records = []
-                for idx in df.index:
-                    error_records.append(
-                        {
-                            "row_index": idx,
-                            "column": None,
-                            "reason_code": reason_code,
-                            "reason_message": str(exc)[:200],
-                            "failure_value": None,
-                        }
-                    )
+                error_records.extend(
+                    {
+                        "row_index": idx,
+                        "column": None,
+                        "reason_code": reason_code,
+                        "reason_message": str(exc)[:200],
+                        "failure_value": None,
+                    }
+                    for idx in df.index
+                )
                 invalid_df = df.copy()
 
         # Ensure generic error_records when failure_cases didn't provide details
@@ -553,8 +558,8 @@ def _coerce_dataframe_columns(df: pd.DataFrame) -> None:
             df["volume"] = pd.to_numeric(df["volume"], errors="coerce").astype("Int64")
 
 
-def _flatten_invalid_error_records(invalid_df: pd.DataFrame) -> List[Dict[str, Any]]:
-    details: List[Dict[str, Any]] = []
+def _flatten_invalid_error_records(invalid_df: pd.DataFrame) -> ErrorRecords:
+    details: ErrorRecords = []
     if invalid_df.empty or "_validation_errors" not in invalid_df.columns:
         return details
 

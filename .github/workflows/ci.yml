@@ -45,6 +45,9 @@ jobs:
           python -m pip install poetry
           python -m pip install --upgrade pip
           python -m pip install poetry
+          # Ensure Poetry creates the venv inside the project so `poetry run`
+          # is reliable in CI and caches behave predictably.
+          poetry config virtualenvs.in-project true
           poetry install --no-interaction
 
       - name: Run pre-commit (all files)

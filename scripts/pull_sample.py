@@ -17,6 +17,8 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import os
+import re
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -41,10 +43,16 @@ def fetch_yahoo(ticker: str, days: int = 5) -> pd.DataFrame:
     print(f"start:{start}, end:{end}, days:{days}")
 
     # Tentar yfinance primeiro (import local)
+    df: pd.DataFrame | None = None
     try:
         import yfinance as yf  # type: ignore
 
-        df = yf.download(ticker, start=start, end=end)
+        result = yf.download(ticker, start=start, end=end)
+        if result is None:
+            print(f"Warning: yfinance retornou None para {ticker}.", file=sys.stderr)
+            df = pd.DataFrame()
+        else:
+            df = result
 
         if df.empty:
             print(
@@ -56,9 +64,14 @@ def fetch_yahoo(ticker: str, days: int = 5) -> pd.DataFrame:
         print("yfinance não disponível ou falhou:", yf_exc, file=sys.stderr)
         raise
 
+    # Garantir que `df` seja um DataFrame (não None) antes de acessar membros
+    if df is None:
+        df = pd.DataFrame()
+
     # Garantir coluna Date disponível
     if "Date" not in df.columns:
         df = df.reset_index()
+
     return df
 
 
@@ -140,9 +153,16 @@ def main() -> None:
         default=None,
         help="Caminho do CSV de saída (padrão: dados/samples/{ticker}_sample.csv)",
     )
+    parser.add_argument(
+        "--allow-external",
+        action="store_true",
+        help="Permite salvar fora de dados/samples (use com cuidado)",
+    )
     args = parser.parse_args()
 
     ticker = args.ticker
+    # sanitize ticker for filename usage (avoid injection/traversal in filenames)
+    safe_ticker = re.sub(r"[^A-Za-z0-9._-]", "_", ticker)
     df = fetch_yahoo(ticker, days=args.days)
 
     # salvar resposta original (raw) para inspeção
@@ -152,7 +172,7 @@ def main() -> None:
 
     out_dir = Path("dados") / "samples"
     out_dir.mkdir(parents=True, exist_ok=True)
-    raw_csv = out_dir / f"{ticker}_raw.csv"
+    raw_csv = out_dir / f"{safe_ticker}_raw.csv"
 
     try:
         df.to_csv(raw_csv, index=False)
@@ -160,13 +180,80 @@ def main() -> None:
         print(f"Warning: não foi possível salvar CSV bruto: {exc}", file=sys.stderr)
 
     canonical, raw_checksum = to_canonical(df, ticker)
-    default_name = f"{ticker}_sample.csv"
-    out_path = Path(args.outfile) if args.outfile else out_dir / default_name
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    canonical.to_csv(out_path, index=False)
+    default_name = f"{safe_ticker}_sample.csv"
 
-    print(f"Amostra salva em: {out_path}")
+    # Sanitizar e validar `--outfile` para evitar path traversal.
+    # Perform validation using os.path on the raw string before creating any Path.
+    if args.outfile:
+        out_path_str = _extracted_from_main_48(args, out_dir)
+    else:
+        out_path_str = str(out_dir / default_name)
+
+    parent_dir = os.path.dirname(out_path_str)
+    os.makedirs(parent_dir, exist_ok=True)
+    canonical.to_csv(out_path_str, index=False)
+
+    print(f"Amostra salva em: {out_path_str}")
     print(f"raw_checksum: {raw_checksum}")
+
+
+# TODO Rename this here and in `main`
+def _extracted_from_main_48(args, out_dir) -> str:
+    if not isinstance(args.outfile, str):
+        print("Invalid --outfile value", file=sys.stderr)
+        sys.exit(2)
+
+    raw = args.outfile
+    if "\x00" in raw:
+        print("Invalid --outfile: contains null byte", file=sys.stderr)
+        sys.exit(2)
+
+    normalized = os.path.normpath(raw)
+    is_abs = os.path.isabs(raw)
+
+    if not args.allow_external:
+        allowed_dir = str(out_dir.resolve())
+
+        if is_abs:
+            real = os.path.realpath(raw)
+            try:
+                common = os.path.commonpath([real, allowed_dir])
+            except ValueError:
+                print(
+                    (
+                        "Refusing to write output outside of dados/samples. "
+                        "Use --allow-external to override."
+                    ),
+                    file=sys.stderr,
+                )
+                sys.exit(2)
+            if common != allowed_dir:
+                print(
+                    (
+                        "Refusing to write output outside of dados/samples. "
+                        "Use --allow-external to override."
+                    ),
+                    file=sys.stderr,
+                )
+                sys.exit(2)
+            resolved_out = real
+        else:
+            # relative: disallow traversal
+            if ".." in normalized.split(os.path.sep):
+                print(
+                    (
+                        "Refusing to write output outside of dados/samples. "
+                        "Use --allow-external to override."
+                    ),
+                    file=sys.stderr,
+                )
+                sys.exit(2)
+            resolved_out = os.path.join(allowed_dir, normalized.lstrip(os.path.sep))
+    else:
+        # allow external: canonicalize
+        resolved_out = os.path.realpath(raw)
+
+    return resolved_out
 
 
 if __name__ == "__main__":

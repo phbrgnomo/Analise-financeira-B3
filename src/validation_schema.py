@@ -13,20 +13,32 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Optional
 
 
-def get_pandera_schema():
+def get_pandera_schema(base_path: Optional[Path] = None):
+    """Return a pandera DataFrameSchema if `pandera` is available.
+
+    `base_path` allows callers to control where `docs/schema.json` is
+    resolved from. When omitted the path is resolved relative to this
+    module's parent directory so library and CLI usage behave
+    consistently regardless of the current working directory.
+    """
     try:
         import pandera as pa
         from pandera import Column, DataFrameSchema
     except Exception:
         return None
 
-    schema_path = Path("docs/schema.json")
+    if base_path is None:
+        base_path = Path(__file__).resolve().parent.parent
+
+    schema_path = base_path / "docs" / "schema.json"
     if not schema_path.exists():
         return None
 
-    spec = json.loads(schema_path.read_text())
+    with schema_path.open("r", encoding="utf-8") as f:
+        spec = json.load(f)
     cols = spec.get("columns", [])
     mapping = {}
     for c in cols:
@@ -45,7 +57,6 @@ def get_pandera_schema():
             mapping[name] = Column(pa.Object, nullable=nullable)
 
     try:
-        schema = DataFrameSchema(mapping)
-        return schema
+        return DataFrameSchema(mapping)
     except Exception:
         return None

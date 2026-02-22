@@ -111,9 +111,7 @@ def test_log_adapter_validation_happy_path(
         ),
     ],
 )
-def test_log_adapter_validation_edge_cases(
-    ticker, provider_name, error_message
-):
+def test_log_adapter_validation_edge_cases(ticker, provider_name, error_message):
     # Arrange
 
     adapter = DummyAdapter()
@@ -165,7 +163,6 @@ def test_log_adapter_validation_edge_cases(
         ),
     ],
 )
-# sourcery skip: no-conditionals-in-tests
 def test_log_adapter_validation_error_paths(
     import_raises, log_invalid_rows_raises, expected_debug_call_msg, caplog
 ):
@@ -179,9 +176,13 @@ def test_log_adapter_validation_error_paths(
 
     # Prepare import behavior without explicit conditionals using selection
     def fake_import(name, *args, **kwargs):
-        if name == "src.validation":
+        def _raise_import(*a, **k):
             raise ImportError("cannot import")
-        return builtins.__import__(name, *args, **kwargs)
+
+        return (
+            builtins.__import__,
+            _raise_import,
+        )[name == "src.validation"](name, *args, **kwargs)
 
     log_invalid_rows_mock = MagicMock()
     # set side_effect conditionally via expression to avoid branching
@@ -193,13 +194,13 @@ def test_log_adapter_validation_error_paths(
     )
 
     # Select the appropriate patch context explicitly to avoid ambiguity
-    if import_raises:
-        import_ctx = patch("builtins.__import__", side_effect=fake_import)
-    else:
-        import_ctx = patch.dict(
+    import_ctx = (
+        patch.dict(
             "sys.modules",
             {"src.validation": mock_validation_module},
-        )
+        ),
+        patch("builtins.__import__", side_effect=fake_import),
+    )[import_raises]
 
     caplog.set_level(logging.DEBUG, logger=logger.name)
 
