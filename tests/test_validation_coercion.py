@@ -57,6 +57,11 @@ def test_coerce_numeric_price_mixed_and_unconvertible():
 
 
 def test_coerce_volume_to_nullable_int():
+    """Verifica que a coluna `volume` é convertida para o tipo inteiro
+    anulável `Int64`, transformando strings numéricas em inteiros e
+    valores inválidos/None em <NA>.
+    """
+
     df = pd.DataFrame(
         {
             "volume": [100, "200", None, "bad"],
