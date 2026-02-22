@@ -18,7 +18,6 @@ import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from pathlib import Path as _Path
 from typing import Dict, Tuple
 
 logger = logging.getLogger(__name__)
@@ -26,7 +25,7 @@ logger = logging.getLogger(__name__)
 # Ensure repo root is on sys.path so `from src...` imports work when the
 # script is executed directly (e.g. `python scripts/validate_snapshots.py`).
 # scripts/ is at repo_root/scripts, so repo_root is two parents up from here.
-_REPO_ROOT = _Path(__file__).resolve().parent.parent
+_REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
