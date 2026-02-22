@@ -12,11 +12,14 @@ pandera is not installed.
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 from typing import Optional
 
+logger = logging.getLogger(__name__)
 
-def get_pandera_schema(base_path: Optional[Path] = None):
+
+def get_pandera_schema(base_path: Optional[Path] = None):  # noqa: C901
     """Return a pandera DataFrameSchema if `pandera` is available.
 
     `base_path` allows callers to control where `docs/schema.json` is
@@ -27,8 +30,12 @@ def get_pandera_schema(base_path: Optional[Path] = None):
     try:
         import pandera as pa
         from pandera import Column, DataFrameSchema
-    except Exception:
+    except ImportError:
+        # Optional dependency not installed: caller can treat this as "no schema"
         return None
+    except Exception:
+        logger.exception("Unexpected error while importing pandera")
+        raise
 
     if base_path is None:
         base_path = Path(__file__).resolve().parent.parent
@@ -37,8 +44,13 @@ def get_pandera_schema(base_path: Optional[Path] = None):
     if not schema_path.exists():
         return None
 
-    with schema_path.open("r", encoding="utf-8") as f:
-        spec = json.load(f)
+    try:
+        with schema_path.open("r", encoding="utf-8") as f:
+            spec = json.load(f)
+    except json.JSONDecodeError:
+        logger.exception("Invalid JSON in pandera schema file: %s", schema_path)
+        raise
+
     cols = spec.get("columns", [])
     mapping = {}
     for c in cols:
@@ -59,4 +71,7 @@ def get_pandera_schema(base_path: Optional[Path] = None):
     try:
         return DataFrameSchema(mapping)
     except Exception:
-        return None
+        logger.exception(
+            "Failed to construct pandera DataFrameSchema from %s", schema_path
+        )
+        raise

@@ -185,7 +185,15 @@ def main() -> None:
     # Sanitizar e validar `--outfile` para evitar path traversal.
     # Perform validation using os.path on the raw string before creating any Path.
     if args.outfile:
-        out_path_str = _extracted_from_main_48(args, out_dir)
+        try:
+            out_path_str = _extracted_from_main_48(
+                args.outfile,
+                out_dir,
+                args.allow_external,
+            )
+        except ValueError as e:
+            print(e, file=sys.stderr)
+            sys.exit(2)
     else:
         out_path_str = str(out_dir / default_name)
 
@@ -198,56 +206,54 @@ def main() -> None:
 
 
 # TODO Rename this here and in `main`
-def _extracted_from_main_48(args, out_dir) -> str:
-    if not isinstance(args.outfile, str):
-        print("Invalid --outfile value", file=sys.stderr)
-        sys.exit(2)
+def _extracted_from_main_48(outfile: str, out_dir: Path, allow_external: bool) -> str:
+    """Validate and normalize an --outfile value.
 
-    raw = args.outfile
+    Returns a resolved path string or raises ValueError on invalid input.
+    This helper does not perform CLI termination; callers should convert
+    exceptions to exit codes as appropriate.
+    """
+    if not isinstance(outfile, str):
+        raise ValueError("Invalid --outfile value")
+
+    raw = outfile
     if "\x00" in raw:
-        print("Invalid --outfile: contains null byte", file=sys.stderr)
-        sys.exit(2)
+        raise ValueError("Invalid --outfile: contains null byte")
 
     normalized = os.path.normpath(raw)
     is_abs = os.path.isabs(raw)
 
-    if not args.allow_external:
+    if not allow_external:
         allowed_dir = str(out_dir.resolve())
 
         if is_abs:
             real = os.path.realpath(raw)
             try:
                 common = os.path.commonpath([real, allowed_dir])
-            except ValueError:
-                print(
+            except ValueError as err:
+                raise ValueError(
                     (
-                        "Refusing to write output outside of dados/samples. "
-                        "Use --allow-external to override."
-                    ),
-                    file=sys.stderr,
-                )
-                sys.exit(2)
+                        "Refusing to write output outside of dados/samples."
+                        " Use --allow-external to override."
+                    )
+                ) from err
             if common != allowed_dir:
-                print(
+                raise ValueError(
                     (
-                        "Refusing to write output outside of dados/samples. "
-                        "Use --allow-external to override."
-                    ),
-                    file=sys.stderr,
+                        "Refusing to write output outside of dados/samples."
+                        " Use --allow-external to override."
+                    )
                 )
-                sys.exit(2)
             resolved_out = real
         else:
             # relative: disallow traversal
             if ".." in normalized.split(os.path.sep):
-                print(
+                raise ValueError(
                     (
-                        "Refusing to write output outside of dados/samples. "
-                        "Use --allow-external to override."
-                    ),
-                    file=sys.stderr,
+                        "Refusing to write output outside of dados/samples."
+                        " Use --allow-external to override."
+                    )
                 )
-                sys.exit(2)
             resolved_out = os.path.join(allowed_dir, normalized.lstrip(os.path.sep))
     else:
         # allow external: canonicalize

@@ -206,21 +206,19 @@ def save_invalid_rows(
         df_to_save = df_to_save.drop(columns=["_validation_errors"])
 
     try:
-        return _write_invalid_rows_with_checksum(
-            df_to_save, file_path, invalid_df, ticker
-        )
+        return _write_invalid_rows_with_checksum(df_to_save, file_path, ticker)
     except Exception as e:
         logger.exception(f"Failed to save invalid rows to {file_path}: {e}")
         return {
             "filepath": str(file_path),
             "checksum": None,
-            "rows": len(invalid_df),
+            "rows": len(df_to_save),
             "status": "error",
             "error_message": str(e),
         }
 
 
-def _write_invalid_rows_with_checksum(df_to_save, file_path, invalid_df, ticker):
+def _write_invalid_rows_with_checksum(df_to_save, file_path, ticker):
     """Persist invalid rows to a CSV file and generate a checksum sidecar.
 
     This helper writes a deterministic CSV representation of invalid rows,
@@ -256,11 +254,12 @@ def _write_invalid_rows_with_checksum(df_to_save, file_path, invalid_df, ticker)
     checksum_path = Path(f"{str(file_path)}.checksum")
     checksum_path.write_text(checksum)
 
-    logger.info(f"Saved {len(invalid_df)} invalid rows for {ticker} to {file_path}")
+    rows = len(df_to_save)
+    logger.info(f"Saved {rows} invalid rows for {ticker} to {file_path}")
 
     return {
         "filepath": str(file_path),
         "checksum": checksum,
-        "rows": len(invalid_df),
+        "rows": rows,
         "status": "success",
     }

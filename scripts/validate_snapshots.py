@@ -153,18 +153,18 @@ def write_manifest(
 def _extracted_from_write_manifest_7(path):
     raw = str(path)
     if "\x00" in raw:
-        raise SystemExit("Invalid manifest path: contains null byte")
+        raise ValueError("Invalid manifest path: contains null byte")
     real = os.path.realpath(raw)
     allowed_dir = str((_REPO_ROOT / "snapshots").resolve())
     try:
         common = os.path.commonpath([real, allowed_dir])
     except ValueError as err:
-        raise SystemExit(
+        raise OSError(
             f"Refusing to write manifest outside snapshots directory: {real}\n"
             "Pass --allow-external to override."
         ) from err
     if common != allowed_dir:
-        raise SystemExit(
+        raise OSError(
             f"Refusing to write manifest outside snapshots directory: {real}\n"
             "Pass --allow-external to override."
         )
@@ -181,7 +181,7 @@ def validate_and_resolve(
     if raw is None:
         return raw
     if "\x00" in raw:
-        raise SystemExit("Invalid path: contains null byte")
+        raise ValueError("Invalid path: contains null byte")
     try:
         normalized = os.path.normpath(raw)
     except Exception:
@@ -194,19 +194,19 @@ def validate_and_resolve(
             try:
                 common = os.path.commonpath([real, allowed_dir])
             except ValueError as err:
-                raise SystemExit(
+                raise OSError(
                     f"Refusing to use path outside snapshots directory: {real}\n"
                     "Pass --allow-external to override."
                 ) from err
             if common != allowed_dir:
-                raise SystemExit(
+                raise OSError(
                     f"Refusing to use path outside snapshots directory: {real}\n"
                     "Pass --allow-external to override."
                 )
             return real
         else:
             if ".." in normalized.split(os.path.sep):
-                raise SystemExit(
+                raise OSError(
                     f"Refusing to use path outside snapshots directory: {raw}\n"
                     "Pass --allow-external to override."
                 )
@@ -248,9 +248,9 @@ def main():
     try:
         dir_str = validate_and_resolve(args.dir, _SNAP, allow_external)
         manifest_str = validate_and_resolve(args.manifest, _SNAP, allow_external)
-    except SystemExit as e:
+    except (ValueError, OSError) as e:
         print(e)
-        raise
+        raise SystemExit(2) from e
 
     args.dir = Path(dir_str)
     args.manifest = Path(manifest_str)
