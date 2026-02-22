@@ -13,12 +13,15 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import logging
 import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from pathlib import Path as _Path
 from typing import Dict, Tuple
+
+logger = logging.getLogger(__name__)
 
 # Ensure repo root is on sys.path so `from src...` imports work when the
 # script is executed directly (e.g. `python scripts/validate_snapshots.py`).
@@ -184,8 +187,12 @@ def validate_and_resolve(
         raise ValueError("Invalid path: contains null byte")
     try:
         normalized = os.path.normpath(raw)
-    except Exception:
+    except (TypeError, ValueError) as err:
+        logger.warning("Failed to normalize path %r: %s; falling back to raw", raw, err)
         normalized = raw
+    except Exception:
+        # Unexpected error while normalizing path: re-raise so callers can see it
+        raise
     is_abs = os.path.isabs(raw)
     allowed_dir = str(allowed_base)
     if not allow_external:
@@ -227,8 +234,6 @@ def main():
     p.add_argument("--update", action="store_true", help="Regenerate manifest")
     args = p.parse_args()
 
-    # Resolve defaults from `src.paths` only after sys.path has been updated
-    # so running the script directly works in CI and locally.
     # Resolve defaults from `src.paths` only after sys.path has been updated
     # so running the script directly works in CI and locally.
     if args.dir is None or args.manifest is None:
