@@ -17,7 +17,49 @@ def _fetch_and_prepare_asset(
     d_fim: str,
     validation_tolerance: Optional[float],
 ) -> None:
-    """Helper to fetch, persist raw, map to canonical and validate an asset."""
+    """Fetch, persist raw data, map to canonical schema and optionally validate.
+
+    Parameters
+    ----------
+    a : str
+        Símbolo do ativo (ex.: 'PETR4').
+    d_in : str
+        Data inicial no formato esperado pelo provedor (ex.: 'MM-DD-YYYY').
+    d_fim : str
+        Data final no formato esperado pelo provedor (ex.: 'MM-DD-YYYY').
+    validation_tolerance : Optional[float]
+        Percentual (0.0-1.0) limite de linhas inválidas aceitáveis para não
+        abortar o ingest; `None` significa não aplicar threshold.
+
+    Side effects
+    ------------
+    - Faz download dos dados do provedor (via `src.dados_b3.cotacao_ativo_dia`).
+    - Persiste CSV bruto via `save_raw_csv` em `raw/<provider>/...`.
+    - Mapeia os dados para o esquema canônico com `to_canonical`.
+    - Se o módulo de validação estiver disponível, executa validação
+      (chama `validate_and_handle`) que pode persistir linhas inválidas e
+      registrar entradas em `metadata/ingest_logs.json`.
+    - Calcula a coluna `Return` (log-return) e salva um CSV em `DATA_DIR/{a}.csv`.
+
+    Errors / raises
+    ----------------
+    - Esta função captura exceções de download, mapeamento e persistência e
+      imprime mensagens de erro, retornando `None` para interromper o fluxo
+      daquele ativo; erros de baixo nível de DB/FS podem propagar se não
+      tratados internamente.
+    - Quando a validação excede o threshold e a função de validação aborta,
+      o ingest é interrompido para aquele ativo.
+
+    Returns
+    -------
+    None
+
+    Notes
+    -----
+    - A função é intencionalmente tolerante a dependências ausentes: o
+      módulo de validação é importado dinamicamente e ignorado se não
+      estiver disponível, permitindo execução em ambientes leves.
+    """
 
     from datetime import datetime
     from datetime import timezone as _tz
