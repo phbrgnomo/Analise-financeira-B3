@@ -1,7 +1,8 @@
 CI helpers for repository
 
-- `smoke.sh`: script de smoke test executado pelo job `smoke` no workflow CI.
+**Scripts para auxiliar na execução de testes e validações no workflow de CI.**
 
-Guidance:
-- Place mock fixtures and helper functions here to support CI deterministic runs.
-- Keep external network calls mocked using `pytest` fixtures and monkeypatching.
+- `ci_orcestrator.py`: script Python para orquestrar a execução dos scripts de CI e coletar resultados.
+- `smoke.sh`: script de smoke test executado pelo job `smoke` no workflow CI.
+- `integration.sh`: script de teste de integração executado pelo job `integration` no workflow CI.
+- `lint.sh`: script de lint executado pelo job `lint` no workflow CI.

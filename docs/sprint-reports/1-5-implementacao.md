@@ -54,6 +54,26 @@ Racional das decisões de implementação
 - Importações locais em pontos críticos (ex.: `main.py`, helpers de persistência): reduzem overhead no startup do CLI (`--help`) e evitam exigir dependências pesadas em ambientes que só consultam a documentação.
 - Testes e smoke runner: incluídos para permitir verificação rápida sem instalar toda a stack (smoke runner) e manter conjunto de testes `pytest` para CI.
 
+## Atualizações da implementação — Story 1-5
+
+Resumo das alterações implementadas para a história "Validar estrutura CSV e filtrar flag rows inválidas":
+
+- `src/validation.py`
+  - `validate_and_handle`: integração de validação + persistência + logging + threshold.
+  - Normalização: conversão de `date` para timezone-aware, coercion de `open/high/low/close` para numérico e `volume` para `Int64`.
+  - Extração de falhas: heurística para mapear checagens DataFrame (ex.: `high > low`) às linhas específicas quando possível.
+  - Persistência: `persist_invalid_rows` escreve CSVs em `raw/<provider>/invalid-<ticker>-<ts>.csv`.
+  - Logging: `log_invalid_rows` append em `metadata/ingest_logs.json` com detalhes e contagem.
+
+- Tests adicionados:
+  - `tests/test_validation_persistence.py` — valida persistência e log em `tmp_path`.
+  - `tests/test_validation_normalize.py` — valida coercion de tipos e normalização de datas.
+
+Como usar:
+
+1. Ajuste a variável de ambiente `VALIDATION_INVALID_PERCENT_THRESHOLD` (ex: `0.10` ou `10`) para mudar o threshold padrão.
+2. A CLI já expõe `--validation-tolerance` e será repassada ao pipeline.
+
 Observações e próximos passos:
 
 
