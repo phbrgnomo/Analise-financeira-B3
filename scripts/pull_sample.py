@@ -186,7 +186,7 @@ def main() -> None:
     # Perform validation using os.path on the raw string before creating any Path.
     if args.outfile:
         try:
-            out_path_str = _extracted_from_main_48(
+            out_path_str = _validate_and_nomalize_outfile(
                 args.outfile,
                 out_dir,
                 args.allow_external,
@@ -206,7 +206,11 @@ def main() -> None:
 
 
 # TODO Rename this here and in `main`
-def _extracted_from_main_48(outfile: str, out_dir: Path, allow_external: bool) -> str:
+def _validate_and_nomalize_outfile(
+    outfile: str,
+    out_dir: Path,
+    allow_external: bool,
+) -> str:
     """Validate and normalize an --outfile value.
 
     Returns a resolved path string or raises ValueError on invalid input.
