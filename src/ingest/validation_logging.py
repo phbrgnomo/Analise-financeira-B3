@@ -90,8 +90,8 @@ def log_invalid_rows(
         # Append new entries
         existing.extend(log_entries)
 
-        # Write atomically
-        tmp = metadata_path.with_suffix(".tmp")
+        # Write atomically using consistent .json.tmp suffix
+        tmp = metadata_path.with_suffix(".json.tmp")
         tmp.write_text(json.dumps(existing, ensure_ascii=False, indent=2))
         os.replace(str(tmp), str(metadata_path))
 
