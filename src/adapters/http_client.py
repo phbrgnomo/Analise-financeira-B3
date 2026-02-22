@@ -42,7 +42,7 @@ class RequestsHTTPClient:
         url: str,
         params: Optional[Dict[str, Any]] = None,
         timeout: Optional[float] = None,
-    ):
+    ) -> Any:
         resp = self._requests.get(url, params=params, timeout=timeout)
         resp.raise_for_status()
         return resp
