@@ -3,7 +3,7 @@
 Este playbook descreve os passos mínimos para reproduzir o fluxo ingest→persist→snapshot→notebook usando um ticker de amostra.
 
 Pré-requisitos
-- Python 3.14+ (virtual env/poetry recomendado)
+- Python 3.12+ (virtual env/poetry recomendado)
 - Dependências instaladas: `poetry install` (ou conforme `pyproject.toml`)
 - Banco local SQLite em `dados/data.db` (o projeto cria quando necessário)
 
@@ -19,6 +19,9 @@ poetry run main --ticker PETR4.SA --force-refresh
 - Snapshot CSV: `snapshots/PETR4_snapshot.csv`
 - Banco SQLite: `dados/data.db`
 - Relatórios derivados: `reports/PETR4_report.csv` (quando aplicável)
+ - Raw provider CSVs: `raw/<provider>/<TICKER>-YYYYMMDDTHHMMSSZ.csv`
+ - Checksum ao lado do raw CSV: `raw/<provider>/<TICKER>-YYYYMMDDTHHMMSSZ.csv.checksum`
+ - Metadados de ingestão (JSON): `metadata/ingest_logs.json` (array de objetos com `job_id, source, fetched_at, raw_checksum, rows, filepath, status, created_at`)
 
 Verificações mínimas
 
@@ -35,6 +38,15 @@ sha256sum snapshots/PETR4_snapshot.csv
 # Exemplo de saída:
 # e3b0c44298fc1c149afbf4c8996fb924...  snapshots/PETR4_snapshot.csv
 ```
+
+Verificar raw provider e metadados
+
+```bash
+ls -l raw/yfinance/PETR4.SA-*.csv
+cat metadata/ingest_logs.json | jq '.[-1]'
+```
+
+Observação: a implementação atual grava metadados em `metadata/ingest_logs.json`. Para exigir permissões owner-only nos artefatos, chame a função com `set_permissions=True` ou aplique `chmod 600` manualmente.
 
 - Abrir notebook de análise (ex.: `notebooks/quickstart.ipynb`) e executar células necessárias para gerar os plots esperados.
 

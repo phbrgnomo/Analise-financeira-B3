@@ -1,0 +1,36 @@
+name: Checksums for snapshots
+
+on:
+  push:
+    branches:
+      - master
+      - main
+  pull_request: {}
+
+jobs:
+  validate-snapshots:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install Poetry and project dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install poetry
+          # Ensure Poetry creates the venv inside the project for CI
+          poetry config virtualenvs.in-project true
+          poetry install --no-interaction
+
+      - name: Validate snapshots manifest
+        run: |
+          python scripts/validate_snapshots.py --dir snapshots --manifest snapshots/checksums.json
+
+      - name: Run tests
+        run: |
+          # Run tests inside Poetry-managed venv so installed deps (pandas) are visible
+          poetry run pytest -q

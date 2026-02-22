@@ -23,7 +23,7 @@ so that I can quickly inspect price and return series and validate end‑to‑en
 2. UI inputs: selectable `ticker` (autocomplete from DB or provided list), `start_date`, `end_date`, and a `refresh`/`force-refresh` toggle for reloading data if needed.
 3. Data source: reads from `dados/data.db` through the project's DB layer (use `db.read_prices(ticker, start, end)` contract). No direct raw file parsing in the app.
 4. Displays at minimum:
-   - Time series chart for `close` / `adj_close` prices
+  - Time series chart for `close` prices (support `adj_close` if available for adjusted-series)
    - Time series chart for daily returns (simple pct change) with selectable annualization note
    - Summary statistics: rows loaded, date range, checksum of the underlying snapshot (if applicable)
 5. The app handles empty results gracefully (user-friendly message and suggested next steps).

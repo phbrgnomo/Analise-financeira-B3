@@ -1,0 +1,10 @@
+{
+  "ticker": "PETR4.SA",
+  "snapshot_date": "2026-02-21",
+  "rows": 1024,
+  "checksum": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "schema_version": "1.0.0",
+  "source": "yfinance",
+  "generated_by": "pipeline-v0.1",
+  "rows_summary": {"min_date": "2020-01-01", "max_date": "2026-02-20", "count": 1024}
+}

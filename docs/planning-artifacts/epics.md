@@ -176,7 +176,7 @@ So that I can reproduce the quickstart experiment in ≤ 30 minutes.
 
 **Acceptance Criteria:**
 
-**Given** a developer on a fresh machine with Python 3.14 and Poetry
+**Given** a developer on a fresh machine with Python 3.12 and Poetry
 **When** they follow the README quickstart steps
 **Then** they can run `poetry install` and `poetry run main --help` and execute a sample quickstart command
 **And** the README lists example tickers and expected output locations (`snapshots/`, `dados/`).
@@ -204,7 +204,7 @@ So that pull requests verify project health automatically.
 
 **Given** a push or PR to any branch
 **When** GitHub Actions runs the `ci.yml`
-**Then** it runs a lightweight CI matrix (Python 3.14) with steps:
+**Then** it runs a lightweight CI matrix (Python 3.12) with steps:
 
 - `poetry install --no-dev` (install runtime deps for quick smoke)
 - `poetry install` (install dev deps)
@@ -320,7 +320,8 @@ So that downstream modules can rely on a consistent format for persistence and p
 
 **Given** a raw `DataFrame` from `yfinance` adapter
 **When** the canonical mapper is executed
-**Then** it returns a `DataFrame` with canonical columns (`ticker`, `date`, `open`, `high`, `low`, `close`, `adj_close`, `volume`, `source`, `fetched_at`)
+**Then** it returns a `DataFrame` with canonical columns (`ticker`, `date`, `open`, `high`, `low`, `close`, `volume`, `source`, `fetched_at`).
+**Nota:** o mapper pode opcionalmente emitir `adj_close` para cálculos internos (ex.: retornos), porém o esquema persistido é definido por `docs/schema.json` e não inclui `adj_close` por padrão. Atualize `docs/schema.json` para persistir `adj_close` quando necessário e siga o processo de versionamento/migração.
 **And** it computes `raw_checksum` for the raw payload and includes it in the metadata.
 **And** `fetched_at` is normalized to UTC ISO8601 and date handling (timezones) is explicitly documented.
 **And** the mapper includes a lightweight `pandera` schema for validation in the canonical step.
@@ -686,8 +687,8 @@ So that users immediately know where to look for generated artifacts.
 - README quickstart must include a copy-paste command and an expected JSON/text short summary example (see Story 3.1) and an example CSV header plus checksum line, e.g.:
 
   ```csv
-  date,open,high,low,close,adj_close,volume
-  2026-02-14,10.0,10.5,9.8,10.2,10.2,100000
+  date,open,high,low,close,volume
+  2026-02-14,10.0,10.5,9.8,10.2,100000
   # checksum: sha256:<hex>
   ```
 
@@ -874,8 +875,8 @@ Recomendações operacionais e exemplos executáveis aplicáveis às histórias 
 - Exemplo CSV + checksum (formato esperado para snapshots):
 
   ```csv
-  date,open,high,low,close,adj_close,volume
-  2026-02-14,10.0,10.5,9.8,10.2,10.2,100000
+  date,open,high,low,close,volume
+  2026-02-14,10.0,10.5,9.8,10.2,100000
   # checksum: sha256:<hex>
   ```
 

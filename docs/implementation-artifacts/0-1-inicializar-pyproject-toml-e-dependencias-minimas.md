@@ -23,7 +23,7 @@ para que eu possa instalar e executar o projeto e os testes de forma consistente
 
 - Mantenha as versões conservadoras e explicitamente fixadas para garantir reprodutibilidade nas fases iniciais.
 - Siga o layout do projeto conforme descrito em `docs/planning-artifacts/architecture.md` na seção ## Project Structure & Boundaries.
-- Garanta compatibilidade com Python 3.14, conforme indicado nos artefatos de planejamento.
+- Garanta compatibilidade com Python 3.12, conforme indicado nos artefatos de planejamento.
 
 ### Project Structure Notes
 

@@ -29,6 +29,8 @@ pip-delete-this-directory.txt
 coverage.xml
 htmlcov/
 .ruff_cache/
+reports/junit.xml
+metadata/
 
 # MyPy cache
 .mypy_cache/
@@ -62,6 +64,8 @@ __pycache__/
 
 # Ignore generated snapshots created during CI/test runs
 snapshots_test/
+
+.sentry-native/
 
 # Snyk Security Extension - AI Rules (auto-generated)
 .github/instructions/snyk_rules.instructions.md

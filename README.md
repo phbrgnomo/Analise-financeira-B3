@@ -1,122 +1,157 @@
-## Análise de dados da B3
+# Análise Financeira — B3
 
-Este projeto visa utilizar dados da B3 para análise financeira
+[![CI](https://github.com/phbrgnomo/Analise-financeira-B3/actions/workflows/ci.yml/badge.svg)](https://github.com/phbrgnomo/Analise-financeira-B3/actions/workflows/ci.yml) [![Python](https://img.shields.io/badge/python-3.12%2B-blue)](https://www.python.org/)
 
-Esse projeto tem a finalidade apenas de aprendizado. Use pelo seu próprio risco.
+Ferramenta leve para coletar dados de mercados (B3), calcular retornos e métricas de risco, e gerar relatórios simples a partir de séries históricas.
 
-<!-- CI badge -->
-![CI](https://github.com/phbrgnomo/Analise-financeira-B3/actions/workflows/ci.yml/badge.svg)
+**Status:** Projeto experimental / utilitários para análise local
 
-## Plano de implementação
+> Visão rápida: coleta dados via Yahoo Finance (adaptador em `src/dados_b3.py`), calcula retornos e estatísticas em `src/retorno.py` e tem um entrypoint em `src/main.py`.
 
-- `[]`Coleta de preços
-- `[]`Cálculo de retorno, variancia, risco(volatilidade), e outras estatísticas
-- `[]`Cálculo de correlação entre diferentes ativos
-- `[]`Cálculo de Carteira eficiente usando Teoria de Markovitz
-- `[]`Cáclulo de carteira utilizando CAPM
-- `[]`Modelo Black-Litterman
+## Recursos principais
+- Coleta de cotações OHLC/Adj Close para ativos B3 (sufixo `.SA`).
+- Cálculo de retornos diários e métricas de risco (volatilidade, conversões anuais).
+- Estrutura para persistir séries em CSV em `dados/` e snapshots em `snapshots/`.
+- Scripts de exemplo e fixtures para testes em `tests/`.
 
-## Possíveis implementações futuras
-- `[]`Adicionar mercados de criptos
+## Pré-requisitos
+- Python 3.12+ (recomendado)
+- poetry (para gerenciar ambiente e dependências)
 
-## Configuração local (env)
+## Configuração (variáveis de ambiente)
 
-Para configurar variáveis de ambiente locais, copie o arquivo de exemplo:
+Algumas configurações podem ser alteradas via variáveis de ambiente. Um
+exemplo está em `.env.example` — copie para `.env` e ajuste conforme
+necessário.
+
+- **VALIDATION_INVALID_PERCENT_THRESHOLD**: limite percentual usado pelo
+  processo de validação para considerar uma operação como inválida. Valor
+  padrão: `0.1` (10%). Deve ser um número decimal entre `0` e `1` (por
+  exemplo `0.05` para 5%). Para sobrescrever localmente, adicione em
+  `.env`:
 
 ```
-cp .env.example .env
+VALIDATION_INVALID_PERCENT_THRESHOLD=0.05
 ```
 
-Preencha os valores em `.env`. Variáveis importantes:
-- `YF_API_KEY` (opcional) — chave para provedores quando necessário
-- `DATA_DIR` — diretório de dados local (padrão `./dados`)
-- `SNAPSHOT_DIR` — onde snapshots CSV são gravados (padrão `./snapshots`)
-- `LOG_LEVEL` — `INFO` por padrão
-
-Nunca comite seu arquivo `.env` com segredos reais.
+  Isso permite reduzir ou aumentar a sensibilidade da validação conforme o
+  contexto (ex.: aceitar até 5% de linhas inválidas antes de tratar como
+  falha).
 
 ## Quickstart
 
-Instalação (recomenda-se usar `poetry`):
+1. Instale dependências (com `poetry`):
 
 ```bash
 poetry install
 ```
 
-Executar a CLI de ajuda:
+2. Execute a aplicação (entrypoint):
 
 ```bash
-poetry run main --help
-# ou, sem poetry (ambiente já configurado):
-python -m src.main --help
+poetry run main
+# ou alternativamente
+python -m src.main
 ```
 
-Rodar testes:
+3. Exemplos e testes rápidos:
 
 ```bash
 poetry run pytest -q
+./examples/run_quickstart_example.sh
 ```
 
-Playbooks úteis:
+### Modo de testes de rede (NETWORK_MODE)
 
-- [Quickstart: ingest → persist → snapshot → notebook](docs/playbooks/quickstart-ticker.md)
-- [UX Playbook (mínimo)](docs/playbooks/ux.md)
+Para reduzir flakiness em CI, os testes que dependem de chamadas de rede rodam
+por padrão em modo `playback`, usando fixtures determinísticas.
 
-- CI Quick Reference
-
-- O workflow CI roda em pull requests para qualquer branch, e em pushes apenas nas branches protegidas `main`/`master`.
-- Jobs principais: `lint`, `test`, `smoke`.
-- `test` executa `poetry install` e `pytest` gerando `reports/junit.xml`.
-- `smoke` executa uma instalação rápida (`poetry install --no-dev`) e roda `tests/ci/smoke.sh`.
-- Em caso de falha o CI faz upload dos artifacts (relatórios e logs) para auxiliar debugging.
-
-Para mais detalhes, veja `.github/workflows/ci.yml` e `tests/ci/README.md`.
-
-Habilitar `pre-commit` hooks (já configurado no projeto):
+- Execução local (playback, padrão):
 
 ```bash
-poetry run pre-commit install
-poetry run pre-commit run --all-files
+poetry run pytest
 ```
 
-Local de dados e snapshots:
-
-- `dados/` — CSVs por ativo (gerados por `src.main`)
-- `snapshots/` — snapshots gerados pela pipeline
-
-### Validando snapshots localmente
-
-- Gerar snapshot usando a CLI em modo sample (sem rede):
+- Atualizar gravações/usar rede (modo `record`) — execute apenas em ambiente controlado:
 
 ```bash
-export SNAPSHOT_DIR=./snapshots
-poetry run main --no-network --ticker PETR4.SA
+NETWORK_MODE=record poetry run pytest tests/adapters/test_adapters.py::TestYFinanceAdapter::test_fetch
 ```
 
-- Verificar o arquivo e o checksum gerado:
+As instruções completas e o playbook estão em `docs/playbooks/testing-network-fixtures.md`.
+
+## Uso e convenções
+- Ao coletar ativos da B3 via Yahoo, adicione o sufixo `.SA` (ex.: `PETR4.SA`).
+- Dados persistidos ficam na pasta `dados/` em CSV com coluna `Return` para retornos diários.
+- Cálculos anuais usam 252 dias úteis por convenção do projeto.
+
+## Estrutura do repositório (resumo)
+- `src/` — código principal
+  - `src/main.py` — entrypoint do CLI
+  - `src/dados_b3.py` — adaptador / ingestão de preços
+  - `src/retorno.py` — cálculos de retorno/risco
+- `dados/` — CSVs de séries históricas e outputs gerados
+- `snapshots/` — snapshots e checksums para validação
+- `tests/` — testes unitários e fixtures
+- `docs/` — documentação e playbooks do projeto
+
+## Desenvolvimento
+
+- Formatação e lint:
 
 ```bash
-ls -l snapshots
-sha256sum snapshots/PETR4_snapshot.csv
-cat snapshots/PETR4_snapshot.csv.checksum
+# Usar ruff e black conforme configuração do projeto
+poetry run ruff check src tests
 ```
 
-- Gerar manualmente um snapshot de teste (alternativa sem depender da CLI):
+- Executar testes:
 
 ```bash
-python - <<'PY'
-import csv, os
-from src.utils.checksums import sha256_file
-os.makedirs('snapshots', exist_ok=True)
-p='snapshots/PETR4_snapshot.csv'
-with open(p,'w',newline='') as f:
-	writer=csv.writer(f)
-	writer.writerow(['ticker','date','open','high','low','close','adj_close','volume'])
-	writer.writerow(['PETR4','2024-01-01','10','10.2','9.8','10.1','10.1','1000'])
-ch=sha256_file(p)
-open(p+'.checksum','w').write(ch)
-print('snapshot',p,'checksum',ch)
-PY
+poetry run pytest
 ```
 
-Documentação adicional no diretório `docs/`.
+## Arquivos úteis
+- Exemplos e playbooks: `docs/playbooks/` e `examples/`
+- Scripts úteis: `scripts/install-hooks.sh`, `examples/run_quickstart_example.sh`
+
+## Exemplo: Checksums
+
+Há um exemplo prático que demonstra o uso de `src.utils.checksums`:
+
+- Arquivo: [examples/checksums_example.py](examples/checksums_example.py)
+- Teste associado: [tests/test_checksums.py](tests/test_checksums.py)
+
+Como usar:
+
+```bash
+python examples/checksums_example.py
+```
+
+O script calcula o SHA256 do arquivo de exemplo `snapshots/PETR4_snapshot_test.csv` e grava um arquivo `*.checksum` ao lado do CSV.
+
+## Onde ler mais
+- Documentação e planejamento do projeto em `docs/`.
+- Para entender o fluxo de ingestão e esquema canônico, veja [docs/implementation-artifacts/1-11-definir-esquema-canonico-de-dados-e-documentacao-do-modelo-schema-examples.md](docs/implementation-artifacts/1-11-definir-esquema-canonico-de-dados-e-documentacao-do-modelo-schema-examples.md).
+
+- Guia de implementação de adaptadores: [docs/modules/adapter-guidelines.md](docs/modules/adapter-guidelines.md)
+- Checklist de PR para adaptadores: [docs/modules/adapter-pr-checklist.md](docs/modules/adapter-pr-checklist.md)
+
+## Operational Notes: Raw files & metadata
+
+- Raw CSV files are written to `raw/<provider>/` with pattern `<ticker>-YYYYMMDDTHHMMSSZ.csv`.
+- A SHA256 checksum is written alongside each CSV as `*.checksum`.
+- In this implementation metadados de ingestão são persistidos em `metadata/ingest_logs.json` (JSON array).
+- Recomenda-se proteger artefatos sensíveis com permissões owner-only. Para aplicar localmente:
+
+```bash
+# tornar arquivos de metadados e raw inacessíveis a outros usuários
+chmod -R 600 metadata dados/raw
+```
+
+Se quiser que o pipeline aplique permissões automaticamente, a função `save_raw_csv` aceita o parâmetro `set_permissions=True` (aplica `chmod 600` em sistemas POSIX).
+
+Nota: a gravação de metadados em JSON é uma escolha inicial; uma migração para SQLite/Postgres pode ser feita posteriormente quando for necessário transacionamento/concorrência.
+
+---
+
+Se você quiser, eu posso: gerar badges adicionais (coverage, PyPI quando aplicável), adicionar exemplos de uso com parâmetros do `src.main`, ou abrir um PR com pré-commit configurado. Qual próximo passo prefere?

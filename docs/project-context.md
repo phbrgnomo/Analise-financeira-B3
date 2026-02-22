@@ -21,7 +21,7 @@ _Arquivo enxuto com regras críticas e padrões que agentes de IA devem seguir a
 - SQLAlchemy: ^2.0.18
 - typer: ^0.9.0 (entrypoint: `src.main:app`)
 - python-dotenv: ^1.0.0
-- Dev: pytest ^7.4.0, black ^24.10.0, ruff ^0.14.14, pre-commit ^3.3.0
+- Dev: pytest ^7.4.0, ruff ^0.14.14, pre-commit ^3.3.0
 
 Observação: seguir estritamente as versões definidas em `pyproject.toml`; documente e justifique qualquer mudança de versão.
 
@@ -31,7 +31,7 @@ Observação: seguir estritamente as versões definidas em `pyproject.toml`; doc
 
 - Use `poetry` para instalação e execução (`poetry install`, `poetry run main`).
 - Evite impor dependências no import global: importe módulos pesados dentro de funções quando apropriado (padrão já aplicado em `src/main.py`).
-- Respeite convenções de formato (`black`, `ruff`) com length=88 antes de commitar; execute `pre-commit` localmente.
+- Respeite convenções de formato (`ruff`) com length=88 antes de commitar; execute `pre-commit` localmente.
 - Nunca comitar segredos; use `.env` (não versionar) e `python-dotenv` para carregamento local.
 
 ### Regras de Dados e Persistência

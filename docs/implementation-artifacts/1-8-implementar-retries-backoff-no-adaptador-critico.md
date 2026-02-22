@@ -1,6 +1,6 @@
  # Story 1.8: Implementar retries/backoff no adaptador crítico
 
- Status: ready-for-dev
+ Status: done
 
  ## Story
 
@@ -20,15 +20,16 @@
 
  ## Tasks / Subtasks
 
- - [ ] Task 1: Implementar utilitário de retries/backoff
-   - [ ] Subtask 1.1: Implementar função `retry_with_backoff` com parametros configuráveis
-   - [ ] Subtask 1.2: Adicionar tratamento de exceções e lógica de retry-on-status
- - [ ] Task 2: Integrar utilitário no adaptador crítico
-   - [ ] Subtask 2.1: Identificar pontos de chamada (client HTTP / IO) e aplicar wrapper
- - [ ] Task 3: Expor configuração via arquivo/env (ex.: `ADAPTER_RETRY_MAX_ATTEMPTS`)
- - [ ] Task 4: Adicionar logs e métricas (preferência por formato JSON/structured)
- - [ ] Task 5: Escrever testes unitários e de integração com mocks
- - [ ] Task 6: Atualizar documentação do adaptador e exemplos de uso
+ - [x] Task 1: Implementar utilitário de retries/backoff
+   - [x] Subtask 1.1: Implementar função `retry_with_backoff` com parametros configuráveis
+   - [x] Subtask 1.2: Adicionar tratamento de exceções e lógica de retry-on-status
+ - [x] Task 2: Integrar utilitário no adaptador crítico
+   - [x] Subtask 2.1: Identificar pontos de chamada (client HTTP / IO) e aplicar wrapper
+ - [x] Task 3: Expor configuração via arquivo/env (ex.: `ADAPTER_RETRY_MAX_ATTEMPTS`)
+ - [x] Task 4: Adicionar logs e métricas (preferência por formato JSON/structured)
+ - [x] Task 5: Escrever testes unitários e de integração com mocks
+ - [x] Task 6: Atualizar documentação do adaptador e exemplos de uso
+ - [x] Documentar o que foi implantado nessa etapa em `docs/sprint-reports` conforme definido no FR28 (`docs/planning-artifacts/prd.md`)
 
  ## Dev Notes
 

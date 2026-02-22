@@ -36,6 +36,7 @@ so that downstream notebooks and modeling code can read precomputed returns.
 - [ ] Add unit tests in `tests/` for happy path and edge cases (missing dates, duplicated runs)
 - [ ] Add minimal CLI entrypoint: `main compute-returns --ticker <TICKER> [--start] [--end] [--dry-run]`
 - [ ] Document annualization and conventions in code comments and `docs/` (reference to `conv_retorno` if exists)
+- [ ] Documentar o que foi implantado nessa etapa em `docs/sprint-reports` conforme definido no FR28 (`docs/planning-artifacts/prd.md`)
 
 ## Dev Notes
 

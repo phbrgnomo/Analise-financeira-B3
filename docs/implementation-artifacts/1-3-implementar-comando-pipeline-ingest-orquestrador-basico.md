@@ -29,6 +29,7 @@ so that I can trigger an end-to-end ingest using the minimal adapter and mapper.
   - [ ] Subtask 2.4: Emit structured logs including `job_id`, timings and row counts
 - [ ] Task 3: CLI integration tests (smoke)
   - [ ] Subtask 3.1: Add a mocked adapter fixture to run ingest in `--dry-run` and assert orchestration flow
+- [ ] Documentar o que foi implantado nessa etapa em `docs/sprint-reports` conforme definido no FR28 (`docs/planning-artifacts/prd.md`)
 
 ## Dev Notes
 

@@ -18,17 +18,33 @@ so that only valid rows enter the canonical pipeline and invalid rows are tracea
 4. Invalid rows are persisted (CSV and/or DB) with clear reason codes and a trace to source raw file and row index.
 5. Provide unit tests covering: fully valid file, file with <10% invalid rows (passes), file with >=10% invalid rows (aborts), and edge cases (empty file, missing columns).
 
+## Implementation Status
+
+Status: done
+
+Summary of what was delivered against the Acceptance Criteria:
+
+- Validation API: `validate_dataframe(df, schema)` returns `(valid_df, invalid_df, summary)` and `validate_and_handle(...)` performs validation, persistence of invalid rows, logging and threshold enforcement.
+- Persistence & Logging: invalid rows written to `raw/<provider>/invalid-<ticker>-<ts>.csv` and referenced in `metadata/ingest_logs.json` with `reason_code`, `reason_message`, `row_index` and `created_at`.
+- Threshold: default 10% enforced; configurable via `VALIDATION_INVALID_PERCENT_THRESHOLD` and CLI flag `--validation-tolerance`.
+- Tests: unit tests added and adjusted — `tests/test_validation.py`, `tests/test_validation_persistence.py`, and `tests/test_validation_normalize.py` cover key scenarios.
+- CLI: `src/main.py` accepts `--validation-tolerance` and propagates it into the pipeline.
+
+All unit tests pass locally (`poetry run pytest` at implementation time).
+
 ## Tasks / Subtasks
 
-- [ ] Implement `validation` module with `validate_dataframe(df, schema) -> (valid_df, invalid_df, summary)`
-  - [ ] Define `pandera` schema (or equivalent) for canonical columns: `ticker, date, open, high, low, close, adj_close, volume, source, fetched_at`
-  - [ ] Map provider raw columns to canonical names prior to validation (use existing `canonical mapper` when available)
-- [ ] Implement logging into `ingest_logs` for invalid rows with fields: `ticker, source, raw_file, row_index, reason_code, reason_message, job_id, created_at`
-- [ ] Persist invalid rows to `raw/<provider>/invalid-<ticker>-<ts>.csv` (or a dedicated `invalid/` folder) with checksum and reference in `ingest_logs`
-- [ ] Expose configurable env var `VALIDATION_INVALID_PERCENT_THRESHOLD` (default `0.10`) and ensure it can be overridden
-- [ ] Add CLI flag `--validation-tolerance` to `pipeline.ingest` (optional, falls back to env var)
-- [ ] Add unit/integration tests in `tests/` exercising validator behavior and thresholds
-- [ ] Document the validator usage and configuration in `docs/playbooks/quickstart-ticker.md` and `docs/phase-1-report.md`
+- [x] Implement `validation` module with `validate_dataframe(df, schema) -> (valid_df, invalid_df, summary)`
+  - [x] Define `pandera` schema (or equivalent) for canonical columns as persisted in `docs/schema.json` (e.g.: `ticker, date, open, high, low, close, volume, source, fetched_at`).
+    - Nota: `adj_close` é opcional no mapper para cálculos internos; atualize `docs/schema.json` e a validação se for necessário persistir `adj_close`.
+  - [x] Map provider raw columns to canonical names prior to validation (use existing `canonical mapper` when available)
+- [x] Implement logging into `ingest_logs` for invalid rows with fields: `ticker, source, raw_file, row_index, reason_code, reason_message, job_id, created_at`
+- [x] Persist invalid rows to `raw/<provider>/invalid-<ticker>-<ts>.csv` (or a dedicated `invalid/` folder) with checksum and reference in `ingest_logs`
+- [x] Expose configurable env var `VALIDATION_INVALID_PERCENT_THRESHOLD` (default `0.10`) and ensure it can be overridden
+- [x] Add CLI flag `--validation-tolerance` to `pipeline.ingest` (optional, falls back to env var)
+- [x] Add unit/integration tests in `tests/` exercising validator behavior and thresholds
+- [x] Document the validator usage and configuration in `docs/playbooks/quickstart-ticker.md` and `docs/phase-1-report.md`
+- [x] Documentar o que foi implantado nessa etapa em `docs/sprint-reports` conforme definido no FR28 (`docs/planning-artifacts/prd.md`)
 
 ## Dev Notes
 

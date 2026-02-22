@@ -60,8 +60,8 @@ Objetivo: definir o techstack ideal para a implementação da ferramenta de apre
 ## Arquitetura proposta (mínima)
 
 - Coleta: scripts em `src/dados_b3.py` usando `yfinance`/`pandas-datareader` para obter OHLCV
-- Persistência: escrever em tabela `prices(ticker, date, open, high, low, close, adj_close, volume)` no arquivo `dados/data.db` (SQLite)
-- ETL: processar `adj_close` para cálculo de retornos e gravar em `returns(ticker, date, return)`
+ - Persistência: escrever em tabela `prices(ticker, date, open, high, low, close, volume)` no arquivo `dados/data.db` (SQLite). Observação: `adj_close` pode ser emitido pelo mapper para cálculos, mas não é persistido por padrão — `docs/schema.json` define o esquema persistido.
+ - ETL: quando disponível, usar `adj_close` para cálculo de retornos ajustados; caso contrário, usar `close`. Persistência de retornos pode usar a coluna apropriada conforme schema e requisitos.
 - Cálculos: usar `src/retorno.py` para funções de volatilidade, correlação e matrizes de covariância
 - Otimização: camada que consome DataFrame de retornos e chama PyPortfolioOpt/CVXPY
 - Visualização: notebooks e um app Streamlit que lê do SQLite e exibe resultados e fronteira eficiente

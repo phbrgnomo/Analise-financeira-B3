@@ -18,11 +18,13 @@ so that repeated ingests do not create duplicate records and the database remain
 ## Tasks / Subtasks
 
 - [ ] Implementar módulo `src.db` com funções `write_prices(df: pd.DataFrame, ticker: str)` e `read_prices(ticker, start=None, end=None)`
-  - [ ] Definir esquema da tabela `prices` com PK (`ticker`, `date`) e colunas: `open, high, low, close, adj_close, volume, source, fetched_at, raw_checksum`
+  - [ ] Definir esquema da tabela `prices` com PK (`ticker`, `date`) e colunas: `open, high, low, close, volume, source, fetched_at, raw_checksum`
+  - [ ] Nota: `adj_close` pode ser emitido pelo mapper para uso em cálculos (ex.: retornos), mas não é persistido por padrão. Se for necessário persistir `adj_close`, atualize `docs/schema.json` e introduza versão/migração apropriada.
   - [ ] Implementar upsert por `(ticker, date)` usando SQLAlchemy/Core ou `pandas.to_sql` + `ON CONFLICT` raw SQL
   - [ ] Gravar/atualizar `schema_version` na tabela `metadata` a cada alteração importante do esquema
   - [ ] Adicionar permissões recomendadas (documentar `chmod 600` para `dados/data.db`)
   - [ ] Escrever testes unitários usando SQLite in-memory que validem idempotência (inserir 2x → mesma contagem)
+- [ ] Documentar o que foi implantado nessa etapa em `docs/sprint-reports` conforme definido no FR28 (`docs/planning-artifacts/prd.md`)
 
 ## Dev Notes
 

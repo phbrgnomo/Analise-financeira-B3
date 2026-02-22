@@ -1,4 +1,3 @@
-```markdown
 # Story 1.9: Garantir execução concorrente segura por ticker (lock simples)
 
 Status: ready-for-dev
@@ -29,6 +28,7 @@ so that we avoid contention and potential SQLite corruption.
 - [ ] Add logging to `ingest_logs` with fields: `ticker`, `job_id`, `started_at`, `finished_at`, `status`, `lock_action`, `lock_waited_seconds`
 - [ ] Add unit/integration tests that spawn two concurrent ingest processes and assert one waits or exits as configured
 - [ ] Update CLI docs and playbook with `INGEST_LOCK_TIMEOUT_SECONDS` and example behavior
+- [ ] Documentar o que foi implantado nessa etapa em `docs/sprint-reports` conforme definido no FR28 (`docs/planning-artifacts/prd.md`)
 
 ## Dev Notes
 
