@@ -5,6 +5,8 @@ Define hierarquia de erros para tratamento padronizado de falhas
 em provedores de dados financeiros.
 """
 
+from typing import Optional
+
 
 class AdapterError(Exception):
     """
@@ -17,7 +19,10 @@ class AdapterError(Exception):
     """
 
     def __init__(
-        self, message: str, code: str = "ADAPTER_ERROR", original_exception=None
+        self,
+        message: str,
+        code: str = "ADAPTER_ERROR",
+        original_exception: Optional[BaseException] = None,
     ):
         """
         Inicializa AdapterError.
@@ -44,7 +49,11 @@ class AdapterError(Exception):
 class FetchError(AdapterError):
     """Erro ao buscar dados do provedor."""
 
-    def __init__(self, message: str, original_exception=None):
+    def __init__(
+        self,
+        message: str,
+        original_exception: Optional[BaseException] = None,
+    ):
         super().__init__(
             message, code="FETCH_ERROR", original_exception=original_exception
         )
@@ -53,7 +62,11 @@ class FetchError(AdapterError):
 class ValidationError(AdapterError):
     """Erro de validação de dados retornados pelo provedor."""
 
-    def __init__(self, message: str, original_exception=None):
+    def __init__(
+        self,
+        message: str,
+        original_exception: Optional[BaseException] = None,
+    ):
         super().__init__(
             message, code="VALIDATION_ERROR", original_exception=original_exception
         )
@@ -62,7 +75,11 @@ class ValidationError(AdapterError):
 class NetworkError(AdapterError):
     """Erro de rede ao acessar provedor."""
 
-    def __init__(self, message: str, original_exception=None):
+    def __init__(
+        self,
+        message: str,
+        original_exception: Optional[BaseException] = None,
+    ):
         super().__init__(
             message, code="NETWORK_ERROR", original_exception=original_exception
         )
@@ -71,7 +88,11 @@ class NetworkError(AdapterError):
 class RateLimitError(AdapterError):
     """Erro quando limite de requisições do provedor é atingido."""
 
-    def __init__(self, message: str, original_exception=None):
+    def __init__(
+        self,
+        message: str,
+        original_exception: Optional[BaseException] = None,
+    ):
         super().__init__(
             message, code="RATE_LIMIT_ERROR", original_exception=original_exception
         )
