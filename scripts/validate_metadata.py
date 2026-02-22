@@ -10,6 +10,7 @@ import os
 import sys
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 from jsonschema import ValidationError, validate
 
@@ -20,7 +21,27 @@ def load_schema():
         return json.load(f)
 
 
-def load_metadata(path: str):
+def load_metadata(path: str) -> dict[str, Any]:
+    """Load JSON metadata from a pre-validated canonical path.
+
+    Parameters
+    ----------
+    path : str
+        A validated, canonical filesystem path to a JSON metadata file. The
+        caller must ensure `path` is safe (no untrusted Path construction).
+
+    Returns
+    -------
+    dict[str, Any]
+        Parsed JSON object as a Python dictionary.
+
+    Raises
+    ------
+    FileNotFoundError
+        If the file does not exist at `path`.
+    json.JSONDecodeError
+        If the file contents are not valid JSON.
+    """
     # `path` must be a validated, canonical string (no untrusted Path construction)
     with open(path, "r", encoding="utf-8") as f:
         return json.load(f)
