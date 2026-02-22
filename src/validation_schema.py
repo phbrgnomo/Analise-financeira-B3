@@ -54,7 +54,16 @@ def get_pandera_schema(base_path: Optional[Path] = None):  # noqa: C901
     cols = spec.get("columns", [])
     mapping = {}
     for c in cols:
+        # Validate column spec shape and required 'name' key
+        if not isinstance(c, dict):
+            logger.error("Invalid column spec (not an object): %r", c)
+            raise ValueError(f"Invalid column spec: {c!r}")
+
         name = c.get("name")
+        if not isinstance(name, str) or name == "":
+            logger.error("Missing or invalid 'name' in column spec: %r", c)
+            raise ValueError(f"Invalid column specification, missing 'name': {c!r}")
+
         t = c.get("type")
         nullable = c.get("nullable", True)
         if t in ("float", "number"):
