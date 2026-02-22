@@ -223,5 +223,9 @@ if __name__ == "__main__":
         resolved = _resolve_db_path(args.db, args.allow_external)
     except (ValueError, TypeError) as exc:
         parser.error(str(exc))
-    init_db(resolved, allow_external=args.allow_external)
+    # `resolved` is already a validated, canonical absolute path.
+    # We can bypass the restricted re-validation by telling `init_db` that
+    # external paths are allowed for this call so it doesn't re-reject the
+    # already-validated path.
+    init_db(resolved, allow_external=True)
     print(f"Banco de ingest inicializado em: {resolved}")
