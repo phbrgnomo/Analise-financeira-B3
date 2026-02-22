@@ -118,7 +118,33 @@ def _fetch_and_prepare_asset(
 
 
 def _compute_and_print_stats(a: str) -> None:
-    """Compute simple statistics from saved CSV and print them."""
+    """Compute and print simple statistics for a saved asset CSV.
+
+    Parameters
+    ----------
+    a : str
+        Basename of the asset CSV to load (filename without directory).
+
+    Behavior / side effects
+    -----------------------
+    - Reads the CSV file at `DATA_DIR/{a}.csv`.
+    - Computes simple statistics from the `Return` column
+      (sum, mean, std) and converts to annual metrics.
+    - Prints a short summary to stdout.
+
+    Expected input
+    --------------
+    The CSV is expected to contain a numeric column named `Return`.
+
+    Errors
+    ------
+    If the CSV cannot be read the function prints an error message and
+    returns early.
+
+    Returns
+    -------
+    None
+    """
     import pandas as pd
 
     import src.retorno as rt
