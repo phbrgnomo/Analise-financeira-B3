@@ -46,6 +46,6 @@ poetry run pytest -q tests/test_integration_e2e_checksum.py
 - Add: [docs/quickstart-ci.md](docs/quickstart-ci.md)
 
 **Próximos passos (rúbrica de execução)**
-- Incorporar testes adicionados no scritp `ci_orchestrator.py` para rodar o workflow localmente.
+- Criar script de teste local em `tests/ci/` e Incorporar testes adicionados no script `tests/ci/ci_orchestrator.sh` para rodar o workflow localmente.
 - Rodar os testes localmente para garantir que o fluxo é reproduzível.
 - Commitar as mudanças no branch atual

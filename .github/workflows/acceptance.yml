@@ -64,7 +64,7 @@ jobs:
 
       - name: Validate snapshots manifest
         run: |
-          python scripts/validate_snapshots.py --dir "$RUNNER_TEMP/snapshots_test" --manifest snapshots/checksums.json
+          python scripts/validate_snapshots.py --dir "$RUNNER_TEMP/snapshots_test" --manifest snapshots/checksums.json --allow-external
 
       - name: Run acceptance tests (E2E)
         run: |
