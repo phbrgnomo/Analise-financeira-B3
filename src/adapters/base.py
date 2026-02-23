@@ -6,13 +6,14 @@ Define o contrato público que todos os adaptadores devem implementar.
 
 import contextlib
 import logging
+import time  # noqa: F401 - exported for tests that patch src.adapters.base.time
 from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import Dict, List, Optional
 
 import pandas as pd
 
-from src.adapters.errors import FetchError, ValidationError
+from src.adapters.errors import FetchError, NetworkError, ValidationError
 from src.adapters.retry_config import RetryConfig
 from src.adapters.retry_metrics import get_global_metrics
 
@@ -187,13 +188,104 @@ class Adapter(ABC):
 
     def _is_retryable_exception(self, e: Exception, status_code) -> bool:
         """Decide se uma exceção é elegível para retry."""
+        # Status-code driven retries take precedence
         if (
             status_code is not None
             and hasattr(self, "retry_config")
             and status_code in self.retry_config.retry_on_status_codes
         ):
             return True
-        return self._is_network_error(e)
+
+        # Validation errors are not retryable
+        if isinstance(e, ValidationError):
+            return False
+
+        # Default: treat network errors and most generic errors as retryable
+        return True
+
+    def _handle_retryable_exception(
+        self,
+        e: Exception,
+        attempt: int,
+        effective_max_retries: int,
+        backoff_factor: float,
+        log_context: dict,
+        metrics,
+        status_code,
+        ticker: str,
+    ) -> None:
+        """Handle a retryable exception.
+
+        Sleep then continue or raise on final attempt.
+        """
+        # record that we will perform a retry (this increments retry_count)
+        try:
+            metrics.record_retry()
+        except Exception:
+            # metrics are best-effort
+            pass
+
+        wait_seconds, delay_ms = self._compute_wait(attempt, backoff_factor)
+        log_context = {
+            **log_context,
+            "next_delay_ms": delay_ms,
+            "error_message": str(e),
+        }
+
+        msg = f"Retryable error (attempt {attempt}/{effective_max_retries}): {e}"
+        logger.warning(msg, extra=log_context)
+
+        # If this was the last allowed attempt, record permanent failure and raise
+        if attempt >= effective_max_retries:
+            try:
+                metrics.record_permanent_failure()
+            except Exception:
+                pass
+
+            if self._is_network_error(e):
+                msg = (
+                    f"Falha de rede ao buscar {ticker}: "
+                    f"{effective_max_retries} tentativas"
+                )
+                raise NetworkError(msg, original_exception=e)
+
+            msg = (
+                f"Erro ao buscar dados de {ticker} "
+                f"após {effective_max_retries} tentativas"
+            )
+            raise FetchError(msg, original_exception=e)
+
+        # Sleep before next retry (tests patch time.sleep on the module)
+        try:
+            time.sleep(wait_seconds)
+        except Exception:
+            # Ignore sleep failures (e.g., patched to raise)
+            pass
+
+    def _handle_non_retryable_fetch_error(
+        self,
+        e: Exception,
+        attempt: int,
+        effective_max_retries: int,
+        backoff_factor: float,
+        log_context: dict,
+        metrics,
+        ticker: str,
+    ) -> None:
+        """Handle non-retryable fetch errors by recording and raising FetchError."""
+        try:
+            metrics.record_permanent_failure()
+        except Exception:
+            pass
+
+            logger.error(
+                f"Non-retryable fetch error for {ticker}: {e}",
+                extra={**log_context, "attempt": attempt},
+            )
+
+        raise FetchError(
+            f"Erro ao buscar dados de {ticker}: {e}", original_exception=e
+        )
 
     def _compute_wait(self, attempt: int, backoff_factor: float) -> tuple[float, int]:
         """Retorna (wait_seconds, delay_ms) para a tentativa atual."""
@@ -204,6 +296,52 @@ class Adapter(ABC):
             wait = self._compute_backoff(attempt, backoff_factor)
             delay_ms = int(wait * 1000)
         return wait, delay_ms
+
+    def _log_adapter_validation(
+        self, e: Exception, ticker: str, log_context: dict
+    ) -> None:
+        """Log adapter-level validation failures for auditability.
+
+        This helper is resilient to import errors and will not raise if the
+        logging helper is unavailable. It writes a single ingest log entry
+        describing the adapter validation failure.
+        """
+        try:
+            # import local to avoid circular imports at module import time
+            try:
+                from src.ingest.validation_logging import log_invalid_rows
+            except Exception:
+                # fallback to legacy location
+                from src.validation import log_invalid_rows
+
+            meta = self.get_metadata()
+            provider_name = meta.get("provider", "")
+            error_records = [
+                {
+                    "row_index": None,
+                    "column": None,
+                    "reason_code": "ADAPTER_VALIDATION",
+                    "reason_message": str(e),
+                }
+            ]
+            try:
+                log_invalid_rows(
+                    metadata_path="metadata/ingest_logs.json",
+                    provider=provider_name,
+                    ticker=ticker,
+                    raw_file="",
+                    invalid_filepath="",
+                    error_records=error_records,
+                    job_id="",
+                )
+            except Exception:
+                logger.debug(
+                    "Failed to write adapter validation to ingest_logs", exc_info=True
+                )
+        except Exception:
+            logger.debug(
+                "Adapter validation logging helper not available", exc_info=True
+            )
 
     def _fetch_with_retries(  # noqa: C901
         self,
