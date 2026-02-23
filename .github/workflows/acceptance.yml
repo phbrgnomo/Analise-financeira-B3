@@ -57,7 +57,7 @@ jobs:
           set -euo pipefail
           # Generate deterministic snapshot in runner temp using project
           # serialization (avoids direct file copy and exercises exporter).
-          SNAPSHOT_DIR="$RUNNER_TEMP/snapshots_test" python scripts/generate_ci_snapshot.py
+          SNAPSHOT_DIR="$RUNNER_TEMP/snapshots_test" poetry run python scripts/generate_ci_snapshot.py
 
       - name: Validate snapshots manifest
         run: |
