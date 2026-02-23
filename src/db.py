@@ -106,10 +106,23 @@ def _get_upsert_sql(schema_cols: list) -> str:
         update_items.append(f"{c}=excluded.{c}")
     update_set = ",".join(update_items)
 
-    sqlite_version = tuple(int(x) for x in sqlite3.sqlite_version.split("."))
-    supports_upssert = sqlite_version >= (3, 24, 0)
+    # Parse sqlite3.sqlite_version defensively in case of non-numeric suffixes
+    # e.g. "3.44.0-alpha" -> (3, 44, 0)
+    version_parts = []
+    for part in sqlite3.sqlite_version.split("."):
+        numeric = ""
+        for ch in part:
+            if ch.isdigit():
+                numeric += ch
+            else:
+                break
+        if not numeric:
+            break
+        version_parts.append(int(numeric))
+    sqlite_version = tuple(version_parts)
+    supports_upsert = sqlite_version >= (3, 24, 0)
 
-    if supports_upssert:
+    if supports_upsert:
         if update_set:
             return (
                 "INSERT INTO prices ({cols}) VALUES ({vals}) "
@@ -281,15 +294,23 @@ def write_prices(
 
         cols_map = {c.lower(): c for c in df.columns}
 
-        # Load canonical schema to determine columns and insert order
-        schema = _load_canonical_schema()
-        schema_cols = [c["name"] for c in schema.get("columns", [])]
-
-        # Ensure computed columns exist
-        if "raw_checksum" not in schema_cols:
-            schema_cols.append("raw_checksum")
-        if "fetched_at" not in schema_cols:
-            schema_cols.append("fetched_at")
+        # Derive insert column order from the actual DB table to avoid
+        # mismatch between canonical JSON schema and the physical table.
+        cur = conn.cursor()
+        cur.execute("PRAGMA table_info('prices')")
+        table_info = cur.fetchall()
+        if table_info:
+            # PRAGMA table_info returns rows where column name is at index 1
+            schema_cols = [r[1] for r in table_info]
+        else:
+            # Fallback to canonical schema if table_info is empty for some reason
+            schema = _load_canonical_schema()
+            schema_cols = [c["name"] for c in schema.get("columns", [])]
+            # Ensure computed columns exist in the fallback
+            if "raw_checksum" not in schema_cols:
+                schema_cols.append("raw_checksum")
+            if "fetched_at" not in schema_cols:
+                schema_cols.append("fetched_at")
 
         rows = []
         for idx, row in df.iterrows():

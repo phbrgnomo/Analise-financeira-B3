@@ -23,6 +23,9 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_INVALID_LOGS = Path("metadata/ingest_logs.jsonl")
 DEFAULT_INVALID_DIR = Path("raw")
+# Toggle fsync after writing validation logs. Set to False to improve
+# throughput at the cost of durability on crash.
+VALIDATION_LOG_FSYNC = True
 
 
 def _ensure_metadata_file(metadata_path: Union[str, Path]) -> None:
@@ -80,14 +83,19 @@ def log_invalid_rows(
         metadata_path = Path(metadata_path)
 
         # Append entries as JSON Lines
-        with open(metadata_path, "a", encoding="utf-8") as fh:
-            for entry in log_entries:
-                fh.write(json.dumps(entry, ensure_ascii=False) + "\n")
-            fh.flush()
-            try:
-                os.fsync(fh.fileno())
-            except Exception:
-                pass
+        # Batch writes to reduce syscall overhead; fsync can be toggled for performance.
+        lines = [json.dumps(entry, ensure_ascii=False) + "\n" for entry in log_entries]
+        if lines:  # Avoid touching the filesystem if there is nothing to log
+            with open(metadata_path, "a", encoding="utf-8") as fh:
+                fh.writelines(lines)
+                fh.flush()
+                if VALIDATION_LOG_FSYNC:
+                    try:
+                        os.fsync(fh.fileno())
+                    except Exception:
+                        # Best-effort durability; ignore fsync issues on platforms
+                        # where it may not be supported or permitted.
+                        pass
 
         logger.info(
             "Logged %d invalid row errors for %s to %s",
