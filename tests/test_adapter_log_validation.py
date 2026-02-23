@@ -226,6 +226,9 @@ def test_log_adapter_validation_error_paths(
     log_context = {}
 
     # Prepare import behavior without explicit conditionals using selection
+    # capture original import to avoid recursion when patching builtins.__import__
+    original_import = builtins.__import__
+
     def fake_import(name, *args, **kwargs):
         def _raise_import(*a, **k):
             raise ImportError("cannot import")
@@ -234,7 +237,7 @@ def test_log_adapter_validation_error_paths(
         if name == "src.validation":
             return _raise_import(name, *args, **kwargs)
 
-        return builtins.__import__(name, *args, **kwargs)
+        return original_import(name, *args, **kwargs)
 
     log_invalid_rows_mock = MagicMock()
     # set side_effect conditionally via expression to avoid branching

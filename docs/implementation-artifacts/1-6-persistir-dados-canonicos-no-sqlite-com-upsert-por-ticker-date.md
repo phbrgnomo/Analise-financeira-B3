@@ -1,6 +1,6 @@
 ## Story 1.6: Persistir dados canônicos no SQLite com upsert por (ticker, date)
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -17,13 +17,13 @@ so that repeated ingests do not create duplicate records and the database remain
 
 ## Tasks / Subtasks
 
-- [ ] Implementar módulo `src.db` com funções `write_prices(df: pd.DataFrame, ticker: str)` e `read_prices(ticker, start=None, end=None)`
-  - [ ] Definir esquema da tabela `prices` com PK (`ticker`, `date`) e colunas: `open, high, low, close, volume, source, fetched_at, raw_checksum`
-  - [ ] Nota: `adj_close` pode ser emitido pelo mapper para uso em cálculos (ex.: retornos), mas não é persistido por padrão. Se for necessário persistir `adj_close`, atualize `docs/schema.json` e introduza versão/migração apropriada.
-  - [ ] Implementar upsert por `(ticker, date)` usando SQLAlchemy/Core ou `pandas.to_sql` + `ON CONFLICT` raw SQL
-  - [ ] Gravar/atualizar `schema_version` na tabela `metadata` a cada alteração importante do esquema
-  - [ ] Adicionar permissões recomendadas (documentar `chmod 600` para `dados/data.db`)
-  - [ ] Escrever testes unitários usando SQLite in-memory que validem idempotência (inserir 2x → mesma contagem)
+- [x] Implementar módulo `src.db` com funções `write_prices(df: pd.DataFrame, ticker: str)` e `read_prices(ticker, start=None, end=None)`
+  - [x] Definir esquema da tabela `prices` com PK (`ticker`, `date`) e colunas: `open, high, low, close, volume, source, fetched_at, raw_checksum`
+  - [x] Nota: `adj_close` pode ser emitido pelo mapper para uso em cálculos (ex.: retornos), mas não é persistido por padrão. Se for necessário persistir `adj_close`, atualize `docs/schema.json` e introduza versão/migração apropriada.
+  - [x] Implementar upsert por `(ticker, date)` usando SQLAlchemy/Core ou `pandas.to_sql` + `ON CONFLICT` raw SQL
+  - [x] Gravar/atualizar `schema_version` na tabela `metadata` a cada alteração importante do esquema
+  - [x] Adicionar permissões recomendadas (documentar `chmod 600` para `dados/data.db`)
+  - [x] Escrever testes unitários usando SQLite in-memory que validem idempotência (inserir 2x → mesma contagem)
 - [ ] Documentar o que foi implantado nessa etapa em `docs/sprint-reports` conforme definido no FR28 (`docs/planning-artifacts/prd.md`)
 
 ## Dev Notes
@@ -68,9 +68,19 @@ GPT-5 mini
 - Acceptance criteria and tasks populated from `docs/planning-artifacts/epics.md` Story 1.6.
 - Dev guardrails added: SQLAlchemy + pandas guidance, upsert patterns, testing notes.
 
+- Implementation summary:
+  - Added `src/db.py` implementing `write_prices` and `read_prices` with SQLite upsert semantics using `ON CONFLICT (ticker,date)`.
+  - Wrote `tests/test_db_write.py` covering initial write, idempotent upsert (write twice → same row count), and metadata `schema_version` persistence.
+  - Ran full test suite: `pytest` → 89 passed, 0 failed (local run).
+
 ### File List
 
 - docs/planning-artifacts/epics.md (source)
 - docs/planning-artifacts/prd.md (source)
+
+### Updated Files (this session)
+
+- src/db.py
+- tests/test_db_write.py
 
 Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/119

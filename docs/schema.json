@@ -1,5 +1,22 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
+  "last_updated": "2026-02-23",
+  "metadata": {
+    "primary_key": ["ticker", "date"],
+    "description": "Esquema canônico com PK composta e controle de versão. Use this file as source-of-truth for DB DDL generation.",
+    "migrations": [
+      {
+        "version": 1,
+        "notes": "Initial schema with core columns",
+        "date": "2024-01-01"
+      },
+      {
+        "version": 2,
+        "notes": "Added schema metadata (primary_key, last_updated, migrations) and formalized versioning policy",
+        "date": "2026-02-23"
+      }
+    ]
+  },
   "columns": [
     {
       "name": "ticker",

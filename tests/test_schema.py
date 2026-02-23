@@ -41,7 +41,9 @@ def test_example_matches_schema():
     example_path = root / "dados" / "samples" / "ticker_example.csv"
 
     schema = json.loads(schema_path.read_text())
-    assert schema.get("schema_version") == 1
+    # Accept any positive integer schema_version to remain resilient to bumps
+    sv = schema.get("schema_version")
+    assert isinstance(sv, int) and sv >= 1
     columns = [c["name"] for c in schema["columns"]]
 
     with example_path.open() as f:
