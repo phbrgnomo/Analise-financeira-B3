@@ -112,6 +112,17 @@ def save_raw_csv(
 
     try:
         # Serialize dataframe deterministically and write the same bytes
+        # Compute per-row checksums for auditability
+        try:
+            from src.utils.checksums import row_checksum_from_series
+
+            per_row_checksums = [
+                row_checksum_from_series(df_to_save.iloc[i])
+                for i in range(len(df_to_save))
+            ]
+        except Exception:
+            per_row_checksums = []
+
         df_bytes = serialize_df_bytes(
             df_to_save,
             index=True,
@@ -142,6 +153,8 @@ def save_raw_csv(
             "status": "success",
             "created_at": created_at,
         }
+        if per_row_checksums:
+            metadata["per_row_checksums"] = per_row_checksums
 
         try:
             _persist_metadata(metadata, metadata_path)

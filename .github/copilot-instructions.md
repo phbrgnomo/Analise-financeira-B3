@@ -1,3 +1,51 @@
+<!-- Project Guidelines: quick, actionable guidance for AI agents -->
+# Project Guidelines
+
+!!MANDATORY!!
+- Always follow the coding conventions and patterns documented in `project-context.md`.
+
+## Code Style
+- Linting: `ruff` config is in `pyproject.toml` (line-length 88). Run `poetry run ruff check src tests`.
+- Tests use `pytest` (see `tests/`). Follow existing test patterns and fixtures in `src/tests` and `tests/conftest.py`.
+
+## Architecture
+- Always reference `docs/architecture.md` for high-level design and rationale.
+- Single-package Python app: core modules live in `src/` (ex.: `src/db.py`, `src/main.py`, `src/validation.py`).
+- Persistence: lightweight SQLite via SQLAlchemy Core; `dados/` holds runtime DB and data snapshots (`snapshots/`, `dados/`).
+- ETL and adapters live under `src/adapters/`, `src/etl/`, and `scripts/` for small helpers.
+- Adapter guidelines and patterns are in `docs/modules/adapter-guidelines.md` (fetch helpers, retry logic, metadata, testing).
+
+## Playbooks and Instructions
+- Follow playbooks in `docs/playbooks/` for common tasks (ex.: `quickstart-ticker.md`, `testing-network-fixtures.md`).
+
+## Implementation Notes
+- Past implementations are documented in `docs/sprint-reports/`
+- Database canonical schema is documented in `docs/schema.md`
+
+## Build and Test
+- Install developer env: `poetry install` (project uses Poetry).
+- Run tests: `poetry run pytest -q`.
+- Run CLI/app: `poetry run main` (entrypoint configured in `pyproject.toml`).
+
+## Before Committing the changes
+- Run `poetry run pre-commit --all-files` to apply formatting and lint fixes.
+- Ensure tests pass: `poetry run pytest`.
+
+## Project Conventions
+- Data files: small example CSVs are kept in `dados/` and `snapshots/` for tests—avoid committing large raw datasets.
+- DB path default: `dados/data.db`. Tests may override engine/db_path.
+- Idempotency: `src/db.py` computes a `raw_checksum` to avoid unnecessary upserts—respect this behavior when writing adapters.
+
+## Integration Points
+- External APIs: `yfinance` (see `pyproject.toml`)—mock network calls in unit tests using fixtures in `tests/fixtures`.
+- Persistence: SQLite via SQLAlchemy (see `src/db.py`); prefer `engine` injection in tests.
+
+## Security
+- Secrets/config: use environment variables and `.env` (project uses `python-dotenv`). Do NOT commit credentials or `.env` files.
+- Avoid printing secrets to logs; prefer structured logging via `src/logging_config.py`.
+
+---
+
 <!-- BMAD:START -->
 # BMAD Method — Project Instructions
 

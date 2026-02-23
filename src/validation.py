@@ -549,6 +549,12 @@ def _coerce_dataframe_columns(df: pd.DataFrame) -> None:
     if "date" in df.columns:
         with contextlib.suppress(Exception):
             df["date"] = pd.to_datetime(df["date"], utc=True, errors="coerce")
+    # Normalize fetched_at to timezone-aware UTC datetimes when present
+    if "fetched_at" in df.columns:
+        with contextlib.suppress(Exception):
+            df["fetched_at"] = pd.to_datetime(
+                df["fetched_at"], utc=True, errors="coerce"
+            )
     # Coerce numeric price columns
     numeric_cols = [c for c in ("open", "high", "low", "close") if c in df.columns]
     for c in numeric_cols:
@@ -631,40 +637,27 @@ def persist_invalid_rows(
     The filename pattern follows: raw/<provider>/invalid-<ticker>-<ts>.csv
     Returns the written filepath as string.
     """
-    import os
+    # Delegate persistence to the ingest logging helper to avoid duplicate
+    # implementations. This keeps behavior consistent across ingestion
+    # pipelines and validation helpers. We import locally to avoid
+    # circular import issues at module import time.
+    try:
+        from src.ingest.validation_logging import save_invalid_rows
 
-    if invalid_df is None or invalid_df.empty:
+        result = save_invalid_rows(
+            invalid_df=invalid_df,
+            ticker=ticker,
+            provider=provider,
+            raw_root=raw_root,
+            ts=ts,
+        )
+        # save_invalid_rows returns a dict with `filepath` key in current
+        # implementation; map to the historical string filepath expected by
+        # callers of this helper.
+        return result.get("filepath") or ""
+    except Exception:
+        logger.exception("Fallback: failed to persist invalid rows via ingest helper")
         return ""
-
-    folder = dest_folder or (raw_root or "raw")
-    folder = os.path.join(folder, provider)
-    _ensure_dir(folder)
-
-    filename = f"invalid-{ticker}-{ts}.csv"
-    path = os.path.join(folder, filename)
-
-    # Prepare a copy for persistence and strip validation metadata so
-    # we don't persist internal `_validation_errors` structures.
-    df_to_write = invalid_df.copy()
-    if "_validation_errors" in df_to_write.columns:
-        try:
-            df_to_write = df_to_write.drop(columns=["_validation_errors"])
-        except Exception:
-            # If dropping fails for any reason, fall back to original copy
-            # but log so we can investigate.
-            msg = (
-                "Could not drop _validation_errors column before persisting "
-                "invalid rows for %s/%s"
-            )
-            logger.warning(msg, provider, ticker)
-
-    # Write CSV
-    df_to_write.to_csv(path, index=True)
-
-    # Compute checksum
-    # checksum is intentionally omitted here (not used by callers)
-
-    return path
 
 
 def log_invalid_rows(
@@ -682,50 +675,24 @@ def log_invalid_rows(
     This is a lightweight implementation compatible with existing project
     patterns.
     """
-    import json
-    import os
-    from datetime import datetime, timezone
-
-    entry = {
-        "job_id": job_id or "",
-        "provider": provider,
-        "ticker": ticker,
-        "raw_file": raw_file,
-        "invalid_filepath": invalid_filepath,
-        "invalid_count": len(error_records) if error_records else 0,
-        "error_details": error_records,
-        "created_at": datetime.now(timezone.utc).isoformat(),
-    }
-
-    if meta_dir := os.path.dirname(metadata_path):
-        _ensure_dir(meta_dir)
-
-    # Prefer a JSON array file format. Read existing file (if any), append
-    # the new entry and write atomically. If parsing fails, start a fresh
-    # array. This keeps logic simple and avoids JSON Lines formats.
-    data = []
-    if os.path.exists(metadata_path):
-        try:
-            with open(metadata_path, "r", encoding="utf-8") as fh:
-                existing = json.load(fh)
-                if isinstance(existing, list):
-                    data = existing
-                elif isinstance(existing, dict):
-                    data = [existing]
-        except Exception:
-            data = []
-
-    data.append(entry)
-    tmp_path = metadata_path + ".tmp"
-    with open(tmp_path, "w", encoding="utf-8") as fh:
-        json.dump(data, fh, ensure_ascii=False, indent=2)
+    # Delegate to the ingest-level logging implementation which provides
+    # richer behavior and a canonical storage format. We provide a
+    # compatibility wrapper with the historical signature.
     try:
-        os.replace(tmp_path, metadata_path)
-    except Exception:
-        with open(metadata_path, "w", encoding="utf-8") as fh:
-            json.dump(data, fh, ensure_ascii=False, indent=2)
+        from src.ingest.validation_logging import log_invalid_rows_entry
 
-    return entry
+        return log_invalid_rows_entry(
+            metadata_path=metadata_path,
+            provider=provider,
+            ticker=ticker,
+            raw_file=raw_file,
+            invalid_filepath=invalid_filepath,
+            error_records=error_records,
+            job_id=job_id,
+        )
+    except Exception:
+        logger.exception("Fallback: failed to log invalid rows via ingest helper")
+        return {}
 
 
 def validate_and_handle(
@@ -739,6 +706,7 @@ def validate_and_handle(
     threshold: float | None = None,
     abort_on_exceed: bool = True,
     persist_invalid: bool = True,
+    db_path: str | None = None,
 ) -> Tuple[pd.DataFrame, pd.DataFrame, ValidationSummary, dict]:
     """Integration helper: validate dataframe, persist invalid rows,
     log results, and enforce threshold.

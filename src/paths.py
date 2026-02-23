@@ -11,3 +11,7 @@ SNAPSHOTS_DIR = Path("snapshots")
 RAW_DIR = Path("raw")
 METADATA_DIR = Path("metadata")
 DATA_DIR = Path("dados")
+
+# Valores string usados como defaults em APIs (compatibilidade com testes)
+RAW_ROOT = "raw"
+INGEST_LOGS = "metadata/ingest_logs.json"

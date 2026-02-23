@@ -64,6 +64,8 @@ def _fetch_and_prepare_asset(
     from datetime import datetime
     from datetime import timezone as _tz
 
+    import pandas as pd
+
     import src.dados_b3 as dados
     from src.ingest.pipeline import save_raw_csv
 
@@ -82,6 +84,9 @@ def _fetch_and_prepare_asset(
     # Mapping: keep failures local and return early if mapper fails
     try:
         from src.etl.mapper import to_canonical
+
+        # Initialize `canonical` so control flow is explicit and safe.
+        canonical: pd.DataFrame | None = None
 
         canonical = to_canonical(
             df,
@@ -143,7 +148,9 @@ def _fetch_and_prepare_asset(
     # Preferir o DataFrame `canonical` (já mapeado/validado) quando disponível.
     import src.retorno as rt
 
-    target_df = canonical if "canonical" in locals() and canonical is not None else df
+    # Use explicit variable instead of inspecting `locals()`; `canonical` is
+    # initialized above and will be either a DataFrame or None.
+    target_df = canonical if canonical is not None else df
 
     price_candidates = ("Adj Close", "adj_close", "Close", "close")
     price_col = next((c for c in price_candidates if c in target_df.columns), None)

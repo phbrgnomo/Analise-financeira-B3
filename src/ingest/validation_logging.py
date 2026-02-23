@@ -263,3 +263,65 @@ def _write_invalid_rows_with_checksum(df_to_save, file_path, ticker):
         "rows": rows,
         "status": "success",
     }
+
+
+def log_invalid_rows_entry(
+    metadata_path: Union[str, Path],
+    provider: str,
+    ticker: str,
+    raw_file: Optional[str],
+    invalid_filepath: str,
+    error_records: List[Dict[str, Any]],
+    job_id: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Compatibility wrapper that writes a single ingest-log entry.
+
+    This function provides a call signature compatible with the older
+    `src.validation.log_invalid_rows` usage. It writes a single entry to the
+    metadata JSON array with the keys expected elsewhere in the codebase
+    (provider, ticker, raw_file, invalid_filepath, invalid_count, error_details).
+    Returns the written entry dict.
+    """
+    if job_id is None:
+        job_id = str(uuid.uuid4())
+
+    created_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+    entry = {
+        "job_id": job_id,
+        "provider": provider,
+        "ticker": ticker,
+        "raw_file": raw_file,
+        "invalid_filepath": invalid_filepath,
+        "invalid_count": len(error_records) if error_records else 0,
+        "error_details": error_records,
+        "created_at": created_at,
+    }
+
+    try:
+        _ensure_metadata_file(metadata_path)
+        metadata_path = Path(metadata_path)
+
+        try:
+            existing = json.loads(metadata_path.read_text())
+            if not isinstance(existing, list):
+                existing = []
+        except Exception:
+            existing = []
+
+        existing.append(entry)
+
+        tmp = metadata_path.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps(existing, ensure_ascii=False, indent=2))
+        os.replace(str(tmp), str(metadata_path))
+
+        logger.info(
+            "Logged invalid rows entry for %d invalid errors for %s to %s",
+            len(entry.get("error_details", [])),
+            ticker,
+            metadata_path,
+        )
+    except Exception:
+        logger.exception("Failed to write invalid rows entry to %s", metadata_path)
+
+    return entry

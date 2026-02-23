@@ -186,7 +186,7 @@ def main() -> None:
     # Perform validation using os.path on the raw string before creating any Path.
     if args.outfile:
         try:
-            out_path_str = _validate_and_nomalize_outfile(
+            out_path_str = _validate_and_normalize_outfile(
                 args.outfile,
                 out_dir,
                 args.allow_external,
@@ -205,8 +205,7 @@ def main() -> None:
     print(f"raw_checksum: {raw_checksum}")
 
 
-# TODO Rename this here and in `main`
-def _validate_and_nomalize_outfile(
+def _validate_and_normalize_outfile(
     outfile: str,
     out_dir: Path,
     allow_external: bool,
@@ -264,6 +263,31 @@ def _validate_and_nomalize_outfile(
         resolved_out = os.path.realpath(raw)
 
     return resolved_out
+
+
+# Backwards-compatible alias for the previous misspelled name
+def _validate_and_nomalize_outfile(
+    outfile: str,
+    out_dir: Path,
+    allow_external: bool,
+) -> str:
+    """Deprecated alias for `_validate_and_normalize_outfile`.
+
+    Kept for backward compatibility; call sites should be updated to use
+    `_validate_and_normalize_outfile`. This wrapper will be removed in a
+    future release.
+    """
+    import warnings
+
+    warnings.warn(
+        "_validate_and_nomalize_outfile is deprecated; use "
+        "_validate_and_normalize_outfile",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return _validate_and_normalize_outfile(
+        outfile=outfile, out_dir=out_dir, allow_external=allow_external
+    )
 
 
 if __name__ == "__main__":

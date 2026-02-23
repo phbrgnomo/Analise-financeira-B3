@@ -82,4 +82,21 @@ def serialize_df_bytes(
     return csv_str.encode("utf-8")
 
 
-__all__ = ["sha256_file", "sha256_bytes", "serialize_df_bytes"]
+def row_checksum_from_series(series: pd.Series) -> str:
+    """Compute a deterministic row-level SHA256 checksum for a pandas Series.
+
+    The implementation serializes the single-row DataFrame using the same
+    deterministic settings as `serialize_df_bytes` and returns the SHA256
+    hex digest. This provides a stable per-row checksum used across the
+    pipeline.
+    """
+    df = series.to_frame().T
+    return sha256_bytes(serialize_df_bytes(df, index=True))
+
+
+__all__ = [
+    "sha256_file",
+    "sha256_bytes",
+    "serialize_df_bytes",
+    "row_checksum_from_series",
+]

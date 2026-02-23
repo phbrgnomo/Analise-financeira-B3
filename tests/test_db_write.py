@@ -12,15 +12,17 @@ def engine():
 
 
 def sample_df():
-    return pd.DataFrame({
-        "date": pd.to_datetime(["2021-01-01", "2021-01-02"]),
-        "open": [10.0, 11.0],
-        "high": [10.5, 11.5],
-        "low": [9.5, 10.5],
-        "close": [10.2, 11.2],
-        "volume": [1000, 1100],
-        "source": ["yfinance", "yfinance"],
-    })
+    return pd.DataFrame(
+        {
+            "date": pd.to_datetime(["2021-01-01", "2021-01-02"]),
+            "open": [10.0, 11.0],
+            "high": [10.5, 11.5],
+            "low": [9.5, 10.5],
+            "close": [10.2, 11.2],
+            "volume": [1000, 1100],
+            "source": ["yfinance", "yfinance"],
+        }
+    )
 
 
 def test_write_and_read(engine):
@@ -52,7 +54,11 @@ def test_schema_version_written(engine):
     db.write_prices(df, "TEST", engine=engine, schema_version="1.0")
 
     with engine.connect() as conn:
-        res = conn.execute(sqlalchemy.select(db.metadata_table.c.value).where(db.metadata_table.c.key == 'schema_version'))
+        res = conn.execute(
+            sqlalchemy.select(db.metadata_table.c.value).where(
+                db.metadata_table.c.key == "schema_version"
+            )
+        )
         val = res.scalar()
 
     assert val == "1.0"

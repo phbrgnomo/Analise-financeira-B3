@@ -66,15 +66,21 @@ def extra_checks(data: dict):
 
 
 def main():  # noqa: C901
-    if len(sys.argv) < 2:
-        print("Usage: python3 scripts/validate_metadata.py path/to/metadata.json")
-        sys.exit(2)
+    import argparse
 
-    # Read raw CLI input as string and validate before any Path construction
-    raw = sys.argv[1]
-    # Resolve path and protect against path traversal by default: only allow
-    # metadata files inside the repository. Pass --allow-external to override.
-    allow_external = "--allow-external" in sys.argv
+    parser = argparse.ArgumentParser(
+        description="Validate a metadata JSON file against docs/metadata_schema.json"
+    )
+    parser.add_argument("path", help="Path to metadata JSON file")
+    parser.add_argument(
+        "--allow-external",
+        action="store_true",
+        help="Allow validating files outside the repository root (use with caution)",
+    )
+    args = parser.parse_args()
+
+    raw = args.path
+    allow_external = args.allow_external
 
     if "\x00" in raw:
         print("Invalid path: contains null byte")

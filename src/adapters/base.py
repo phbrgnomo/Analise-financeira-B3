@@ -278,7 +278,7 @@ class Adapter(ABC):
             )
             raise NetworkError(msg, original_exception=e) from e
 
-        wait_time = self._compute_and_record_backoff(
+        wait_time = self._compute_wait_and_record_backoff(
             attempt, backoff_factor, metrics, log_context
         )
         msg = f"Aguardando {wait_time}s antes de retry"
@@ -311,14 +311,14 @@ class Adapter(ABC):
                 original_exception=e,
             ) from e
 
-        wait_time = self._compute_and_record_backoff(
+        wait_time = self._compute_wait_and_record_backoff(
             attempt, backoff_factor, metrics, log_context
         )
         time.sleep(wait_time)
 
-    # TODO: Rename this helper and update references in
-    # `_handle_retryable_exception` and `_handle_non_retryable_fetch_error`.
-    def _compute_and_record_backoff(
+    # Refactored helper name for clarity: returns wait seconds and records
+    # retry metrics and logging context.
+    def _compute_wait_and_record_backoff(
         self, attempt, backoff_factor, metrics, log_context
     ):
         result, delay_ms = self._compute_wait(attempt, backoff_factor)
