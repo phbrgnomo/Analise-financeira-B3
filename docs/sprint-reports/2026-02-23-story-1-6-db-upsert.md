@@ -58,10 +58,9 @@ Permissões e operação
 - Recomendação de permissão: `chmod 600 dados/data.db` quando o arquivo for criado em produção para proteger dados sensíveis.
 
 Limitações e observações
--
-- Upsert com `ON CONFLICT` requer SQLite >= 3.24 para comportamento UPSERT; verifique a versão do SQLite do ambiente se encontrar erros.
-- `INSERT OR REPLACE` foi evitado devido a possíveis efeitos colaterais (substituição completa da linha); a opção escolhida atualiza apenas campos expostos.
-- `fetched_at` é atualmente gerado sem timezone explícito (datetime.utcnow()). Em ambiente crítico, preferir objetos timezone-aware.`
+- Upsert com `ON CONFLICT` requer SQLite >= 3.24 para comportamento UPSERT; a implementação agora detecta a versão do SQLite em runtime e, quando não suportado, realiza fallback para `INSERT OR REPLACE` (com aviso). Documente o risco do fallback (substituição completa da linha) e, se necessário, atualize o ambiente/CI para usar SQLite >= 3.24.
+- `INSERT OR REPLACE` foi evitado por padrão devido a possíveis efeitos colaterais (substituição completa da linha); quando usado como fallback, há um aviso explicando o risco.
+- `fetched_at` agora é gerado como timestamp timezone-aware UTC (`datetime.now(timezone.utc).isoformat()`), evitando ambiguidade de timezone.
 - Se for necessário persistir `adj_close` ou outros campos, atualize `docs/schema.json` e introduza migração/versão de esquema.
 
 Próximos passos recomendados

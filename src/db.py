@@ -3,13 +3,17 @@ import hashlib
 import json
 import os
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 import pandas as pd
 
-DEFAULT_DB_PATH = os.path.join(os.getcwd(), "dados", "data.db")
-DEFAULT_SCHEMA_PATH = os.path.join(os.getcwd(), "docs", "schema.json")
+DEFAULT_DB_PATH = os.path.join(
+    os.path.dirname(os.path.dirname(__file__)), "dados", "data.db"
+)
+DEFAULT_SCHEMA_PATH = os.path.join(
+    os.path.dirname(os.path.dirname(__file__)), "docs", "schema.json"
+)
 
 
 def _load_canonical_schema(schema_path: Optional[str] = None) -> dict:
@@ -87,6 +91,83 @@ def _ensure_schema(conn: sqlite3.Connection, schema_path: Optional[str] = None) 
     conn.commit()
 
 
+def _build_row_tuple(vals: dict, schema_cols: list) -> tuple:
+    return tuple(vals.get(col) for col in schema_cols)
+
+
+def _get_upsert_sql(schema_cols: list) -> str:
+    col_list_sql = ",".join(schema_cols)
+    placeholders = ",".join(["?" for _ in schema_cols])
+
+    update_items = []
+    for c in schema_cols:
+        if c in ("ticker", "date"):
+            continue
+        update_items.append(f"{c}=excluded.{c}")
+    update_set = ",".join(update_items)
+
+    sqlite_version = tuple(int(x) for x in sqlite3.sqlite_version.split("."))
+    supports_upssert = sqlite_version >= (3, 24, 0)
+
+    if supports_upssert:
+        if update_set:
+            return (
+                "INSERT INTO prices ({cols}) VALUES ({vals}) "
+                "ON CONFLICT(ticker,date) DO UPDATE SET {updates}"
+            ).format(cols=col_list_sql, vals=placeholders, updates=update_set)
+        # Nothing to update on conflict: DO NOTHING
+        return (
+            "INSERT INTO prices ({cols}) VALUES ({vals}) "
+            "ON CONFLICT(ticker,date) DO NOTHING"
+        ).format(cols=col_list_sql, vals=placeholders)
+
+    # Fallback for older SQLite versions: replace entire row
+    import warnings
+
+    warnings.warn(
+        (
+            "SQLite version %s does not support UPSERT; falling back to "
+            "INSERT OR REPLACE. Consider upgrading SQLite to >= 3.24.0 "
+            "for safer ON CONFLICT semantics."
+        ) % sqlite3.sqlite_version,
+        stacklevel=2,
+    )
+    return ("INSERT OR REPLACE INTO prices ({cols}) VALUES ({vals})").format(
+        cols=col_list_sql, vals=placeholders
+    )
+
+
+def _row_tuple_from_series(
+    idx, row, ticker, source, fetched_at, cols_map, schema_cols
+) -> tuple:
+    date_s = pd.to_datetime(idx).strftime("%Y-%m-%d")
+    vals = {"ticker": ticker, "date": date_s, "source": source}
+
+    src_col = cols_map.get("source")
+    if src_col is not None and not pd.isna(row[src_col]):
+        vals["source"] = str(row[src_col])
+
+    for name in ["open", "high", "low", "close", "volume"]:
+        col = cols_map.get(name)
+        if col is not None and not pd.isna(row[col]):
+            if name != "volume":
+                vals[name] = float(row[col])
+            else:
+                vals[name] = int(row[col])
+        else:
+            vals[name] = None
+
+    payload = (
+        f"{ticker}|{date_s}|{vals.get('open')}|{vals.get('high')}|"
+        f"{vals.get('low')}|{vals.get('close')}|{vals.get('volume')}|{source}"
+    )
+
+    vals["raw_checksum"] = hashlib.sha256(payload.encode("utf-8")).hexdigest()
+    vals["fetched_at"] = fetched_at or datetime.now(timezone.utc).isoformat()
+
+    return _build_row_tuple(vals, schema_cols)
+
+
 def _connect(db_path: Optional[str]) -> sqlite3.Connection:
     if db_path is None:
         db_path = DEFAULT_DB_PATH
@@ -131,44 +212,13 @@ def write_prices(
 
         rows = []
         for idx, row in df.iterrows():
-            date_s = pd.to_datetime(idx).strftime("%Y-%m-%d")
-            vals = {
-                "ticker": ticker,
-                "date": date_s,
-                "source": source,
-            }
-
-            # Map provider columns (case-insensitive)
-            for name in ["open", "high", "low", "close", "volume"]:
-                col = cols_map.get(name)
-                if col is not None and not pd.isna(row[col]):
-                    vals[name] = float(row[col]) if name != "volume" else int(row[col])
-                else:
-                    vals[name] = None
-
-            # Build a stable payload string for checksum
-            payload = (
-                f"{ticker}|{date_s}|{vals.get('open')}|{vals.get('high')}|"
-                f"{vals.get('low')}|{vals.get('close')}|{vals.get('volume')}|{source}"
+            rows.append(
+                _row_tuple_from_series(
+                    idx, row, ticker, source, fetched_at, cols_map, schema_cols
+                )
             )
-            vals["raw_checksum"] = hashlib.sha256(payload.encode("utf-8")).hexdigest()
-            vals["fetched_at"] = fetched_at or datetime.utcnow().isoformat()
 
-            # Build row tuple in schema order
-            row_tuple = tuple(vals.get(col) for col in schema_cols)
-            rows.append(row_tuple)
-
-        col_list_sql = ",".join(schema_cols)
-        placeholders = ",".join(["?" for _ in schema_cols])
-        update_items = [
-            f"{c}=excluded.{c}" for c in schema_cols if c not in ("ticker", "date")
-        ]
-        update_set = ",".join(update_items)
-
-        sql = (
-            "INSERT INTO prices ({} ) VALUES ({} ) "
-            "ON CONFLICT(ticker,date) DO UPDATE SET {}"
-        ).format(col_list_sql, placeholders, update_set)
+        sql = _get_upsert_sql(schema_cols)
 
         cur = conn.cursor()
         cur.executemany(sql, rows)
