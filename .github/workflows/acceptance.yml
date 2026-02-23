@@ -56,11 +56,9 @@ jobs:
           mkdir -p "$RUNNER_TEMP/snapshots_test"
           set -euo pipefail
           export SNAPSHOT_DIR="$RUNNER_TEMP/snapshots_test"
-          if [ -x ./examples/run_quickstart_example.sh ]; then
-            SNAPSHOT_DIR="$RUNNER_TEMP/snapshots_test" ./examples/run_quickstart_example.sh || true
-          else
-            python scripts/run_save_raw_example.py --out-dir "$RUNNER_TEMP/snapshots_test" || true
-          fi
+          # Run the mocked quickstart integration which copies the sample
+          # snapshot into the target dir (tests/integration/test_quickstart_mocked.py)
+          NETWORK_MODE=playback poetry run pytest -q tests/integration -k quickstart_mocked --maxfail=1
 
       - name: Validate snapshots manifest
         run: |

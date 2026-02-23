@@ -65,9 +65,6 @@ __pycache__/
 # Ignore generated snapshots created during CI/test runs
 snapshots_test/
 
-# Local quickstart output logs
-outputs/
-
 .sentry-native/
 
 # Snyk Security Extension - AI Rules (auto-generated)
