@@ -208,8 +208,10 @@ def init_db(db_path: Optional[str] = None, allow_external: bool = False) -> None
     if db_path is None:
         db_path = DEFAULT_DB_PATH
 
-    os.makedirs(os.path.dirname(db_path), exist_ok=True)
-    conn = sqlite3.connect(db_path)
+    # Use _connect to ensure parent directories are created safely and
+    # to centralize connection logic (avoids os.makedirs('') when db_path
+    # is a bare filename).
+    conn = _connect(db_path)
     try:
         _ensure_schema(conn)
     finally:
