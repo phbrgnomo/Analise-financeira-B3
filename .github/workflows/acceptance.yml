@@ -55,15 +55,9 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/snapshots_test"
           set -euo pipefail
-          # Use the committed snapshot file as the deterministic source for
-          # acceptance validation. Copy the repository snapshot into the
-          # runner temp dir so the validator can find it.
-          cp snapshots/PETR4_snapshot.csv "$RUNNER_TEMP/snapshots_test/"
-          if [ -f snapshots/PETR4_snapshot.csv.checksum ]; then
-            cp snapshots/PETR4_snapshot.csv.checksum "$RUNNER_TEMP/snapshots_test/"
-          else
-            # generate checksum sidecar if missing
-            python -c "import hashlib;print(hashlib.sha256(open('snapshots/PETR4_snapshot.csv','rb').read()).hexdigest())" > "$RUNNER_TEMP/snapshots_test/PETR4_snapshot.csv.checksum"
+          # Generate deterministic snapshot in runner temp using project
+          # serialization (avoids direct file copy and exercises exporter).
+          SNAPSHOT_DIR="$RUNNER_TEMP/snapshots_test" python scripts/generate_ci_snapshot.py
 
       - name: Validate snapshots manifest
         run: |
