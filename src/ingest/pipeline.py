@@ -53,10 +53,13 @@ def _db_initialized(db_path: Union[str, Path]) -> bool:
 
 
 def _ensure_metadata_file(metadata_path: Union[str, Path]) -> None:
-    """Ensure metadata directory exists and file is initialized as JSON array.
+    """Ensure metadata directory exists and initialize a JSONL file.
 
-    For JSONL we only ensure the parent directory exists and create an
-    empty file if missing.
+    For JSONL metadata files this function ensures the parent directory
+    exists and creates an empty file atomically (write to a `.tmp` and
+    `os.replace`) if the target file does not exist. It does not attempt
+    to initialize a JSON array or modify file contents if the file is
+    already present.
     """
     metadata_path = Path(metadata_path)
     metadata_path.parent.mkdir(parents=True, exist_ok=True)
