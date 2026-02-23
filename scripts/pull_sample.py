@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-import os
 import re
 import sys
 from datetime import datetime, timedelta, timezone
@@ -180,114 +179,13 @@ def main() -> None:
         print(f"Warning: não foi possível salvar CSV bruto: {exc}", file=sys.stderr)
 
     canonical, raw_checksum = to_canonical(df, ticker)
-    default_name = f"{safe_ticker}_sample.csv"
+    default_name = f"{ticker}_sample.csv"
+    out_path = Path(args.outfile) if args.outfile else out_dir / default_name
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    canonical.to_csv(out_path, index=False)
 
-    # Sanitizar e validar `--outfile` para evitar path traversal.
-    # Perform validation using os.path on the raw string before creating any Path.
-    if args.outfile:
-        try:
-            out_path_str = _validate_and_normalize_outfile(
-                args.outfile,
-                out_dir,
-                args.allow_external,
-            )
-        except ValueError as e:
-            print(e, file=sys.stderr)
-            sys.exit(2)
-    else:
-        out_path_str = str(out_dir / default_name)
-
-    parent_dir = os.path.dirname(out_path_str)
-    os.makedirs(parent_dir, exist_ok=True)
-    canonical.to_csv(out_path_str, index=False)
-
-    print(f"Amostra salva em: {out_path_str}")
+    print(f"Amostra salva em: {out_path}")
     print(f"raw_checksum: {raw_checksum}")
-
-
-def _validate_and_normalize_outfile(
-    outfile: str,
-    out_dir: Path,
-    allow_external: bool,
-) -> str:
-    """Validate and normalize an --outfile value.
-
-    Returns a resolved path string or raises ValueError on invalid input.
-    This helper does not perform CLI termination; callers should convert
-    exceptions to exit codes as appropriate.
-    """
-    if not isinstance(outfile, str):
-        raise ValueError("Invalid --outfile value")
-
-    raw = outfile
-    if "\x00" in raw:
-        raise ValueError("Invalid --outfile: contains null byte")
-
-    normalized = os.path.normpath(raw)
-    is_abs = os.path.isabs(raw)
-
-    if not allow_external:
-        allowed_dir = str(out_dir.resolve())
-
-        if is_abs:
-            real = os.path.realpath(raw)
-            try:
-                common = os.path.commonpath([real, allowed_dir])
-            except ValueError as err:
-                raise ValueError(
-                    (
-                        "Refusing to write output outside of dados/samples."
-                        " Use --allow-external to override."
-                    )
-                ) from err
-            if common != allowed_dir:
-                raise ValueError(
-                    (
-                        "Refusing to write output outside of dados/samples."
-                        " Use --allow-external to override."
-                    )
-                )
-            resolved_out = real
-        else:
-            # relative: disallow traversal
-            if ".." in normalized.split(os.path.sep):
-                raise ValueError(
-                    (
-                        "Refusing to write output outside of dados/samples."
-                        " Use --allow-external to override."
-                    )
-                )
-            resolved_out = os.path.join(allowed_dir, normalized.lstrip(os.path.sep))
-    else:
-        # allow external: canonicalize
-        resolved_out = os.path.realpath(raw)
-
-    return resolved_out
-
-
-# Backwards-compatible alias for the previous misspelled name
-def _validate_and_nomalize_outfile(
-    outfile: str,
-    out_dir: Path,
-    allow_external: bool,
-) -> str:
-    """Deprecated alias for `_validate_and_normalize_outfile`.
-
-    Kept for backward compatibility; call sites should be updated to use
-    `_validate_and_normalize_outfile`. This wrapper will be removed in a
-    future release.
-    """
-    import warnings
-
-    warnings.warn(
-        "_validate_and_nomalize_outfile is deprecated; use "
-        "_validate_and_normalize_outfile",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-    return _validate_and_normalize_outfile(
-        outfile=outfile, out_dir=out_dir, allow_external=allow_external
-    )
 
 
 if __name__ == "__main__":

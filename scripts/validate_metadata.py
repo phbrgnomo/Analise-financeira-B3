@@ -6,7 +6,6 @@ Uso:
 """
 
 import json
-import os
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -65,71 +64,19 @@ def extra_checks(data: dict):
     return errors
 
 
-def main():  # noqa: C901
-    import argparse
-
-    parser = argparse.ArgumentParser(
-        description="Validate a metadata JSON file against docs/metadata_schema.json"
-    )
-    parser.add_argument("path", help="Path to metadata JSON file")
-    parser.add_argument(
-        "--allow-external",
-        action="store_true",
-        help="Allow validating files outside the repository root (use with caution)",
-    )
-    args = parser.parse_args()
-
-    raw = args.path
-    allow_external = args.allow_external
-
-    if "\x00" in raw:
-        print("Invalid path: contains null byte")
+def main():
+    if len(sys.argv) < 2:
+        print("Usage: python3 scripts/validate_metadata.py path/to/metadata.json")
         sys.exit(2)
 
-    normalized = os.path.normpath(raw)
-
-    is_abs = os.path.isabs(raw)
-
-    repo_root = Path(__file__).resolve().parents[1]
-    allowed_dir = str(repo_root)
-
-    if allow_external:
-        # allow external: canonicalize
-        resolved = os.path.realpath(raw)
-
-    elif is_abs:
-        real = os.path.realpath(raw)
-        try:
-            common = os.path.commonpath([real, allowed_dir])
-        except ValueError:
-            print(
-                f"Refusing to validate file outside repository root: {real}\n"
-                "Pass --allow-external to override (use with caution)."
-            )
-            sys.exit(2)
-        if common != allowed_dir:
-            print(
-                f"Refusing to validate file outside repository root: {real}\n"
-                "Pass --allow-external to override (use with caution)."
-            )
-            sys.exit(2)
-        resolved = real
-    else:
-        # relative: disallow traversal
-        if ".." in normalized.split(os.path.sep):
-            print(
-                f"Refusing to validate file outside repository root: {raw}\n"
-                "Pass --allow-external to override (use with caution)."
-            )
-            sys.exit(2)
-        resolved = os.path.join(allowed_dir, normalized.lstrip(os.path.sep))
-    if not os.path.exists(resolved):
-        print(f"File not found: {resolved}")
+    path = Path(sys.argv[1])
+    if not path.exists():
+        print(f"File not found: {path}")
         sys.exit(2)
 
     schema = load_schema()
     try:
-        data = load_metadata(resolved)
+        data = load_metadata(str(path))
     except Exception as e:
         print(f"Failed to load JSON: {e}")
         sys.exit(2)

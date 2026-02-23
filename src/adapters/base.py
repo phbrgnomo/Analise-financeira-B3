@@ -6,14 +6,13 @@ Define o contrato público que todos os adaptadores devem implementar.
 
 import contextlib
 import logging
-import time
 from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import Dict, List, Optional
 
 import pandas as pd
 
-from src.adapters.errors import FetchError, NetworkError, ValidationError
+from src.adapters.errors import FetchError, ValidationError
 from src.adapters.retry_config import RetryConfig
 from src.adapters.retry_metrics import get_global_metrics
 
@@ -205,126 +204,6 @@ class Adapter(ABC):
             wait = self._compute_backoff(attempt, backoff_factor)
             delay_ms = int(wait * 1000)
         return wait, delay_ms
-
-    def _log_adapter_validation(
-        self, e: Exception, ticker: str, log_context: dict
-    ) -> None:
-        """Loga falhas de validação no nível do adaptador de forma resiliente."""
-        try:
-            # import local to avoid circular imports at module import time
-            from src.validation import log_invalid_rows
-
-            meta = self.get_metadata()
-            provider_name = meta.get("provider", "")
-            error_records = [
-                {
-                    "row_index": None,
-                    "column": None,
-                    "reason_code": "ADAPTER_VALIDATION",
-                    "reason_message": str(e),
-                }
-            ]
-            try:
-                log_invalid_rows(
-                    metadata_path="metadata/ingest_logs.json",
-                    provider=provider_name,
-                    ticker=ticker,
-                    raw_file="",
-                    invalid_filepath="",
-                    error_records=error_records,
-                    job_id="",
-                )
-            except Exception:
-                logger.debug(
-                    "Failed to write adapter validation to ingest_logs", exc_info=True
-                )
-        except Exception:
-            logger.debug(
-                "Adapter validation logging helper not available", exc_info=True
-            )
-
-    def _handle_retryable_exception(
-        self,
-        e: Exception,
-        attempt: int,
-        effective_max_retries: int,
-        backoff_factor: float,
-        log_context: dict,
-        metrics,
-        status_code,
-        ticker: str,
-    ) -> bool:
-        """Lida com exceções retryable: registra o erro, aguarda segundo
-        backoff e retorna True para indicar retry.
-
-        Atualiza `log_context` com informações da falha, registra métricas e,
-        quando o número de tentativas excede `effective_max_retries`, registra
-        falha permanente e lança `NetworkError`. Caso contrário, calcula o
-        tempo de backoff, aguarda e retorna True para indicar que o chamador
-        deve tentar novamente.
-        """
-        log_context["status"] = "retryable_error"
-        log_context["error_message"] = str(e)
-        if status_code is not None:
-            log_context["http_status"] = status_code
-        msg = f"Erro retryable na tentativa {attempt}"
-        logger.warning(msg, extra=log_context)
-
-        if attempt >= effective_max_retries:
-            metrics.record_permanent_failure()
-            msg = (
-                f"Falha de rede ao buscar {ticker} "
-                f"após {effective_max_retries} tentativas"
-            )
-            raise NetworkError(msg, original_exception=e) from e
-
-        wait_time = self._compute_wait_and_record_backoff(
-            attempt, backoff_factor, metrics, log_context
-        )
-        msg = f"Aguardando {wait_time}s antes de retry"
-        logger.debug(msg, extra=log_context)
-        time.sleep(wait_time)
-        return True
-
-    def _handle_non_retryable_fetch_error(
-        self,
-        e: Exception,
-        attempt: int,
-        effective_max_retries: int,
-        backoff_factor: float,
-        log_context: dict,
-        metrics,
-        ticker: str,
-    ) -> None:
-        """Trata erros de fetch não retryable: registra e levanta exceção ou
-        aguarda para nova tentativa."""
-        log_context["status"] = "fetch_error"
-        log_context["error_message"] = str(e)
-        log_context["error_type"] = type(e).__name__
-        msg = f"Erro ao buscar dados na tentativa {attempt}"
-        logger.error(msg, extra=log_context)
-
-        if attempt >= effective_max_retries:
-            metrics.record_permanent_failure()
-            raise FetchError(
-                f"Erro ao buscar dados de {ticker}: {str(e)}",
-                original_exception=e,
-            ) from e
-
-        wait_time = self._compute_wait_and_record_backoff(
-            attempt, backoff_factor, metrics, log_context
-        )
-        time.sleep(wait_time)
-
-    # Refactored helper name for clarity: returns wait seconds and records
-    # retry metrics and logging context.
-    def _compute_wait_and_record_backoff(
-        self, attempt, backoff_factor, metrics, log_context
-    ):
-        result, delay_ms = self._compute_wait(attempt, backoff_factor)
-        metrics.record_retry()
-        log_context["next_delay_ms"] = delay_ms
-        return result
 
     def _fetch_with_retries(  # noqa: C901
         self,

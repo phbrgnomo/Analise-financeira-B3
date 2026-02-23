@@ -229,7 +229,6 @@ def test_log_adapter_validation_error_paths(
     def fake_import(name, *args, **kwargs):
         def _raise_import(*a, **k):
             raise ImportError("cannot import")
-
         # If the import requested is "src.validation" simulate ImportError,
         # otherwise delegate to the real builtins.__import__ implementation.
         if name == "src.validation":
