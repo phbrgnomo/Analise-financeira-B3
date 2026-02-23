@@ -8,9 +8,9 @@ from typing import Optional
 
 import pandas as pd
 
-DEFAULT_DB_PATH = os.path.join(
-    os.path.dirname(os.path.dirname(__file__)), "dados", "data.db"
-)
+from src.paths import DATA_DIR
+
+DEFAULT_DB_PATH = os.path.join(str(DATA_DIR), "data.db")
 DEFAULT_SCHEMA_PATH = os.path.join(
     os.path.dirname(os.path.dirname(__file__)), "docs", "schema.json"
 )
@@ -89,6 +89,19 @@ def _ensure_schema(conn: sqlite3.Connection, schema_path: Optional[str] = None) 
         ("schema_version", sv),
     )
     conn.commit()
+
+
+def init_db(db_path: Optional[str] = None) -> None:
+    """Initialize DB schema (idempotent).
+
+    Ensures the canonical tables exist. Uses the DEFAULT_DB_PATH when
+    `db_path` is None.
+    """
+    conn = _connect(db_path or DEFAULT_DB_PATH)
+    try:
+        _ensure_schema(conn)
+    finally:
+        conn.close()
 
 
 def _build_row_tuple(vals: dict, schema_cols: list) -> tuple:

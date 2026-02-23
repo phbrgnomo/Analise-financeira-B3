@@ -144,6 +144,12 @@ def save_raw_csv(
         }
 
         try:
+            # Persist metadata as JSONL for append-only audit trail (primary)
+            _persist_metadata_jsonl(metadata, metadata_path)
+        except Exception as e_meta:
+            _log_metadata_error("Falha ao gravar metadados JSONL", e_meta, metadata)
+
+        try:
             _persist_metadata(metadata, metadata_path)
         except Exception as e_meta:
             _log_metadata_error("Falha ao gravar metadados em JSON", e_meta, metadata)
@@ -174,6 +180,23 @@ def save_raw_csv(
                 "Falha ao gravar metadados de erro em JSON", e_meta, metadata
             )
         return metadata
+
+
+def _persist_metadata_jsonl(
+    metadata: dict[str, Any],
+    metadata_path: str | Path,
+) -> None:
+    """Append a single metadata record as JSONL for auditability.
+
+    The `metadata_path` may point to a .json file; the JSONL file will use
+    the same path with a `.jsonl` suffix for append-only logs.
+    """
+    p = Path(metadata_path)
+    jsonl_path = p if p.suffix == ".jsonl" else p.with_suffix(".jsonl")
+    jsonl_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(jsonl_path, "a", encoding="utf-8") as fh:
+        fh.write(json.dumps(metadata, ensure_ascii=False) + "\n")
+    metadata["metadata_jsonl_path"] = str(jsonl_path)
 
 
 # TODO Rename this here and in `save_raw_csv`

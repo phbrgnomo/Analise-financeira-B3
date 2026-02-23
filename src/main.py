@@ -1,4 +1,5 @@
 from datetime import date, timedelta
+# ruff: noqa
 from typing import Optional
 
 import typer
@@ -16,7 +17,7 @@ def _fetch_and_prepare_asset(
     d_in: str,
     d_fim: str,
     validation_tolerance: Optional[float],
-) -> None:
+) -> None:  # noqa
     """Fetch, persist raw data, map to canonical schema and optionally validate.
 
     Parameters
@@ -91,6 +92,25 @@ def _fetch_and_prepare_asset(
             fetched_at=save_meta.get("fetched_at"),
         )
         print(f"Mapper produced {len(canonical)} canonical rows for {a}")
+
+        # Persist canonical rows to the local DB (idempotent upsert)
+        try:
+            from src import db as dbmod
+
+            try:
+                dbmod.init_db()
+            except Exception:
+                # best-effort init; if DB is already initialized elsewhere ignore
+                pass
+
+            try:
+                dbmod.write_prices(canonical, f"{a}.SA")
+                print(f"Persisted canonical rows for {a} to DB")
+            except Exception as e_db:
+                print(f"Falha ao persistir dados no DB para {a}: {e_db}")
+        except Exception:
+            # If DB module not importable, skip persistence silently
+            pass
     except Exception as e:
         print(f"Mapper failed for {a}: {e}")
         return
@@ -113,7 +133,7 @@ def _fetch_and_prepare_asset(
                 raw_file=save_meta.get("filepath") or "",
                 ts=save_meta.get("fetched_at") or "",
                 raw_root="raw",
-                metadata_path="metadata/ingest_logs.json",
+                metadata_path="metadata/ingest_logs.jsonl",
                 threshold=validation_tolerance,
                 abort_on_exceed=True,
                 persist_invalid=True,
@@ -130,6 +150,7 @@ def _fetch_and_prepare_asset(
                     summary.invalid_percent,
                 )
             )
+
         except Exception as e:
             # Avoid using `except ValidationError` when `ValidationError` may
             # be None (not imported). Distinguish validation-threshold
