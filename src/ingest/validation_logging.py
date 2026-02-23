@@ -21,17 +21,17 @@ from src.utils.checksums import serialize_df_bytes, sha256_bytes
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_INVALID_LOGS = Path("metadata/ingest_logs.json")
+DEFAULT_INVALID_LOGS = Path("metadata/ingest_logs.jsonl")
 DEFAULT_INVALID_DIR = Path("raw")
 
 
 def _ensure_metadata_file(metadata_path: Union[str, Path]) -> None:
-    """Ensure metadata directory exists and file is initialized as JSON array."""
+    """Ensure metadata directory exists and create empty JSONL file if missing."""
     metadata_path = Path(metadata_path)
     metadata_path.parent.mkdir(parents=True, exist_ok=True)
     if not metadata_path.exists():
-        tmp = metadata_path.with_suffix(".json.tmp")
-        tmp.write_text("[]")
+        tmp = metadata_path.with_suffix(".tmp")
+        tmp.write_text("")
         os.replace(str(tmp), str(metadata_path))
 
 
@@ -79,21 +79,15 @@ def log_invalid_rows(
         _ensure_metadata_file(metadata_path)
         metadata_path = Path(metadata_path)
 
-        # Read existing entries
-        try:
-            existing = json.loads(metadata_path.read_text())
-            if not isinstance(existing, list):
-                existing = []
-        except Exception:
-            existing = []
-
-        # Append new entries
-        existing.extend(log_entries)
-
-        # Write atomically using consistent .json.tmp suffix
-        tmp = metadata_path.with_suffix(".json.tmp")
-        tmp.write_text(json.dumps(existing, ensure_ascii=False, indent=2))
-        os.replace(str(tmp), str(metadata_path))
+        # Append entries as JSON Lines
+        with open(metadata_path, "a", encoding="utf-8") as fh:
+            for entry in log_entries:
+                fh.write(json.dumps(entry, ensure_ascii=False) + "\n")
+            fh.flush()
+            try:
+                os.fsync(fh.fileno())
+            except Exception:
+                pass
 
         logger.info(
             "Logged %d invalid row errors for %s to %s",

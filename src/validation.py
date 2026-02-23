@@ -676,11 +676,11 @@ def log_invalid_rows(
     error_records: list,
     job_id: str | None = None,
 ):
-    """Append an entry to metadata/ingest_logs.json (JSON array) describing
+    """Append an entry to metadata/ingest_logs.jsonl (JSON Lines) describing
     invalid rows.
 
-    This is a lightweight implementation compatible with existing project
-    patterns.
+    This implementation appends a single JSON object per line (JSONL), which
+    is append-only and serves as the source-of-record for ingest events.
     """
     import json
     import os
@@ -700,30 +700,16 @@ def log_invalid_rows(
     if meta_dir := os.path.dirname(metadata_path):
         _ensure_dir(meta_dir)
 
-    # Prefer a JSON array file format. Read existing file (if any), append
-    # the new entry and write atomically. If parsing fails, start a fresh
-    # array. This keeps logic simple and avoids JSON Lines formats.
-    data = []
-    if os.path.exists(metadata_path):
+    # Append as a single JSON object per line (JSONL). This avoids reading
+    # and rewriting large arrays and serves as a source-of-record for audits.
+    line = json.dumps(entry, ensure_ascii=False)
+    with open(metadata_path, "a", encoding="utf-8") as fh:
+        fh.write(line + "\n")
+        fh.flush()
         try:
-            with open(metadata_path, "r", encoding="utf-8") as fh:
-                existing = json.load(fh)
-                if isinstance(existing, list):
-                    data = existing
-                elif isinstance(existing, dict):
-                    data = [existing]
+            os.fsync(fh.fileno())
         except Exception:
-            data = []
-
-    data.append(entry)
-    tmp_path = metadata_path + ".tmp"
-    with open(tmp_path, "w", encoding="utf-8") as fh:
-        json.dump(data, fh, ensure_ascii=False, indent=2)
-    try:
-        os.replace(tmp_path, metadata_path)
-    except Exception:
-        with open(metadata_path, "w", encoding="utf-8") as fh:
-            json.dump(data, fh, ensure_ascii=False, indent=2)
+            pass
 
     return entry
 
@@ -735,7 +721,7 @@ def validate_and_handle(
     raw_file: str,
     ts: str,
     raw_root: str = "raw",
-    metadata_path: str = "metadata/ingest_logs.json",
+    metadata_path: str = "metadata/ingest_logs.jsonl",
     threshold: float | None = None,
     abort_on_exceed: bool = True,
     persist_invalid: bool = True,

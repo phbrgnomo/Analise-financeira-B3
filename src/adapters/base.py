@@ -226,7 +226,7 @@ class Adapter(ABC):
             ]
             try:
                 log_invalid_rows(
-                    metadata_path="metadata/ingest_logs.json",
+                    metadata_path="metadata/ingest_logs.jsonl",
                     provider=provider_name,
                     ticker=ticker,
                     raw_file="",

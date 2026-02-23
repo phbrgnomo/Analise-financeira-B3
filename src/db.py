@@ -10,7 +10,7 @@ import pandas as pd
 
 from src.paths import DATA_DIR
 
-DEFAULT_DB_PATH = os.path.join(str(DATA_DIR), "data.db")
+DEFAULT_DB_PATH = str(DATA_DIR / "data.db")
 DEFAULT_SCHEMA_PATH = os.path.join(
     os.path.dirname(os.path.dirname(__file__)), "docs", "schema.json"
 )
@@ -89,19 +89,6 @@ def _ensure_schema(conn: sqlite3.Connection, schema_path: Optional[str] = None) 
         ("schema_version", sv),
     )
     conn.commit()
-
-
-def init_db(db_path: Optional[str] = None) -> None:
-    """Initialize DB schema (idempotent).
-
-    Ensures the canonical tables exist. Uses the DEFAULT_DB_PATH when
-    `db_path` is None.
-    """
-    conn = _connect(db_path or DEFAULT_DB_PATH)
-    try:
-        _ensure_schema(conn)
-    finally:
-        conn.close()
 
 
 def _build_row_tuple(vals: dict, schema_cols: list) -> tuple:
@@ -186,6 +173,87 @@ def _connect(db_path: Optional[str]) -> sqlite3.Connection:
         db_path = DEFAULT_DB_PATH
     os.makedirs(os.path.dirname(db_path), exist_ok=True)
     return sqlite3.connect(db_path)
+
+
+def init_db(db_path: Optional[str] = None, allow_external: bool = False) -> None:
+    """Inicializa o banco (cria arquivo e schema) de forma idempotente.
+
+    Parameters
+    ----------
+    db_path: Optional[str]
+        Caminho para o arquivo .db. Quando None usa `DATA_DIR / 'data.db'`.
+    allow_external: bool
+        Parâmetro reservado para compatibilidade com scripts que validam
+        caminhos externamente. Atualmente apenas influencia a passagem de
+        `db_path` tal como recebido.
+    """
+    if db_path is None:
+        db_path = DEFAULT_DB_PATH
+
+    os.makedirs(os.path.dirname(db_path), exist_ok=True)
+    conn = sqlite3.connect(db_path)
+    try:
+        _ensure_schema(conn)
+    finally:
+        conn.close()
+
+
+def record_snapshot_metadata(
+    metadata: dict,
+    conn: Optional[sqlite3.Connection] = None,
+    db_path: Optional[str] = None,
+) -> None:
+    """Registra um resumo de snapshot/ingest na tabela `snapshots`.
+
+    Armazena o JSON serializado no campo `payload` junto com `ticker` e
+    `created_at` para consultas rápidas.
+    """
+    close_conn = False
+    if conn is None:
+        conn = _connect(db_path)
+        close_conn = True
+
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS snapshots (
+                id TEXT PRIMARY KEY,
+                ticker TEXT,
+                created_at TEXT,
+                payload TEXT
+            )
+            """
+        )
+        job_id = (
+            metadata.get("job_id")
+            or metadata.get("id")
+            or hashlib.sha256(
+                json.dumps(metadata, sort_keys=True).encode("utf-8")
+            ).hexdigest()
+        )
+        created_at = (
+            metadata.get("created_at")
+            or datetime.now(timezone.utc).isoformat()
+        )
+        ticker = metadata.get("ticker") or metadata.get("symbol") or None
+        sql = (
+            "INSERT OR REPLACE INTO snapshots(id, ticker, created_at, payload) "
+            "VALUES (?, ?, ?, ?)"
+        )
+        cur.execute(
+            sql,
+            (
+                job_id,
+                ticker,
+                created_at,
+                json.dumps(metadata, ensure_ascii=False),
+            ),
+        )
+        conn.commit()
+    finally:
+        if close_conn:
+            conn.close()
 
 
 def write_prices(

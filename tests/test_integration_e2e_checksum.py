@@ -20,7 +20,7 @@ def test_end_to_end_checksum_agreement(tmp_path):
     )
 
     raw_root = tmp_path / "raw"
-    metadata_path = tmp_path / "metadata" / "ingest_logs.json"
+    metadata_path = tmp_path / "metadata" / "ingest_logs.jsonl"
 
     # Act: save raw
     meta = save_raw_csv(

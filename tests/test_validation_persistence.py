@@ -24,7 +24,7 @@ def test_persist_and_log_invalid_rows(tmp_path):
 
     df = pd.DataFrame(rows)
 
-    metadata_path = tmp_path / "ingest_logs.json"
+    metadata_path = tmp_path / "ingest_logs.jsonl"
     raw_root = tmp_path / "raw"
 
     # Act
@@ -50,13 +50,12 @@ def test_persist_and_log_invalid_rows(tmp_path):
     invalid_filepath = entry.get("invalid_filepath")
     assert invalid_filepath and Path(invalid_filepath).exists()
 
-    # Assert: metadata file contains the entry
+    # Assert: metadata file contains the entry (JSONL)
     assert metadata_path.exists()
-    with open(metadata_path, "r", encoding="utf-8") as fh:
-        data = json.load(fh)
-
-    assert isinstance(data, list) and len(data) >= 1
-    recorded = data[-1]
+    text = metadata_path.read_text(encoding="utf-8")
+    lines = [line for line in text.splitlines() if line.strip()]
+    assert len(lines) >= 1
+    recorded = json.loads(lines[-1])
     assert recorded["provider"] == "yfinance"
     assert recorded["ticker"] == "PETR4.SA"
     assert recorded["invalid_count"] == len(details.get("error_records", []))

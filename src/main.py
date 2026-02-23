@@ -1,5 +1,4 @@
 from datetime import date, timedelta
-# ruff: noqa
 from typing import Optional
 
 import typer
@@ -17,7 +16,7 @@ def _fetch_and_prepare_asset(
     d_in: str,
     d_fim: str,
     validation_tolerance: Optional[float],
-) -> None:  # noqa
+) -> None:
     """Fetch, persist raw data, map to canonical schema and optionally validate.
 
     Parameters
@@ -32,14 +31,14 @@ def _fetch_and_prepare_asset(
         Percentual (0.0-1.0) limite de linhas inválidas aceitáveis para não
         abortar o ingest; `None` significa não aplicar threshold.
 
-    Side effects
-    ------------
-    - Faz download dos dados do provedor (via `src.dados_b3.cotacao_ativo_dia`).
-    - Persiste CSV bruto via `save_raw_csv` em `raw/<provider>/...`.
-    - Mapeia os dados para o esquema canônico com `to_canonical`.
-    - Se o módulo de validação estiver disponível, executa validação
-      (chama `validate_and_handle`) que pode persistir linhas inválidas e
-      registrar entradas em `metadata/ingest_logs.json`.
+        Side effects
+        ------------
+        - Faz download dos dados do provedor (via `src.dados_b3.cotacao_ativo_dia`).
+        - Persiste CSV bruto via `save_raw_csv` em `raw/<provider>/...`.
+        - Mapeia os dados para o esquema canônico com `to_canonical`.
+        - Se o módulo de validação estiver disponível, executa validação
+            (chama `validate_and_handle`) que pode persistir linhas inválidas e
+            registrar entradas em `metadata/ingest_logs.jsonl` (JSONL append-only).
     - Calcula a coluna `Return` (log-return) e salva um CSV em `DATA_DIR/{a}.csv`.
 
     Errors / raises
@@ -92,25 +91,6 @@ def _fetch_and_prepare_asset(
             fetched_at=save_meta.get("fetched_at"),
         )
         print(f"Mapper produced {len(canonical)} canonical rows for {a}")
-
-        # Persist canonical rows to the local DB (idempotent upsert)
-        try:
-            from src import db as dbmod
-
-            try:
-                dbmod.init_db()
-            except Exception:
-                # best-effort init; if DB is already initialized elsewhere ignore
-                pass
-
-            try:
-                dbmod.write_prices(canonical, f"{a}.SA")
-                print(f"Persisted canonical rows for {a} to DB")
-            except Exception as e_db:
-                print(f"Falha ao persistir dados no DB para {a}: {e_db}")
-        except Exception:
-            # If DB module not importable, skip persistence silently
-            pass
     except Exception as e:
         print(f"Mapper failed for {a}: {e}")
         return
@@ -132,8 +112,8 @@ def _fetch_and_prepare_asset(
                 ticker=f"{a}.SA",
                 raw_file=save_meta.get("filepath") or "",
                 ts=save_meta.get("fetched_at") or "",
-                raw_root="raw",
-                metadata_path="metadata/ingest_logs.jsonl",
+                    raw_root="raw",
+                    metadata_path="metadata/ingest_logs.jsonl",
                 threshold=validation_tolerance,
                 abort_on_exceed=True,
                 persist_invalid=True,
@@ -150,7 +130,6 @@ def _fetch_and_prepare_asset(
                     summary.invalid_percent,
                 )
             )
-
         except Exception as e:
             # Avoid using `except ValidationError` when `ValidationError` may
             # be None (not imported). Distinguish validation-threshold
@@ -159,6 +138,17 @@ def _fetch_and_prepare_asset(
                 print(f"Ingest aborted for {a} due to validation threshold: {e}")
                 return
             print(f"Validation step failed for {a}: {e}")
+
+    # Persist canonical rows to the DB (idempotent upsert). This is a best-effort
+    # operation: the DB may not be initialized in some environments, but when
+    # available we should persist canonical rows for downstream queries.
+    try:
+        from src import db as _db
+
+        _db.write_prices(canonical, f"{a}.SA")
+        print(f"Persisted canonical rows for {a} into DB")
+    except Exception as e:
+        print(f"Warning: failed to persist canonical rows for {a}: {e}")
 
     # Calcula o retorno (usa coluna ajustada quando disponível, senão `close`)
     # Preferir o DataFrame `canonical` (já mapeado/validado) quando disponível.
