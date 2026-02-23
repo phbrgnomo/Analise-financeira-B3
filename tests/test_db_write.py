@@ -61,4 +61,7 @@ def test_write_and_read_idempotent():
     out_range = dbmod.read_prices(
         "PETR4.SA", start="2023-01-03", end="2023-01-05", conn=conn
     )
-    assert len(out_range) == 3
+    # read_prices() uses SQL BETWEEN semantics (end date is inclusive),
+    # therefore the range 2023-01-03..2023-01-05 should return three rows.
+    EXPECTED_RANGE_COUNT = 3
+    assert len(out_range) == EXPECTED_RANGE_COUNT

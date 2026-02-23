@@ -23,7 +23,7 @@ from src.utils.checksums import serialize_df_bytes, sha256_bytes, sha256_file
 
 logger = logging.getLogger(__name__)
 
-# Legacy DB var kept for compatibility; metadata will be written to JSON
+# Legacy DB var kept for compatibility; metadata will be written to JSONL
 DEFAULT_DB = Path("dados/data.db")
 DEFAULT_METADATA = Path("metadata/ingest_logs.jsonl")
 

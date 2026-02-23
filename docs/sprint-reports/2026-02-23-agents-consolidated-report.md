@@ -15,11 +15,7 @@
 - **Governança BMAD:** Inconsistências entre `_bmad/_config/agent-manifest.csv` e frontmatter de agentes.
 
 **3) Riscos Críticos**
-- **Corrupção de DB (ALTA):** Concurrency em SQLite sem PRAGMA/locking pode corromper dados em cargas paralelas.
-- **Perda silenciosa (ALTA):** `INSERT OR REPLACE` pode sobrescrever registros sem verificação semântica.
-- **Falha de aceitação (MÉDIA):** Sem job CI acceptance, regressões em integração só serão detectadas tarde.
-- **Operação deficitaria (MÉDIA):** Ausência de runbook/migration strategy aumenta tempo de recuperação e risco em produção.
-- **Testes insuficientes (MÉDIA):** Falta tests de snapshot e concorrência reduz confiança em upgrades.
+**Operação deficitária (MÉDIA):** Ausência de runbook/migration strategy aumenta tempo de recuperação e risco em produção.
 
 **4) Recomendações Prioritárias (com responsáveis e esforço)**
 - **Alta**
@@ -31,7 +27,7 @@
   - **Snapshot generation test + `scripts/verify_snapshot.py`:** Responsável: `Amelia` + `Quinn`; Esforço: 1–2 dias.
   - **Migration Runbook + light migrations util:** Responsável: `Winston` + `Paige`; Esforço: 2 dias.
 - **Baixa**
-  - **Normalizar `_bmad` agent manifest + validação script:** Responsável: `Bond`; Esforço: 1–2 dias.
+  - **Normalizar `_bmad` agent manifest + script de validação:** Responsável: `Bond`; Esforço: 1–2 dias.
   - **Docs Quickstart unificado e templates:** Responsável: `Paige`; Esforço: 1–2 dias.
 
 **5) Plano de Ação Imediato (7–14 dias) — 6–8 tarefas**

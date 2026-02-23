@@ -11,7 +11,7 @@ poetry install
 2. Inicializar DB (opcional):
 
 ```bash
-python scripts/init_ingest_db.py --db dados/data.db
+poetry run python scripts/init_ingest_db.py --db dados/data.db
 ```
 
 3. Gerar snapshot determinístico em um diretório temporário:
@@ -20,15 +20,15 @@ python scripts/init_ingest_db.py --db dados/data.db
 mkdir -p ./snapshots_test
 SNAPSHOT_DIR=$PWD/snapshots_test ./examples/run_quickstart_example.sh
 # ou
-SNAPSHOT_DIR=$PWD/snapshots_test python scripts/run_save_raw_example.py --out-dir snapshots_test
+SNAPSHOT_DIR=$PWD/snapshots_test poetry run python scripts/run_save_raw_example.py --out-dir snapshots_test
 ```
 
 4. Validar checksums/manifest:
 
 ```bash
-python scripts/validate_snapshots.py --dir snapshots_test --manifest snapshots/checksums.json
+poetry run python scripts/validate_snapshots.py --dir snapshots_test --manifest snapshots/checksums.json
 # ou usar o wrapper
-python scripts/verify_snapshot.py --dir snapshots_test --manifest snapshots/checksums.json
+poetry run python scripts/verify_snapshot.py --dir snapshots_test --manifest snapshots/checksums.json
 ```
 
 5. Rodar teste E2E localmente (opcional):

@@ -27,19 +27,19 @@ from src import db
 
 # Exemplo mínimo de DataFrame canônico
 df = pd.DataFrame({
-  "date": pd.to_datetime(["2024-01-01", "2024-01-02"]),
-  "open": [10.0, 10.5],
-  "high": [10.2, 10.8],
-  "low": [9.8, 10.0],
-  "close": [10.1, 10.6],
-  "volume": [1000, 1500],
-  # Campos auxiliares como `source`, `fetched_at` e `raw_checksum` podem
-  # ser preenchidos pelo pipeline ou pelo chamador quando disponíveis.
-  "source": ["yfinance", "yfinance"],
+    "date": pd.to_datetime(["2024-01-01", "2024-01-02"]),
+    "open": [10.0, 10.5],
+    "high": [10.2, 10.8],
+    "low": [9.8, 10.0],
+    "close": [10.1, 10.6],
+    "volume": [1000, 1500],
+    # Campos auxiliares como `source`, `fetched_at` e `raw_checksum` podem
+    # ser preenchidos pelo pipeline ou pelo chamador quando disponíveis.
+    "source": ["yfinance", "yfinance"],
 })
 
 # Persistir (idempotente por (ticker, date))
-db.write_prices(df, ticker="PETR4")
+    db.write_prices(df, ticker="PETR4")
 ```
 
 - Leitura completa e por intervalo:

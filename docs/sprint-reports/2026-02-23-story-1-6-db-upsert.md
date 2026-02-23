@@ -29,7 +29,7 @@ Design e decisões principais
   - tabela `metadata` (key/value) armazena `schema_version`.
 - Estratégia de upsert: usamos SQL `INSERT ... ON CONFLICT(ticker,date) DO UPDATE SET ...` para atualizar campos com os valores mais recentes quando a mesma combinação `(ticker,date)` já existir.
 - `raw_checksum`: SHA256 calculado por linha a partir dos campos relevantes (ticker, date, preços, volume, source) para facilitar detecção de mudanças no payload original.
-- `fetched_at` gravado em formato ISO8601 UTC (por enquanto via datetime.utcnow().isoformat()).
+- `fetched_at` gravado em formato ISO8601 UTC (usando datetime.now(timezone.utc).isoformat()).
 - A implementação aceita um `sqlite3.Connection` in-memory para testes e `db_path` para uso em disco (padrão: dados/data.db).
 
 Exemplo de uso (Python)
@@ -67,7 +67,7 @@ Próximos passos recomendados
 -
 - Escrever uma migração / versão do esquema se a tabela `prices` for expandida. Documentar no arquivo `docs/schema.md`.
 - Adicionar um utilitário CLI para inspecionar/compactar o DB (vacuum, permissões, backup).
-- Considerar gravação de `fetched_at` com timezone-aware (`datetime.now(timezone.utc)`) e padronizar formato usado no projeto.
+- `fetched_at` é agora timezone-aware em UTC (`datetime.now(timezone.utc).isoformat()`); padronize este formato no projeto e documente-o em `docs/schema.md` para evitar inconsistências.
 - Abrir PR com os arquivos criados e este relatório de sprint.
 
 Contato

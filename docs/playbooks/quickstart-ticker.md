@@ -19,9 +19,9 @@ poetry run main --ticker PETR4.SA --force-refresh
 - Snapshot CSV: `snapshots/PETR4_snapshot.csv`
 - Banco SQLite: `dados/data.db`
 - Relatórios derivados: `reports/PETR4_report.csv` (quando aplicável)
- - Raw provider CSVs: `raw/<provider>/<TICKER>-YYYYMMDDTHHMMSSZ.csv`
- - Checksum ao lado do raw CSV: `raw/<provider>/<TICKER>-YYYYMMDDTHHMMSSZ.csv.checksum`
- - Metadados de ingestão (JSONL, append-only): `metadata/ingest_logs.jsonl` (uma linha JSON por ingest com `job_id, source, fetched_at, raw_checksum, rows, filepath, status, created_at`)
+- Raw provider CSVs: `raw/<provider>/<TICKER>-YYYYMMDDTHHMMSSZ.csv`
+- Checksum ao lado do raw CSV: `raw/<provider>/<TICKER>-YYYYMMDDTHHMMSSZ.csv.checksum`
+- Metadados de ingestão (JSONL, append-only): `metadata/ingest_logs.jsonl` (uma linha JSON por ingest com `job_id, source, fetched_at, raw_checksum, rows, filepath, status, created_at`)
 
 Verificações mínimas
 
@@ -53,7 +53,7 @@ Banco de dados local
 - Inicialize o banco SQLite (se ainda não existir):
 
 ```bash
-python scripts/init_ingest_db.py --db dados/data.db
+poetry run python scripts/init_ingest_db.py --db dados/data.db
 ```
 
 O pipeline também tenta persistir automaticamente as linhas canônicas no banco via `db.write_prices()` quando o mapeamento canônico e a validação forem bem-sucedidos.
