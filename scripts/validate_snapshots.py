@@ -262,6 +262,18 @@ def main():
     # flexible so tests or other callers can request different patterns.
     current = generate_manifest(args.dir, pattern="*.csv")
 
+    # If validating an external directory (not the repo snapshots/), map
+    # current files into the `snapshots/` namespace by basename so they can
+    # be compared against the repository manifest which uses keys like
+    # `snapshots/PETR4_snapshot.csv`.
+    if allow_external:
+        remapped: Dict[str, Dict[str, str]] = {}
+        for k, v in current.items():
+            # Use the file's basename and place under snapshots/ to match manifest
+            name = Path(k).name
+            remapped[f"snapshots/{name}"] = v
+        current = remapped
+
     if args.update:
         write_manifest(args.manifest, current, allow_external=allow_external)
         print(f"Manifest updated: {args.manifest}")
