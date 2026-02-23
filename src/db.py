@@ -184,7 +184,12 @@ def _row_tuple_from_series(
 def _connect(db_path: Optional[str]) -> sqlite3.Connection:
     if db_path is None:
         db_path = DEFAULT_DB_PATH
-    os.makedirs(os.path.dirname(db_path), exist_ok=True)
+    # Ensure parent directory exists when a directory component is present.
+    # Avoid calling os.makedirs with an empty string when db_path is just a
+    # filename (e.g., "data.db"). Use absolute path to be deterministic.
+    dirname = os.path.dirname(os.path.abspath(db_path))
+    if dirname:
+        os.makedirs(dirname, exist_ok=True)
     return sqlite3.connect(db_path)
 
 

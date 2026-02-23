@@ -21,7 +21,7 @@ Versionamento:
 - Mudanças 'breaking' (remoção/renomeação de colunas obrigatórias, troca de tipos) -> incrementar major e seguir processo de migração.
 
 Política de Versionamento e Migração
--
+---
 - `docs/schema.json` é a fonte de verdade. Sempre atualize `schema_version` quando alterar o esquema.
 - Convenção recomendada: usar SemVer-like (major.minor), mas o campo atual é inteiro; incremente para indicar nova versão canônica do esquema.
 - Para mudanças não-break (ex.: adicionar coluna opcional): incrementar a versão e documentar em `metadata.migrations`.
@@ -32,7 +32,7 @@ Política de Versionamento e Migração
  4. Atualizar testes e snapshots, e rodar full `pytest`.
 
 Recomendações operacionais
--
+---
 - Ao aplicar mudanças no esquema em ambiente de produção:
 	- Faça backup do arquivo de dados (`dados/data.db`).
 	- Teste migrações em um clone do DB antes de executar em produção.

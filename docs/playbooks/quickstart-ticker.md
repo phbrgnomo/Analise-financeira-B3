@@ -21,8 +21,6 @@ poetry run main --ticker PETR4.SA --force-refresh
 - Relatórios derivados: `reports/PETR4_report.csv` (quando aplicável)
  - Raw provider CSVs: `raw/<provider>/<TICKER>-YYYYMMDDTHHMMSSZ.csv`
  - Checksum ao lado do raw CSV: `raw/<provider>/<TICKER>-YYYYMMDDTHHMMSSZ.csv.checksum`
- - Metadados de ingestão (JSON): `metadata/ingest_logs.json` (array de objetos com `job_id, source, fetched_at, raw_checksum, rows, filepath, status, created_at`)
- - Checksum ao lado do raw CSV: `raw/<provider>/<TICKER>-YYYYMMDDTHHMMSSZ.csv.checksum`
  - Metadados de ingestão (JSONL, append-only): `metadata/ingest_logs.jsonl` (uma linha JSON por ingest com `job_id, source, fetched_at, raw_checksum, rows, filepath, status, created_at`)
 
 Verificações mínimas
