@@ -1,6 +1,6 @@
 Plano: T5 — Testes de Snapshot & scripts/verify_snapshot.py
 
-CRITICO: Crie o branch `feature/verify-snapshot` e implemente as seguintes mudanças para mitigar riscos de concorrência com SQLite e validar a robustez do sistema:
+CRÍTICO: Crie o branch `feature/verify-snapshot` e implemente as seguintes mudanças para mitigar riscos de concorrência com SQLite e validar a robustez do sistema:
 
 
 Objetivo
@@ -16,7 +16,7 @@ Critério de aceitação
 - Documentação curta adicionada em `docs/implementation-artifacts/snapshot-verification.md`.
 
 Passos (ETA: 2 dias)
-1) Revisar artefatos chave
+1) Revisar artefatos-chave
 - Confirmar comportamento de `serialize_df_bytes`, `write_snapshot` e `save_raw_csv` para garantir serialização determinística.
 - Confirmar formato e localização de `snapshots/checksums.json`.
 

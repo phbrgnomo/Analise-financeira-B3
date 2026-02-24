@@ -18,7 +18,7 @@ python scripts/validate_snapshots.py --dir <tmp_dir> --manifest <tmp_manifest.js
 ```
 
 Notas sobre determinismo
-- Para testes e E2E, gere arquivos com timestamp controlado (ex.: `--ts` ou variável de ambiente) ou crie os CSVs de forma determinística. O código de verificação suporta `--allow-external` para remapear nomes base dos arquivos externos para `snapshots/<basename>` durante validação.
+- Para testes e E2E, gere arquivos com timestamp controlado (ex.: `--ts` ou variável de ambiente) ou crie os CSVs de forma determinística. O código de verificação suporta `--allow-external` para remapear nomes-base dos arquivos externos para `snapshots/<basename>` durante validação.
 
 Códigos de saída relevantes
 - `0` — todos os snapshots batem com o manifesto

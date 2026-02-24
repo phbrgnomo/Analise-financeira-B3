@@ -6,7 +6,7 @@ import os
 import re
 import sqlite3
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Any, Optional
 
 import pandas as pd
 
@@ -295,14 +295,14 @@ def record_snapshot_metadata(
         close_conn = True
 
     try:
-        _extracted_from_record_snapshot_metadata_17(conn, metadata)
+        _upsert_snapshot_metadata(conn, metadata)
     finally:
         if close_conn:
             conn.close()
 
-
-# TODO Rename this here and in `record_snapshot_metadata`
-def _extracted_from_record_snapshot_metadata_17(conn, metadata):
+def _upsert_snapshot_metadata(
+    conn: sqlite3.Connection, metadata: dict[str, Any]
+) -> None:
     cur = conn.cursor()
     cur.execute(
         """

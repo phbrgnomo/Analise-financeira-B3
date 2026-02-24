@@ -33,18 +33,15 @@ def _sanitize_env_value(val: str) -> str:
 
 
 def _resolve_allowed_roots(
-    base: Union[str, Path], extra_allowed: Sequence[Union[str, Path]] | None
-):
+    base: Path, extra_allowed: Sequence[Union[str, Path]] | None
+) -> list[Path]:
     """Resolve and return a list of Path roots from base and extra_allowed.
 
-    This helper keeps `safe_path_under` smaller to satisfy complexity
-    linters while centralizing resolution logic.
+    `base` is expected to already be a sanitized, resolved `Path` provided by
+    the caller. This helper centralizes resolution logic for additional
+    allowed roots (which may still be strings coming from environment).
     """
-    # Sanitize and resolve base (base may come from env in some callers)
-    base_val = _sanitize_env_value(base) if isinstance(base, str) else str(base)
-    roots: list[Path] = []
-    with contextlib.suppress(Exception):
-        roots.append(Path(base_val).resolve())
+    roots: list[Path] = [base]
     if extra_allowed:
         for r in extra_allowed:
             try:
@@ -127,6 +124,8 @@ def _choose_from_snapshot_env(repo_root: Path) -> Path | None:
         candidate = safe_path_under(repo_root, sanitized, extra_allowed=extra_roots)
     except ValueError:
         candidate = Path(sanitized)
+        if not candidate.is_absolute():
+            candidate = repo_root / candidate
 
     try:
         validate_snapshot_dir(candidate, repo_root, extra_allowed=extra_roots)
