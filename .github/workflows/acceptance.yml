@@ -57,8 +57,9 @@ jobs:
 
       - name: Run concurrency acceptance test (file-backed)
         run: |
+          set -euo pipefail
           mkdir -p reports
-          NETWORK_MODE=playback poetry run pytest -q tests/test_concurrency_sqlite.py -q --maxfail=1 --junitxml=reports/junit_concurrency.xml || true
+          NETWORK_MODE=playback poetry run pytest -q tests/test_concurrency_sqlite.py --maxfail=1 --junitxml=reports/junit_concurrency.xml
 
       - name: Generate snapshots (deterministic)
         run: |

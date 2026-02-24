@@ -24,7 +24,7 @@ except Exception:  # pragma: no cover - runtime dependency
 
 
 def _sanitize_env_value(val: str) -> str:
-    """Remover bytes nulos e espaços acidentais de valores de ambiente."""
+    """Remove bytes nulos e espaços acidentais de valores de ambiente."""
     if not isinstance(val, str):
         raise ValueError("Valor da variável de ambiente não é uma string")
     return val.split("\x00", 1)[0].strip()
@@ -38,24 +38,36 @@ def safe_path_under(base: Union[str, Path], user_value: str) -> Path:
     base_path = Path(base).resolve()
     val = _sanitize_env_value(user_value)
 
-    candidate = Path(val)
+    # Rejeitar explicitamente valores vazios após sanitização para evitar
+    # que Path("") seja resolvido para CWD e escape do `base_path`.
+    if not val:
+        raise ValueError("Valor de caminho vazio ou inválido")
+
+    try:
+        candidate = Path(val)
+    except Exception:
+        raise ValueError("Valor de caminho inválido") from None
+
     if not candidate.is_absolute():
         candidate = base_path / candidate
 
-    candidate = candidate.resolve()
+    try:
+        # Usar strict=False para evitar FileNotFoundError em caminhos não-existentes
+        candidate = candidate.resolve(strict=False)
+    except Exception as exc:
+        raise ValueError("Falha ao resolver o caminho do usuário") from exc
 
     try:
         if not candidate.is_relative_to(base_path):
             raise ValueError("Caminho fora do diretório permitido")
-    except AttributeError as _:
-        import os as _os
-        if _os.path.commonpath([str(base_path), str(candidate)]) != str(base_path):
+    except AttributeError:
+        if os.path.commonpath([str(base_path), str(candidate)]) != str(base_path):
             raise ValueError("Caminho fora do diretório permitido") from None
 
     return candidate
 
 
-def choose_snapshot_dir(repo_root: Path) -> Path:
+def choose_snapshot_dir(repo_root: Path) -> Path:  # noqa: C901
     """Decide e retorna o `snapshot_dir` preferido com validação básica.
 
     Prioridade: `SNAPSHOT_DIR` > `RUNNER_TEMP/snapshots_test` > repo_root/snapshots_test
@@ -63,27 +75,52 @@ def choose_snapshot_dir(repo_root: Path) -> Path:
     snapshot_dir = None
 
     raw_snapshot_dir = os.environ.get("SNAPSHOT_DIR")
-    if raw_snapshot_dir:
+    if raw_snapshot_dir is not None:
+        # Sanitizar e tratar valores vazios/whitespace como não definidos
         try:
-            snapshot_dir = safe_path_under(repo_root, raw_snapshot_dir)
-        except ValueError as exc:
-            msg = (
-                "Aviso: variável SNAPSHOT_DIR inválida: "
-                f"{exc}; usando fallback."
-            )
-            print(msg, file=sys.stderr)
+            sanitized = _sanitize_env_value(raw_snapshot_dir)
+        except ValueError:
+            sanitized = ""
+
+        if sanitized:
+            # Construir candidate e validar contra repo_root, system tmp e
+            # RUNNER_TEMP (se presente).
+            candidate = Path(sanitized)
+            if not candidate.is_absolute():
+                candidate = repo_root / candidate
+
+            extra_roots: list[Path] = []
+            runner_env = os.environ.get("RUNNER_TEMP")
+            if runner_env:
+                try:
+                    runner_sanitized = _sanitize_env_value(runner_env)
+                    if runner_sanitized:
+                        extra_roots.append(Path(runner_sanitized))
+                except ValueError:
+                    pass
+
+            try:
+                validate_snapshot_dir(candidate, repo_root, extra_allowed=extra_roots)
+                snapshot_dir = candidate.resolve()
+            except ValueError as exc:
+                msg = (
+                    "Aviso: variável SNAPSHOT_DIR inválida: "
+                    f"{exc}; usando fallback."
+                )
+                print(msg, file=sys.stderr)
 
     if snapshot_dir is None and os.environ.get("RUNNER_TEMP"):
         try:
             raw_runner = _sanitize_env_value(os.environ["RUNNER_TEMP"])
-            system_tmp = Path(tempfile.gettempdir()).resolve()
-            candidate = str(Path(raw_runner) / "snapshots_test")
+            runner_base = Path(raw_runner).resolve()
+            candidate = runner_base / "snapshots_test"
             try:
-                snapshot_dir = safe_path_under(system_tmp, candidate)
+                validate_snapshot_dir(candidate, repo_root, extra_allowed=[runner_base])
+                snapshot_dir = candidate.resolve()
             except ValueError as exc:
                 msg = (
-                    "Aviso: RUNNER_TEMP inválido ou fora do diretório "
-                    f"temporário: {exc}; usando fallback."
+                    "Aviso: RUNNER_TEMP inválido ou fora dos diretórios permitidos: "
+                    f"{exc}; usando fallback."
                 )
                 print(msg, file=sys.stderr)
         except Exception:
@@ -95,8 +132,13 @@ def choose_snapshot_dir(repo_root: Path) -> Path:
     return snapshot_dir
 
 
-def validate_snapshot_dir(snapshot_dir: Path, repo_root: Path) -> None:
-    """Valida que `snapshot_dir` está dentro de `repo_root` ou do temp do sistema.
+def validate_snapshot_dir(
+    snapshot_dir: Path,
+    repo_root: Path,
+    extra_allowed: list[Path] | None = None,
+) -> None:
+    """Valida que `snapshot_dir` está dentro de `repo_root`, do temp do sistema,
+    ou de quaisquer raízes adicionais fornecidas em `extra_allowed`.
 
     Lança `ValueError` se inválido.
     """
@@ -104,23 +146,31 @@ def validate_snapshot_dir(snapshot_dir: Path, repo_root: Path) -> None:
     allowed = False
     repo_resolved = repo_root.resolve()
     system_tmp = Path(tempfile.gettempdir()).resolve()
-    try:
-        if resolved_snapshot.is_relative_to(repo_resolved):
-            allowed = True
-    except AttributeError:
-        import os as _os
-        common = _os.path.commonpath([str(repo_resolved), str(resolved_snapshot)])
-        if common == str(repo_resolved):
-            allowed = True
 
-    try:
-        if resolved_snapshot.is_relative_to(system_tmp):
-            allowed = True
-    except AttributeError:
-        import os as _os
-        common = _os.path.commonpath([str(system_tmp), str(resolved_snapshot)])
-        if common == str(system_tmp):
-            allowed = True
+    roots: list[Path] = [repo_resolved, system_tmp]
+    if extra_allowed:
+        for r in extra_allowed:
+            try:
+                roots.append(Path(r).resolve())
+            except Exception:
+                # ignore invalid extra roots
+                continue
+
+    for root in roots:
+        try:
+            if resolved_snapshot.is_relative_to(root):
+                allowed = True
+                break
+        except AttributeError:
+            import os as _os
+
+            try:
+                common = _os.path.commonpath([str(root), str(resolved_snapshot)])
+                if common == str(root):
+                    allowed = True
+                    break
+            except Exception:
+                continue
 
     if not allowed:
         raise ValueError("Diretório de snapshot fora dos diretórios permitidos")

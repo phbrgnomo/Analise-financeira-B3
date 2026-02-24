@@ -25,11 +25,11 @@ Steps - Crie um #tool:todo para cada passo e inicie a execução:
 
 Verification
 - Rodar apenas o teste novo:
-```
+```bash
 poetry run pytest -q tests/test_concurrency_sqlite.py
 ```
 - Rodar suíte completa:
-```
+```bash
 poetry run pytest -q
 ```
 - No CI, confirmar job imprime `sqlite3.sqlite_version` e que testes de concorrência são executados ou marcados como skip/xfail quando versão insuficiente.

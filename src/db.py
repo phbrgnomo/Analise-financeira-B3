@@ -95,6 +95,28 @@ def _build_row_tuple(vals: dict, schema_cols: list) -> tuple:
     return tuple(vals.get(col) for col in schema_cols)
 
 
+def _sqlite_version_tuple() -> tuple[int, ...]:
+    """Parse ``sqlite3.sqlite_version`` into a tuple of integers.
+
+    Handles non-numeric suffixes like ``"3.44.0-alpha"`` by consuming only
+    the leading digit characters of each version component. Returns a
+    tuple of ints (e.g., ``(3, 44, 0)``) and stops parsing when a component
+    has no leading digits.
+    """
+    parts: list[int] = []
+    for part in sqlite3.sqlite_version.split("."):
+        numeric = ""
+        for ch in part:
+            if ch.isdigit():
+                numeric += ch
+            else:
+                break
+        if not numeric:
+            break
+        parts.append(int(numeric))
+    return tuple(parts)
+
+
 def _get_upsert_sql(schema_cols: list) -> str:
     col_list_sql = ",".join(schema_cols)
     placeholders = ",".join(["?" for _ in schema_cols])
@@ -108,18 +130,7 @@ def _get_upsert_sql(schema_cols: list) -> str:
 
     # Parse sqlite3.sqlite_version defensively in case of non-numeric suffixes
     # e.g. "3.44.0-alpha" -> (3, 44, 0)
-    version_parts = []
-    for part in sqlite3.sqlite_version.split("."):
-        numeric = ""
-        for ch in part:
-            if ch.isdigit():
-                numeric += ch
-            else:
-                break
-        if not numeric:
-            break
-        version_parts.append(int(numeric))
-    sqlite_version = tuple(version_parts)
+    sqlite_version = _sqlite_version_tuple()
     supports_upsert = sqlite_version >= (3, 24, 0)
 
     if supports_upsert:
@@ -148,6 +159,46 @@ def _get_upsert_sql(schema_cols: list) -> str:
     return ("INSERT OR REPLACE INTO prices ({cols}) VALUES ({vals})").format(
         cols=col_list_sql, vals=placeholders
     )
+
+
+def _apply_pragmas(conn: sqlite3.Connection, db_path: Optional[str]) -> None:
+    """Aplicar PRAGMAs em modo best-effort para DBs file-backed.
+
+    Esta função encapsula a detecção de DB em memória e a execução dos
+    PRAGMA `journal_mode=WAL` e `busy_timeout=30000`. Falhas são silenciadas
+    para não quebrar testes que usam bancos em-memória ou plataformas
+    sem suporte a WAL.
+    """
+    try:
+        if db_path is None:
+            db_path = DEFAULT_DB_PATH
+
+        db_path = str(db_path)
+
+        file_mode_memory = (
+            db_path.startswith("file:")
+            and ("mode=memory" in db_path or db_path.startswith("file::memory"))
+        )
+        is_memory = db_path == ":memory:" or file_mode_memory
+        if is_memory:
+            return
+
+        cur = conn.cursor()
+        try:
+            cur.execute("PRAGMA journal_mode=WAL;")
+        except Exception:
+            pass
+        try:
+            cur.execute("PRAGMA busy_timeout=30000;")
+        except Exception:
+            pass
+        try:
+            _ = cur.fetchall()
+        except Exception:
+            pass
+    except Exception:
+        # Never fail due to PRAGMA application
+        pass
 
 
 def _row_tuple_from_series(
@@ -197,38 +248,8 @@ def _connect(db_path: Optional[str]) -> sqlite3.Connection:
     # Apply PRAGMAs in best-effort mode for file-backed DBs. Skip applying
     # PRAGMAs for explicit in-memory connections to avoid breaking tests that
     # rely on :memory: semantics.
-    try:
-        file_mode_memory = (
-            isinstance(db_path, str)
-            and db_path.startswith("file:")
-            and "mode=memory" in db_path
-        )
-        is_memory = (
-            db_path == ":memory:"
-            or db_path == "memory"
-            or file_mode_memory
-        )
-        if not is_memory:
-            cur = conn.cursor()
-            try:
-                cur.execute("PRAGMA journal_mode=WAL;")
-            except Exception:
-                # Best-effort: some SQLite builds (or platforms) may not
-                # support WAL for certain filesystem types or in-memory
-                # configurations. Ignore failures and continue.
-                pass
-            try:
-                cur.execute("PRAGMA busy_timeout=30000;")
-            except Exception:
-                pass
-            # Some PRAGMAs return rows; consume to avoid surprises.
-            try:
-                _ = cur.fetchall()
-            except Exception:
-                pass
-    except Exception:
-        # Defensive: ensure _connect never raises due to PRAGMA issues.
-        pass
+    # Apply PRAGMAs in best-effort mode for file-backed DBs.
+    _apply_pragmas(conn, db_path)
 
     return conn
 
@@ -254,25 +275,8 @@ def init_db(db_path: Optional[str] = None, allow_external: bool = False) -> None
     conn = _connect(db_path)
     try:
         _ensure_schema(conn)
-        # Re-apply PRAGMAs after schema creation in best-effort mode. This
-        # ensures a freshly-created file-backed DB receives the same
-        # configuration even if _connect was changed in the future.
-        try:
-            cur = conn.cursor()
-            try:
-                cur.execute("PRAGMA journal_mode=WAL;")
-            except Exception:
-                pass
-            try:
-                cur.execute("PRAGMA busy_timeout=30000;")
-            except Exception:
-                pass
-            try:
-                _ = cur.fetchall()
-            except Exception:
-                pass
-        except Exception:
-            pass
+        # Re-apply PRAGMAs after schema creation in best-effort mode.
+        _apply_pragmas(conn, db_path)
     finally:
         conn.close()
 
