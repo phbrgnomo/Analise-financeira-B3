@@ -38,11 +38,27 @@ def _resolve_allowed_roots(
     This helper keeps `safe_path_under` smaller to satisfy complexity
     linters while centralizing resolution logic.
     """
-    roots: list[Path] = [Path(base).resolve()]
+    # Sanitize and resolve base (base may come from env in some callers)
+    if isinstance(base, str):
+        base_val = _sanitize_env_value(base)
+    else:
+        base_val = str(base)
+
+    roots: list[Path] = []
+    try:
+        roots.append(Path(base_val).resolve())
+    except Exception:
+        # If base cannot be resolved, fallback empty list (caller will handle)
+        pass
+
     if extra_allowed:
         for r in extra_allowed:
             try:
-                roots.append(Path(r).resolve())
+                if isinstance(r, str):
+                    r_val = _sanitize_env_value(r)
+                else:
+                    r_val = str(r)
+                roots.append(Path(r_val).resolve())
             except Exception:
                 # ignore invalid extras
                 continue
