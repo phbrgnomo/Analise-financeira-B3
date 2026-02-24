@@ -37,12 +37,12 @@
 - **T4 — PRAGMA + Concurrency Tests:** Aplicar PRAGMAs no engine e adicionar testes de concorrência (tmp_path isolation). **Owner:** `Winston` + `Quinn`. **ETA:** 3 dias.
 - **T5 — Snapshot Tests & Verify Script:** Test de geração de snapshot e `scripts/verify_snapshot.py`. **Owner:** `Amelia`. **ETA:** 2 dias.
 - **T6 — Runbook de Migrations & Backup/Restore:** Documentar procedimento e adicionar util scripts de manutenção. **Owner:** `Winston` + `Paige`. **ETA:** 3 dias.
-- **T7 — PRs rápidos + pre-commit unify:** Criar PR template, unificar pre-commit/black/ruff e travar versão SQLite no CI. **Owner:** `Barry` + `Amelia`. **ETA:** 1–2 dias.
+-- **T7 — PRs rápidos + pre-commit unify:** Criar PR template, unificar pre-commit/ruff (remover referências a black) e travar versão SQLite no CI. **Owner:** `Barry` + `Amelia`. **ETA:** 1–2 dias.
 - **T8 — Normalizar agentes `_bmad`:** Script de validação e correção de `id/slug`. **Owner:** `Bond`. **ETA:** 1 dia.
 
 **6) Lista de Sugestões Rápidas (PRs de alto impacto / baixo esforço)**
 - **Adicionar PR template:** `.github/PULL_REQUEST_TEMPLATE.md` (Checklist: testes, docs, CI green).
-- **Unificar pre-commit / black / ruff:** atualizar `pyproject.toml` e `.pre-commit-config.yaml`.
+-- **Unificar pre-commit / ruff:** atualizar `pyproject.toml` e `.pre-commit-config.yaml` (remover referências a black se não for usado).
 - **`scripts/verify_snapshot.py` (checksum quick):** utilitário mínimo que calcula SHA256 e retorna 0/1.
 - **DB inspect helper / backup script:** `scripts/db_inspect.py` e `scripts/db_backup.sh`.
 - **Check sqlite version in CI:** step que imprime `sqlite3.sqlite_version` e falha se <3.24.

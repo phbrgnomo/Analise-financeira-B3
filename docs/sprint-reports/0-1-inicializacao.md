@@ -16,7 +16,7 @@ Resumo: este relatório documenta as alterações e artefatos entregues na prime
 
 - `pyproject.toml`
   - Dependências runtime adicionadas: `sqlalchemy`, `typer`, `python-dotenv` (além de `pandas`, `numpy`, `pandas-datareader`).
-  - Dev-dependencies adicionadas: `pytest`, `black`, `ruff`, `pre-commit`.
+  - Dev-dependencies adicionadas: `pytest`, `ruff`, `pre-commit` (black optional).
   - Script entrypoint corrigido para `main = "src.main:app"`.
 
 - `src/main.py`
@@ -28,7 +28,7 @@ Resumo: este relatório documenta as alterações e artefatos entregues na prime
   - `poetry run pytest` executado com sucesso (2 testes passando após formatação).
 
 - Pre-commit
-  - `.pre-commit-config.yaml` adicionado com hooks: `black`, `ruff`, `pre-commit-hooks` (end-of-file-fixer, trailing-whitespace).
+  - `.pre-commit-config.yaml` adicionado com hooks: `ruff`, `pre-commit-hooks` (end-of-file-fixer, trailing-whitespace). (`black` era opcional)
   - Hooks instalados e executados; código reformatado e issues de lint corrigidas.
 
 - Documentação

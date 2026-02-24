@@ -100,7 +100,7 @@ As instruções completas e o playbook estão em `docs/playbooks/testing-network
 - Formatação e lint:
 
 ```bash
-# Usar ruff e black conforme configuração do projeto
+# Usar ruff conforme configuração do projeto
 poetry run ruff check src tests
 ```
 
