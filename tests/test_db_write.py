@@ -25,6 +25,16 @@ def test_write_and_read_idempotent():
     first_count = len(out)
     assert first_count == len(df)
 
+    # Verify 'source' column preserved from DataFrame
+    assert "source" in out.columns
+    assert out["source"].nunique() == 1
+    assert out["source"].iloc[0] == "yfinance"
+
+    # Verify raw_checksum exists and looks like a SHA256 hex
+    assert "raw_checksum" in out.columns
+    sample_checksum = out["raw_checksum"].iloc[0]
+    assert isinstance(sample_checksum, str) and len(sample_checksum) == 64
+
     # Second write (idempotent)
     dbmod.write_prices(df, "PETR4.SA", conn=conn)
     out2 = dbmod.read_prices("PETR4.SA", conn=conn)
@@ -46,3 +56,12 @@ def test_write_and_read_idempotent():
         expected = "1"
 
     assert row is not None and row[0] == expected
+
+    # Verify read_prices start/end filtering
+    out_range = dbmod.read_prices(
+        "PETR4.SA", start="2023-01-03", end="2023-01-05", conn=conn
+    )
+    # read_prices() uses SQL BETWEEN semantics (end date is inclusive),
+    # therefore the range 2023-01-03..2023-01-05 should return three rows.
+    EXPECTED_RANGE_COUNT = 3
+    assert len(out_range) == EXPECTED_RANGE_COUNT

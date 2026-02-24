@@ -120,7 +120,7 @@ def test_log_adapter_validation_happy_path(
     log_invalid_rows_mock.assert_called_once()
     call_kwargs = log_invalid_rows_mock.call_args.kwargs
 
-    assert call_kwargs["metadata_path"] == "metadata/ingest_logs.json"
+    assert call_kwargs["metadata_path"] == "metadata/ingest_logs.jsonl"
     assert call_kwargs["provider"] == provider_name
     assert call_kwargs["ticker"] == ticker
     assert call_kwargs["raw_file"] == ""

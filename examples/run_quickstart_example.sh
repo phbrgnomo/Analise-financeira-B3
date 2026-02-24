@@ -5,7 +5,9 @@ set -euo pipefail
 # Defaults
 DATA_DIR=${DATA_DIR:-./dados}
 SNAPSHOT_DIR=${SNAPSHOT_DIR:-./snapshots}
-OUTPUTS_DIR=${OUTPUTS_DIR:-./outputs}
+# By default do not persist example outputs to repository; set OUTPUTS_DIR to
+# a directory to enable saving artifacts (useful in CI or debugging).
+OUTPUTS_DIR=${OUTPUTS_DIR:-}
 LOG_DIR=${LOG_DIR:-./logs}
 TICKER="PETR4.SA"
 FORMAT="json"
@@ -26,7 +28,10 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-mkdir -p "$SNAPSHOT_DIR" "$OUTPUTS_DIR" "$LOG_DIR"
+mkdir -p "$SNAPSHOT_DIR" "$LOG_DIR"
+if [ -n "$OUTPUTS_DIR" ]; then
+  mkdir -p "$OUTPUTS_DIR"
+fi
 
 JOB_ID=$(uuidgen 2>/dev/null || date +%s)
 TIMESTAMP=$(date -u +%Y%m%dT%H%M%SZ)
@@ -39,9 +44,17 @@ echo "Running quickstart example for $TICKER (no_network=$NO_NETWORK)..." >> "$L
 
 if [[ $NO_NETWORK -eq 1 ]]; then
   # Use fixtures: call project CLI with flags to use sample tickers
-  poetry run main --no-network --ticker "$TICKER" --format "$FORMAT" --sample-tickers tests/fixtures/sample_ticker.csv > "$OUTPUTS_DIR/quickstart_${TIMESTAMP}.out" 2>>"$LOGFILE" || EXIT_CODE=$?
+  if [ -n "$OUTPUTS_DIR" ]; then
+    poetry run main --no-network --ticker "$TICKER" --format "$FORMAT" --sample-tickers tests/fixtures/sample_ticker.csv > "$OUTPUTS_DIR/quickstart_${TIMESTAMP}.out" 2>>"$LOGFILE" || EXIT_CODE=$?
+  else
+    poetry run main --no-network --ticker "$TICKER" --format "$FORMAT" --sample-tickers tests/fixtures/sample_ticker.csv 2>>"$LOGFILE" || EXIT_CODE=$?
+  fi
 else
-  poetry run main --ticker "$TICKER" --format "$FORMAT" > "$OUTPUTS_DIR/quickstart_${TIMESTAMP}.out" 2>>"$LOGFILE" || EXIT_CODE=$?
+  if [ -n "$OUTPUTS_DIR" ]; then
+    poetry run main --ticker "$TICKER" --format "$FORMAT" > "$OUTPUTS_DIR/quickstart_${TIMESTAMP}.out" 2>>"$LOGFILE" || EXIT_CODE=$?
+  else
+    poetry run main --ticker "$TICKER" --format "$FORMAT" 2>>"$LOGFILE" || EXIT_CODE=$?
+  fi
 fi
 
 EXIT_CODE=${EXIT_CODE:-0}

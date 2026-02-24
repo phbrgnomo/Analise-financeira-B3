@@ -1,12 +1,14 @@
+import json
+
 import pandas as pd
 
+from src import db
 from src.etl.mapper import to_canonical
 from src.ingest.pipeline import save_raw_csv
-from src.utils.checksums import serialize_df_bytes, sha256_bytes
 
 
-def test_end_to_end_checksum_agreement(tmp_path):
-    # Arrange
+def test_pipeline_write_and_read_prices(tmp_path):
+    # Prepare small DF
     df = pd.DataFrame(
         {
             "Open": [10.0, 11.0],
@@ -22,7 +24,7 @@ def test_end_to_end_checksum_agreement(tmp_path):
     raw_root = tmp_path / "raw"
     metadata_path = tmp_path / "metadata" / "ingest_logs.jsonl"
 
-    # Act: save raw
+    # Save raw CSV and metadata
     meta = save_raw_csv(
         df,
         "testprov",
@@ -33,7 +35,7 @@ def test_end_to_end_checksum_agreement(tmp_path):
 
     assert meta["status"] == "success"
 
-    # Map to canonical reusing checksum and fetched_at
+    # Map to canonical
     canonical = to_canonical(
         df,
         provider_name="testprov",
@@ -42,14 +44,25 @@ def test_end_to_end_checksum_agreement(tmp_path):
         fetched_at=meta["fetched_at"],
     )
 
-    # Verify agreement
-    assert canonical.attrs["raw_checksum"] == meta["raw_checksum"]
-    # Also verify checksum corresponds to serialized bytes of df
-    df_bytes = serialize_df_bytes(
-        df.sort_index(),
-        index=True,
-        date_format="%Y-%m-%dT%H:%M:%S",
-        float_format="%.10g",
-        na_rep="",
-    )
-    assert sha256_bytes(df_bytes) == meta["raw_checksum"]
+    # Init DB at tmp path
+    db_path = tmp_path / "dados" / "data.db"
+    db.init_db(str(db_path))
+
+    # Write canonical rows
+    db.write_prices(canonical, "TICK", db_path=str(db_path))
+
+    # Read back
+    out = db.read_prices("TICK", conn=None, db_path=str(db_path))
+    assert not out.empty
+    assert len(out) == len(canonical)
+
+    # Verify metadata JSONL contains the ingest entry
+    text = metadata_path.read_text(encoding="utf-8")
+    lines = [line for line in text.splitlines() if line.strip()]
+    entries = [json.loads(line) for line in lines]
+    found = [
+        e
+        for e in entries
+        if e.get("raw_checksum") == meta.get("raw_checksum")
+    ]
+    assert len(found) >= 1

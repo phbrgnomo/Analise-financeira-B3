@@ -29,7 +29,7 @@ Design e decisões principais
   - tabela `metadata` (key/value) armazena `schema_version`.
 - Estratégia de upsert: usamos SQL `INSERT ... ON CONFLICT(ticker,date) DO UPDATE SET ...` para atualizar campos com os valores mais recentes quando a mesma combinação `(ticker,date)` já existir.
 - `raw_checksum`: SHA256 calculado por linha a partir dos campos relevantes (ticker, date, preços, volume, source) para facilitar detecção de mudanças no payload original.
-- `fetched_at` gravado em formato ISO8601 UTC (por enquanto via datetime.utcnow().isoformat()).
+- `fetched_at` gravado em formato ISO8601 UTC (usando datetime.now(timezone.utc).isoformat()).
 - A implementação aceita um `sqlite3.Connection` in-memory para testes e `db_path` para uso em disco (padrão: dados/data.db).
 
 Exemplo de uso (Python)
@@ -58,17 +58,16 @@ Permissões e operação
 - Recomendação de permissão: `chmod 600 dados/data.db` quando o arquivo for criado em produção para proteger dados sensíveis.
 
 Limitações e observações
--
-- Upsert com `ON CONFLICT` requer SQLite >= 3.24 para comportamento UPSERT; verifique a versão do SQLite do ambiente se encontrar erros.
-- `INSERT OR REPLACE` foi evitado devido a possíveis efeitos colaterais (substituição completa da linha); a opção escolhida atualiza apenas campos expostos.
-- `fetched_at` é atualmente gerado sem timezone explícito (datetime.utcnow()). Em ambiente crítico, preferir objetos timezone-aware.`
+- Upsert com `ON CONFLICT` requer SQLite >= 3.24 para comportamento UPSERT; a implementação agora detecta a versão do SQLite em runtime e, quando não suportado, realiza fallback para `INSERT OR REPLACE` (com aviso). Documente o risco do fallback (substituição completa da linha) e, se necessário, atualize o ambiente/CI para usar SQLite >= 3.24.
+- `INSERT OR REPLACE` foi evitado por padrão devido a possíveis efeitos colaterais (substituição completa da linha); quando usado como fallback, há um aviso explicando o risco.
+- `fetched_at` agora é gerado como timestamp timezone-aware UTC (`datetime.now(timezone.utc).isoformat()`), evitando ambiguidade de timezone.
 - Se for necessário persistir `adj_close` ou outros campos, atualize `docs/schema.json` e introduza migração/versão de esquema.
 
 Próximos passos recomendados
 -
 - Escrever uma migração / versão do esquema se a tabela `prices` for expandida. Documentar no arquivo `docs/schema.md`.
 - Adicionar um utilitário CLI para inspecionar/compactar o DB (vacuum, permissões, backup).
-- Considerar gravação de `fetched_at` com timezone-aware (`datetime.now(datetime.UTC)`) e padronizar formato usado no projeto.
+- `fetched_at` é agora timezone-aware em UTC (`datetime.now(timezone.utc).isoformat()`); padronize este formato no projeto e documente-o em `docs/schema.md` para evitar inconsistências.
 - Abrir PR com os arquivos criados e este relatório de sprint.
 
 Contato

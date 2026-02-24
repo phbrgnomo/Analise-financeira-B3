@@ -15,6 +15,51 @@ so that repeated ingests do not create duplicate records and the database remain
 3. Escritas registram `schema_version` em `metadata` para rastreabilidade.
 4. Implementação documenta claramente a estratégia de upsert (ex.: `ON CONFLICT` / `INSERT OR REPLACE`) e limitações do SQLite.
 
+## Exemplos de Uso
+
+Abaixo seguem exemplos simples de como utilizar a nova API de BD em `src.db`.
+
+- Exemplo de `DataFrame` canônico esperado (colunas essenciais):
+
+```python
+import pandas as pd
+from src import db
+
+# Exemplo mínimo de DataFrame canônico
+df = pd.DataFrame({
+    "date": pd.to_datetime(["2024-01-01", "2024-01-02"]),
+    "open": [10.0, 10.5],
+    "high": [10.2, 10.8],
+    "low": [9.8, 10.0],
+    "close": [10.1, 10.6],
+    "volume": [1000, 1500],
+    # Campos auxiliares como `source`, `fetched_at` e `raw_checksum` podem
+    # ser preenchidos pelo pipeline ou pelo chamador quando disponíveis.
+    "source": ["yfinance", "yfinance"],
+})
+
+# Persistir (idempotente por (ticker, date))
+    db.write_prices(df, ticker="PETR4")
+```
+
+- Leitura completa e por intervalo:
+
+```python
+# Ler todas as linhas para um ticker
+all_rows = db.read_prices("PETR4")
+
+# Ler por intervalo de datas (inclusive)
+range_rows = db.read_prices("PETR4", start="2024-01-01", end="2024-01-31")
+```
+
+Observações:
+
+- O `DataFrame` de entrada deve conter pelo menos as colunas `date, open, high, low, close, volume`.
+- A coluna `date` pode ser uma coluna do `DataFrame` (será interpretada) ou o índice ser do tipo `DatetimeIndex`.
+- `write_prices` aplica comportamento de upsert por `(ticker, date)`: chamar `write_prices` repetidamente com o mesmo `ticker` e as mesmas datas é idempotente — registros duplicados não serão criados; valores existentes serão atualizados conforme a política definida (`ON CONFLICT` / `INSERT OR REPLACE`).
+- `read_prices` retorna um `DataFrame` com a coluna `date` como índice (`DatetimeIndex`).
+
+
 ## Tasks / Subtasks
 
 - [x] Implementar módulo `src.db` com funções `write_prices(df: pd.DataFrame, ticker: str)` e `read_prices(ticker, start=None, end=None)`
