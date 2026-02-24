@@ -183,27 +183,30 @@ def _apply_pragmas(conn: sqlite3.Connection, db_path: Optional[str]) -> None:
     para não quebrar testes que usam bancos em-memória ou plataformas
     sem suporte a WAL.
     """
+    if db_path is None:
+        db_path = DEFAULT_DB_PATH
+
+    db_path = str(db_path)
+
+    file_mode_memory = (
+        db_path.startswith("file:")
+        and ("mode=memory" in db_path or db_path.startswith("file::memory"))
+    )
+    is_memory = db_path == ":memory:" or file_mode_memory
+    if is_memory:
+        return
+
+    cur = conn.cursor()
+    # Apply PRAGMAs in best-effort mode for file-backed DBs. Each call is
+    # individually suppressed to avoid breaking tests on platforms that do
+    # not support WAL or when the underlying connection does not allow the
+    # operation.
     with contextlib.suppress(Exception):
-        if db_path is None:
-            db_path = DEFAULT_DB_PATH
-
-        db_path = str(db_path)
-
-        file_mode_memory = (
-            db_path.startswith("file:")
-            and ("mode=memory" in db_path or db_path.startswith("file::memory"))
-        )
-        is_memory = db_path == ":memory:" or file_mode_memory
-        if is_memory:
-            return
-
-        cur = conn.cursor()
-        with contextlib.suppress(Exception):
-            cur.execute("PRAGMA journal_mode=WAL;")
-        with contextlib.suppress(Exception):
-            cur.execute("PRAGMA busy_timeout=30000;")
-        with contextlib.suppress(Exception):
-            _ = cur.fetchall()
+        cur.execute("PRAGMA journal_mode=WAL;")
+    with contextlib.suppress(Exception):
+        cur.execute("PRAGMA busy_timeout=30000;")
+    with contextlib.suppress(Exception):
+        _ = cur.fetchall()
 
 
 def _row_tuple_from_series(
@@ -299,6 +302,7 @@ def record_snapshot_metadata(
     finally:
         if close_conn:
             conn.close()
+
 
 def _upsert_snapshot_metadata(
     conn: sqlite3.Connection, metadata: dict[str, Any]
