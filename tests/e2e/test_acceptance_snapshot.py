@@ -8,7 +8,11 @@ from src.utils.checksums import serialize_df_bytes, sha256_bytes
 
 
 def _make_csv_bytes() -> bytes:
-    # deterministic small dataframe
+    """Cria um DataFrame pequeno determinístico e retorna bytes CSV.
+
+    O CSV é serializado de forma determinística para uso em testes E2E.
+    """
+    # dataframe pequeno determinístico
     df = pd.DataFrame({"Date": ["2020-01-01", "2020-01-02"], "Close": [10.0, 11.5]})
     return serialize_df_bytes(
         df,
