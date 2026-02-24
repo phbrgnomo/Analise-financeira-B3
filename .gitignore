@@ -30,7 +30,6 @@ coverage.xml
 htmlcov/
 .ruff_cache/
 reports/junit.xml
-metadata/
 
 # MyPy cache
 .mypy_cache/
