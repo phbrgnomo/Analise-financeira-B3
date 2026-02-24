@@ -213,8 +213,8 @@ def _compute_and_print_stats(a: str) -> None:
     retorno_total = df["Return"].sum()
     retorno_medio = df["Return"].mean()
     risco = df["Return"].std()
-    retorno_anual = rt.conv_retorno(retorno_medio, 252)
-    risco_anual = rt.conv_risco(risco, 252)
+    retorno_anual = rt.conv_retorno(retorno_medio, rt.TRADING_DAYS)
+    risco_anual = rt.conv_risco(risco, rt.TRADING_DAYS)
 
     print(f"\n--------{a}--------")
     print(f"Retorno total do período: {round((retorno_total * 100), 4)}%")

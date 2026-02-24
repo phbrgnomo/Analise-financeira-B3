@@ -38,6 +38,9 @@ so that downstream notebooks and modeling code can read precomputed returns.
 - [ ] Document annualization and conventions in code comments and `docs/` (reference to `conv_retorno` if exists)
 - [ ] Documentar o que foi implantado nessa etapa em `docs/sprint-reports` conforme definido no FR28 (`docs/planning-artifacts/prd.md`)
 
+- [x] Document annualization and conventions in code comments and `docs/` (reference to `conv_retorno` if exists)
+- [ ] Documentar o que foi implantado nessa etapa em `docs/sprint-reports` conforme definido no FR28 (`docs/planning-artifacts/prd.md`)
+
 ## Dev Notes
 
 - Technical stack: Python, pandas for ETL, SQLAlchemy or `sqlite3` for persistence, use project's DB layer (`src.retorno` / `src.dados_b3` conventions).
@@ -79,6 +82,14 @@ GPT-5 mini
 - Testes: criado `tests/test_returns.py` com casos: happy path, idempotência e intervalo. Testes passaram localmente (3 testes novos).
 - CLI: adicionado comando `compute-returns` em `src/main.py`.
 
+### Correções aplicadas (code-review yolo)
+
+- Corrigido `compute_returns` para usar `db.read_prices(...)` garantindo contrato com a camada de DB (arquivo alterado: `src/retorno.py`).
+- Adicionada constante `TRADING_DAYS = 252` e documentação mínima de anualização em `src/retorno.py`; `src/main.py` atualizado para usar a constante.
+- Documentação: criado `docs/implementation-artifacts/retornos-conventions.md` com convenções de anualização, esquema `returns` e exemplo SQL de upsert.
+- Atualizado `src/db.py::write_returns` para usar `ON CONFLICT ... DO UPDATE` quando a versão do SQLite suportar, com fallback para `INSERT OR REPLACE` em versões antigas (preserva `created_at` quando possível).
+- Executado testes focados: `tests/test_returns.py` — todos passaram.
+
 ### File List
 
 - src/retorno.py
@@ -86,5 +97,11 @@ GPT-5 mini
 - src/main.py
 - tests/test_returns.py
 - docs/implementation-artifacts/sprint-status.yaml
+
+Files changed by review fixes:
+
+- src/retorno.py (use db.read_prices, TRADING_DAYS constant)
+- src/db.py (write_returns: use ON CONFLICT upsert when available)
+- src/main.py (use TRADING_DAYS)
 
 Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/120

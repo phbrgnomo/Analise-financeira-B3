@@ -518,10 +518,26 @@ def write_returns(
                 )
             )
 
-        sql = (
-            "INSERT OR REPLACE INTO returns (ticker, date, return, "
-            "return_type, created_at) VALUES (?,?,?,?,?)"
-        )
+        # Prefer modern UPSERT syntax when supported by the SQLite runtime to
+        # preserve finer-grained update semantics (e.g., avoid overwriting
+        # created_at unless necessary). Fallback to INSERT OR REPLACE for
+        # older SQLite versions.
+        sqlite_version = _sqlite_version_tuple()
+        supports_upsert = sqlite_version >= (3, 24, 0)
+
+        if supports_upsert:
+            sql = (
+                "INSERT INTO returns (ticker, date, return, return_type, created_at) "
+                "VALUES (?,?,?,?,?) "
+                "ON CONFLICT(ticker,date,return_type) DO UPDATE SET "
+                "return=excluded.return, "
+                "created_at=COALESCE(returns.created_at, excluded.created_at)"
+            )
+        else:
+            sql = (
+                "INSERT OR REPLACE INTO returns (ticker, date, return, "
+                "return_type, created_at) VALUES (?,?,?,?,?)"
+            )
         cur.executemany(sql, rows)
         conn.commit()
     finally:

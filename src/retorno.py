@@ -2,8 +2,8 @@ import math
 import sqlite3
 import time
 import uuid
-from datetime import datetime
-from typing import Tuple, Union
+from datetime import datetime, timezone
+from typing import Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -11,11 +11,14 @@ import pandas as pd
 import src.db as db
 from src.paths import DATA_DIR
 
+# Convenção de dias de negociação para anualização
+TRADING_DAYS = 252
+
 
 def compute_returns(
     ticker: str,
-    start: object = None,
-    end: object = None,
+    start: Optional[object] = None,
+    end: Optional[object] = None,
     conn: sqlite3.Connection | None = None,
     dry_run: bool = False,
 ) -> pd.DataFrame | None:
@@ -33,8 +36,27 @@ def compute_returns(
             "compute_returns requires a sqlite3.Connection via conn parameter"
         )
 
-    # Read price series using helper to keep complexity low
-    series = _read_price_series(ticker, start, end, conn)
+    # Prefer using the shared DB read helper to load canonical prices so the
+    # routine follows the project's DB API contract (read_prices).
+    df_prices = db.read_prices(ticker, start=start, end=end, conn=conn)
+    if df_prices.empty:
+        if dry_run:
+            return pd.DataFrame()
+        return None
+
+    # Choose best price column (adj_close preferred)
+    price_candidates = ("adj_close", "Adj Close", "close", "Close")
+    price_col = next(
+        (c for c in price_candidates if c in df_prices.columns),
+        None,
+    )
+
+    if price_col is None:
+        raise KeyError(
+            "Nenhuma coluna de preço encontrada em `prices` para cálculo de retornos"
+        )
+
+    series = df_prices[price_col].astype(float)
     returns = series.pct_change().dropna()
 
     if returns.empty:
@@ -46,7 +68,7 @@ def compute_returns(
     out_df = returns.rename("return").to_frame()
     out_df["ticker"] = ticker
     out_df["return_type"] = "daily"
-    out_df["created_at"] = datetime.utcnow().isoformat()
+    out_df["created_at"] = datetime.now(timezone.utc).isoformat()
     out_df = out_df.reset_index()  # date becomes a column again
 
     if dry_run:
@@ -71,7 +93,7 @@ def compute_returns(
                 "ticker": ticker,
                 "rows_written": rows_written,
                 "duration_ms": duration_ms,
-                "created_at": datetime.utcnow().isoformat(),
+                "created_at": datetime.now(timezone.utc).isoformat(),
             },
             conn=conn,
         )
