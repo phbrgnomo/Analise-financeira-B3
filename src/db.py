@@ -1,10 +1,12 @@
 
+import contextlib
 import hashlib
 import json
 import os
+import re
 import sqlite3
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Any, Optional
 
 import pandas as pd
 
@@ -59,7 +61,7 @@ def _ensure_schema(conn: sqlite3.Connection, schema_path: Optional[str] = None) 
     for c in cols:
         name = c["name"]
         typ = _sql_type(c.get("type", "string"))
-        nullable = "NOT NULL" if not c.get("nullable", True) else ""
+        nullable = "" if c.get("nullable", True) else "NOT NULL"
         col_sql_parts.append(f"{name} {typ} {nullable}".strip())
 
     # Ensure PK on (ticker,date) if those columns exist
@@ -95,6 +97,19 @@ def _build_row_tuple(vals: dict, schema_cols: list) -> tuple:
     return tuple(vals.get(col) for col in schema_cols)
 
 
+# Identifier helpers lifted to module level so read and write paths share the
+# same validation and quoting rules. Keeps SQL construction robust against
+# reserved words or unexpected characters in schema-derived column names.
+def _is_valid_identifier(name: str) -> bool:
+    return bool(re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", name))
+
+
+def _quote_identifier(name: str) -> str:
+    if not _is_valid_identifier(name):
+        raise ValueError(f"Invalid column identifier: {name!r}")
+    return f'"{name}"'
+
+
 def _sqlite_version_tuple() -> tuple[int, ...]:
     """Parse ``sqlite3.sqlite_version`` into a tuple of integers.
 
@@ -118,14 +133,18 @@ def _sqlite_version_tuple() -> tuple[int, ...]:
 
 
 def _get_upsert_sql(schema_cols: list) -> str:
-    col_list_sql = ",".join(schema_cols)
+    # Quote column identifiers using module-level helpers to ensure both
+    # read and write paths use identical validation logic.
+    quoted_cols = [_quote_identifier(c) for c in schema_cols]
+    col_list_sql = ",".join(quoted_cols)
     placeholders = ",".join(["?" for _ in schema_cols])
 
     update_items = []
     for c in schema_cols:
         if c in ("ticker", "date"):
             continue
-        update_items.append(f"{c}=excluded.{c}")
+        qc = _quote_identifier(c)
+        update_items.append(f"{qc}=excluded.{qc}")
     update_set = ",".join(update_items)
 
     # Parse sqlite3.sqlite_version defensively in case of non-numeric suffixes
@@ -169,36 +188,30 @@ def _apply_pragmas(conn: sqlite3.Connection, db_path: Optional[str]) -> None:
     para não quebrar testes que usam bancos em-memória ou plataformas
     sem suporte a WAL.
     """
-    try:
-        if db_path is None:
-            db_path = DEFAULT_DB_PATH
+    if db_path is None:
+        db_path = DEFAULT_DB_PATH
 
-        db_path = str(db_path)
+    db_path = str(db_path)
 
-        file_mode_memory = (
-            db_path.startswith("file:")
-            and ("mode=memory" in db_path or db_path.startswith("file::memory"))
-        )
-        is_memory = db_path == ":memory:" or file_mode_memory
-        if is_memory:
-            return
+    file_mode_memory = (
+        db_path.startswith("file:")
+        and ("mode=memory" in db_path or db_path.startswith("file::memory"))
+    )
+    is_memory = db_path == ":memory:" or file_mode_memory
+    if is_memory:
+        return
 
-        cur = conn.cursor()
-        try:
-            cur.execute("PRAGMA journal_mode=WAL;")
-        except Exception:
-            pass
-        try:
-            cur.execute("PRAGMA busy_timeout=30000;")
-        except Exception:
-            pass
-        try:
-            _ = cur.fetchall()
-        except Exception:
-            pass
-    except Exception:
-        # Never fail due to PRAGMA application
-        pass
+    cur = conn.cursor()
+    # Apply PRAGMAs in best-effort mode for file-backed DBs. Each call is
+    # individually suppressed to avoid breaking tests on platforms that do
+    # not support WAL or when the underlying connection does not allow the
+    # operation.
+    with contextlib.suppress(Exception):
+        cur.execute("PRAGMA journal_mode=WAL;")
+    with contextlib.suppress(Exception):
+        cur.execute("PRAGMA busy_timeout=30000;")
+    with contextlib.suppress(Exception):
+        _ = cur.fetchall()
 
 
 def _row_tuple_from_series(
@@ -214,10 +227,7 @@ def _row_tuple_from_series(
     for name in ["open", "high", "low", "close", "volume"]:
         col = cols_map.get(name)
         if col is not None and not pd.isna(row[col]):
-            if name != "volume":
-                vals[name] = float(row[col])
-            else:
-                vals[name] = int(row[col])
+            vals[name] = float(row[col]) if name != "volume" else int(row[col])
         else:
             vals[name] = None
 
@@ -235,11 +245,7 @@ def _row_tuple_from_series(
 def _connect(db_path: Optional[str]) -> sqlite3.Connection:
     if db_path is None:
         db_path = DEFAULT_DB_PATH
-    # Ensure parent directory exists when a directory component is present.
-    # Avoid calling os.makedirs with an empty string when db_path is just a
-    # filename (e.g., "data.db"). Use absolute path to be deterministic.
-    dirname = os.path.dirname(os.path.abspath(db_path))
-    if dirname:
+    if dirname := os.path.dirname(os.path.abspath(db_path)):
         os.makedirs(dirname, exist_ok=True)
     # Use a reasonable Python-side timeout to reduce OperationalError race
     # conditions when multiple writers contend for the same file.
@@ -297,9 +303,18 @@ def record_snapshot_metadata(
         close_conn = True
 
     try:
-        cur = conn.cursor()
-        cur.execute(
-            """
+        _upsert_snapshot_metadata(conn, metadata)
+    finally:
+        if close_conn:
+            conn.close()
+
+
+def _upsert_snapshot_metadata(
+    conn: sqlite3.Connection, metadata: dict[str, Any]
+) -> None:
+    cur = conn.cursor()
+    cur.execute(
+        """
             CREATE TABLE IF NOT EXISTS snapshots (
                 id TEXT PRIMARY KEY,
                 ticker TEXT,
@@ -307,36 +322,33 @@ def record_snapshot_metadata(
                 payload TEXT
             )
             """
-        )
-        job_id = (
-            metadata.get("job_id")
-            or metadata.get("id")
-            or hashlib.sha256(
-                json.dumps(metadata, sort_keys=True).encode("utf-8")
-            ).hexdigest()
-        )
-        created_at = (
-            metadata.get("created_at")
-            or datetime.now(timezone.utc).isoformat()
-        )
-        ticker = metadata.get("ticker") or metadata.get("symbol") or None
-        sql = (
-            "INSERT OR REPLACE INTO snapshots(id, ticker, created_at, payload) "
-            "VALUES (?, ?, ?, ?)"
-        )
-        cur.execute(
-            sql,
-            (
-                job_id,
-                ticker,
-                created_at,
-                json.dumps(metadata, ensure_ascii=False),
-            ),
-        )
-        conn.commit()
-    finally:
-        if close_conn:
-            conn.close()
+    )
+    job_id = (
+        metadata.get("job_id")
+        or metadata.get("id")
+        or hashlib.sha256(
+            json.dumps(metadata, sort_keys=True).encode("utf-8")
+        ).hexdigest()
+    )
+    created_at = (
+        metadata.get("created_at")
+        or datetime.now(timezone.utc).isoformat()
+    )
+    ticker = metadata.get("ticker") or metadata.get("symbol") or None
+    sql = (
+        "INSERT OR REPLACE INTO snapshots(id, ticker, created_at, payload) "
+        "VALUES (?, ?, ?, ?)"
+    )
+    cur.execute(
+        sql,
+        (
+            job_id,
+            ticker,
+            created_at,
+            json.dumps(metadata, ensure_ascii=False),
+        ),
+    )
+    conn.commit()
 
 
 def write_prices(
@@ -368,8 +380,7 @@ def write_prices(
         # mismatch between canonical JSON schema and the physical table.
         cur = conn.cursor()
         cur.execute("PRAGMA table_info('prices')")
-        table_info = cur.fetchall()
-        if table_info:
+        if table_info := cur.fetchall():
             # PRAGMA table_info returns rows where column name is at index 1
             schema_cols = [r[1] for r in table_info]
         else:
@@ -383,13 +394,12 @@ def write_prices(
                 schema_cols.append("fetched_at")
 
         rows = []
-        for idx, row in df.iterrows():
-            rows.append(
-                _row_tuple_from_series(
-                    idx, row, ticker, source, fetched_at, cols_map, schema_cols
-                )
+        rows.extend(
+            _row_tuple_from_series(
+                idx, row, ticker, source, fetched_at, cols_map, schema_cols
             )
-
+            for idx, row in df.iterrows()
+        )
         sql = _get_upsert_sql(schema_cols)
 
         cur = conn.cursor()
@@ -420,7 +430,11 @@ def read_prices(
         # ensure date is selected first
         select_cols = [c for c in schema_cols if c != "date"]
         select_cols = ["date"] + select_cols
-        sql = f"SELECT {', '.join(select_cols)} FROM prices WHERE ticker = ?"
+        # Validate and quote column identifiers for the SELECT clause to avoid
+        # SQL injection or malformed queries when schema contains unexpected
+        # names. Column names used as DataFrame columns remain unquoted.
+        quoted_select = [_quote_identifier(c) for c in select_cols]
+        sql = f"SELECT {', '.join(quoted_select)} FROM prices WHERE ticker = ?"
         if start and end:
             sql += " AND date BETWEEN ? AND ?"
             params.extend([start, end])

@@ -139,43 +139,83 @@ def compare_manifests(
 def write_manifest(
     path: Path, manifest: Dict[str, Dict[str, str]], allow_external: bool = True
 ):
-    # Validate target path to avoid path traversal from untrusted inputs
-    # only when called from the CLI with `allow_external=False`.
-    if not allow_external:
-        _validate_manifest_path(path)
-    # Resolve and ensure parent directory exists. Use an atomic write
-    # (write to temp file in same dir and replace) to avoid symlink
-    # and partial-write risks when manifest path originates from users.
-    target = Path(path).resolve()
-    parent = target.parent
-    parent.mkdir(parents=True, exist_ok=True)
+    # Delegate to helpers for clarity and to reduce cyclomatic complexity
+    _validate_manifest_structure(manifest)
+    target = _prepare_manifest_target(path, allow_external)
 
     payload = {
-        # Use timezone-aware UTC datetime to avoid DeprecationWarning on
-        # Python 3.12+
         "generated_at": datetime.now(timezone.utc).isoformat().replace(
             "+00:00", "Z"
         ),
         "files": manifest,
     }
 
+    _atomic_write_json(target, payload)
+
+
+def _validate_manifest_structure(manifest: object) -> None:
+    """Validate that manifest is a mapping of str -> mapping of str->str."""
+    if not isinstance(manifest, dict):
+        raise TypeError("manifest must be a mapping of file -> metadata")
+    for k, v in manifest.items():
+        if not isinstance(k, str):
+            raise ValueError("manifest keys must be strings")
+        if not isinstance(v, dict):
+            raise ValueError("manifest values must be mappings/dicts")
+        for sub_k, sub_v in v.items():
+            if not isinstance(sub_k, str) or not isinstance(sub_v, str):
+                raise ValueError("manifest nested keys and values must be strings")
+
+
+def _prepare_manifest_target(path: Path, allow_external: bool) -> Path:
+    """Validate and prepare the target Path; return resolved Path.
+
+    Ensures parent exists and is not a symlink. Performs CLI-only
+    directory restriction when `allow_external` is False.
+    """
+    raw = str(path)
+    if "\x00" in raw:
+        raise ValueError("Invalid manifest path: contains null byte")
+
+    if not allow_external:
+        _validate_manifest_path(path)
+
+    target = Path(path).resolve()
+    parent = target.parent
+
+    # Detect symlinks before creating directories to avoid creating
+    # directories under a symlink target.
+    if parent.exists() and parent.is_symlink():
+        raise OSError("Refusing to write manifest into symlinked directory")
+
+    parent.mkdir(parents=True, exist_ok=True)
+    return target
+
+
+def _atomic_write_json(target: Path, payload: object) -> None:
+    """Atomically write JSON payload into `target` within its directory."""
     import tempfile
 
-    # Write atomically into the target directory
+    parent = target.parent
+    temp_name = None
     tf = tempfile.NamedTemporaryFile(
-        mode="w", encoding="utf-8", dir=str(parent), delete=False
+        mode="w",
+        encoding="utf-8",
+        dir=str(parent),
+        delete=False,
     )
     try:
         json.dump(payload, tf, indent=2, ensure_ascii=False)
         tf.flush()
         os.fsync(tf.fileno())
+        temp_name = tf.name
         tf.close()
-        os.replace(tf.name, str(target))
+        os.replace(temp_name, str(target))
+        temp_name = None
     finally:
-        # Cleanup stray temp file if any
         with contextlib.suppress(Exception):
-            if tf and os.path.exists(tf.name):
-                os.unlink(tf.name)
+            if temp_name and os.path.exists(temp_name):
+                os.unlink(temp_name)
 
 
 def _validate_manifest_path(path):
@@ -283,21 +323,23 @@ def _remap_external_current(current: Dict[str, Dict[str, str]], allow_external: 
             orig_map[key] = k
 
     if collisions:
-        # Mensagens em PT-BR, quebradas em linhas curtas para ruff
-        print(
-            "Erro: nomes base duplicados detectados ao remapear",
-            file=sys.stderr,
-        )
-        print("diretório externo:", file=sys.stderr)
-        for key, paths in collisions.items():
-            unique_paths = ", ".join(paths)
-            # imprimir fontes conflitantes de forma legível
-            print(" -", key, "de:", unique_paths, file=sys.stderr)
-        print("Renomeie os arquivos ou execute sem", file=sys.stderr)
-        print("--allow-external para evitar ambiguidade.", file=sys.stderr)
-        raise SystemExit(3)
-
+        _report_basename_collisions(collisions)
     return remapped
+
+
+def _report_basename_collisions(collisions):
+    # Mensagens em PT-BR, quebradas em linhas curtas para ruff
+    print(
+        "Erro: nomes base duplicados detectados ao remapear",
+        file=sys.stderr,
+    )
+    print("diretório externo:", file=sys.stderr)
+    for key, paths in collisions.items():
+        # imprimir fontes conflitantes de forma legível
+        print(" -", key, "de:", ", ".join(paths), file=sys.stderr)
+    print("Renomeie os arquivos ou execute sem", file=sys.stderr)
+    print("--allow-external para evitar ambiguidade.", file=sys.stderr)
+    raise SystemExit(3)
 
 
 def main():

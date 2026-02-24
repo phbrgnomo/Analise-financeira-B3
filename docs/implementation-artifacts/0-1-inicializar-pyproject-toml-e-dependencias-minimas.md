@@ -14,7 +14,7 @@ para que eu possa instalar e executar o projeto e os testes de forma consistente
 
 ## Tasks / Subtasks
 - [x] Adicionar `pyproject.toml` com dependências de runtime: `pandas`, `sqlalchemy`, `typer`, `python-dotenv`.
-- [x] Adicionar dev-dependencies: `pytest`, `black`, `ruff`, `pre-commit` e configurar hooks básicos do pre-commit.
+- [x] Adicionar dev-dependencies: `pytest`, `ruff`, `pre-commit` (black optional) e configurar hooks básicos do pre-commit.
 - [x] Adicionar script de entrypoint `main` em `src/main.py` e verificar `poetry run main --help`.
 - [x] Documentar comandos de quickstart no README.md (instalação, execução, testes).
 - [x] Documentar o que foi implantado nessa etapa conforme o FR28 (`docs/planning-artifacts/prd.md`)

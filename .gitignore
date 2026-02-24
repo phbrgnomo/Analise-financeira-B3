@@ -64,6 +64,9 @@ __pycache__/
 # Ignore generated snapshots created during CI/test runs
 snapshots_test/
 
+# Local ingest logs (runtime, append-only)
+metadata/ingest_logs.jsonl
+
 .sentry-native/
 
 # Snyk Security Extension - AI Rules (auto-generated)

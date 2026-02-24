@@ -19,7 +19,7 @@ Contexto
 - Observação: Esta é a primeira retrospectiva registrada (não há retro anterior para comparar).
 
 Principais achados
-- Infraestrutura e qualidade: `pyproject.toml`, hooks de `pre-commit` (black/ruff), CI e fixtures foram implementados com sucesso — isso estabeleceu uma base estável para desenvolvimento.
+-- Infraestrutura e qualidade: `pyproject.toml`, hooks de `pre-commit` (ruff; `black` opcional), CI e fixtures foram implementados com sucesso — isso estabeleceu uma base estável para desenvolvimento.
 - Quickstart incompleto: a história `0-2-criar-readme-md-quickstart` está em `backlog` e precisa ser finalizada para permitir um onboarding reprodutível de novos contribuidores.
 - Lint/format: houve ocorrências detectadas por `ruff` (linhas longas) após aplicar hooks — recomenda-se executar `ruff --fix` e revisar manualmente onde necessário.
 - Verificações de snapshot/checksum e integração: passos para snapshot e validação foram implementados (história `0-7`), útil para reprodutibilidade e integridade de dados.
@@ -27,7 +27,7 @@ Principais achados
 Lições aprendidas
 - Automatizar já nas primeiras histórias (pre-commit/CI) reduz atrito em PRs e contribuições — boa prática confirmada.
 - Documentação de Quickstart é crítica para validação de fluxo end-to-end; deixar o quickstart incompleto atrasa experimentação por novos colaboradores.
-- Ferramentas de lint/config (ruff/black) detectam problemas reais; incluir passo de correção automática no fluxo de PR evita falhas repetidas.
+-- Ferramentas de lint/config (ruff — `black` opcional) detectam problemas reais; incluir passo de correção automática no fluxo de PR evita falhas repetidas.
 
 Riscos e bloqueios
 - Sem o README quickstart finalizado, novos contribuintes poderão ter dificuldade em executar o fluxo end-to-end localmente.

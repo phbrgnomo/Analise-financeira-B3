@@ -230,13 +230,11 @@ def test_log_adapter_validation_error_paths(
     original_import = builtins.__import__
 
     def fake_import(name, *args, **kwargs):
-        def _raise_import(*a, **k):
-            raise ImportError("cannot import")
-        # If the import requested is "src.validation" simulate ImportError,
-        # otherwise delegate to the real builtins.__import__ implementation.
+        # Simplified: if the import requested is `src.validation`, raise
+        # ImportError to simulate an import failure; otherwise delegate
+        # to the original import implementation.
         if name == "src.validation":
-            return _raise_import(name, *args, **kwargs)
-
+            raise ImportError("cannot import")
         return original_import(name, *args, **kwargs)
 
     log_invalid_rows_mock = MagicMock()

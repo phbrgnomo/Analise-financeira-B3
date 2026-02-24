@@ -16,7 +16,7 @@ so that pull requests verify project health automatically.
    - `poetry install --no-dev` (install runtime deps for quick smoke)
    - `poetry install` (install dev deps)
    - `poetry run pytest -q --maxfail=1`
-   - `ruff . --select` and `black --check .`
+  - `ruff . --select` (optional: `black --check .` if black is used)
 2. The workflow reports pass/fail in the PR status and exposes logs/artifacts for failed runs.
 3. CI uses mocked providers for any network-dependent integration tests (no real network calls in CI by default).
 4. Artifacts (test results, coverage, generated snapshots for failed runs) are uploaded for debugging when jobs fail.
@@ -24,7 +24,7 @@ so that pull requests verify project health automatically.
 ## Tasks / Subtasks
 
 - [ ] Create `.github/workflows/ci.yml` with jobs:
-  - [x] `lint` job: run `ruff` and `black --check` on codebase
+  - [x] `lint` job: run `ruff` on codebase (optional: `black --check` if black is used)
   - [x] `test` job: install deps and run `pytest -q --maxfail=1`
   - [x] `smoke` job: `poetry install --no-dev` + quick smoke tests
   - [x] Matrix for Python 3.12 (single axis) and OS `ubuntu-latest`
