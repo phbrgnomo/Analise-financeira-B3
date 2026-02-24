@@ -97,6 +97,19 @@ def _build_row_tuple(vals: dict, schema_cols: list) -> tuple:
     return tuple(vals.get(col) for col in schema_cols)
 
 
+# Identifier helpers lifted to module level so read and write paths share the
+# same validation and quoting rules. Keeps SQL construction robust against
+# reserved words or unexpected characters in schema-derived column names.
+def _is_valid_identifier(name: str) -> bool:
+    return bool(re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", name))
+
+
+def _quote_identifier(name: str) -> str:
+    if not _is_valid_identifier(name):
+        raise ValueError(f"Invalid column identifier: {name!r}")
+    return f'"{name}"'
+
+
 def _sqlite_version_tuple() -> tuple[int, ...]:
     """Parse ``sqlite3.sqlite_version`` into a tuple of integers.
 
@@ -120,16 +133,8 @@ def _sqlite_version_tuple() -> tuple[int, ...]:
 
 
 def _get_upsert_sql(schema_cols: list) -> str:
-    # Validate and quote column identifiers to avoid SQL injection via
-    # malicious column names. Only allow a conservative identifier set.
-    def _is_valid_identifier(name: str) -> bool:
-        return bool(re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", name))
-
-    def _quote_identifier(name: str) -> str:
-        if not _is_valid_identifier(name):
-            raise ValueError(f"Invalid column identifier: {name!r}")
-        return f'"{name}"'
-
+    # Quote column identifiers using module-level helpers to ensure both
+    # read and write paths use identical validation logic.
     quoted_cols = [_quote_identifier(c) for c in schema_cols]
     col_list_sql = ",".join(quoted_cols)
     placeholders = ",".join(["?" for _ in schema_cols])
@@ -425,7 +430,11 @@ def read_prices(
         # ensure date is selected first
         select_cols = [c for c in schema_cols if c != "date"]
         select_cols = ["date"] + select_cols
-        sql = f"SELECT {', '.join(select_cols)} FROM prices WHERE ticker = ?"
+        # Validate and quote column identifiers for the SELECT clause to avoid
+        # SQL injection or malformed queries when schema contains unexpected
+        # names. Column names used as DataFrame columns remain unquoted.
+        quoted_select = [_quote_identifier(c) for c in select_cols]
+        sql = f"SELECT {', '.join(quoted_select)} FROM prices WHERE ticker = ?"
         if start and end:
             sql += " AND date BETWEEN ? AND ?"
             params.extend([start, end])
