@@ -43,7 +43,7 @@ def test_update_writes_manifest(tmp_path: Path):
         "--allow-external",
     ]
 
-    proc = subprocess.run(cmd, capture_output=True, text=True)
+    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
     assert proc.returncode == 0, (
         f"Falha na geração do manifesto: {proc.stderr}\n{proc.stdout}"
     )
@@ -78,7 +78,7 @@ def test_allow_external_remap_collision(tmp_path: Path):
         "--allow-external",
     ]
 
-    proc = subprocess.run(cmd, capture_output=True, text=True)
+    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
     # colisão deve provocar código de saída 3 (SystemExit(3))
     assert proc.returncode == 3
 
@@ -105,5 +105,5 @@ def test_invalid_manifest_path_errors(tmp_path: Path):
         str(manifest),
     ]
 
-    proc = subprocess.run(cmd, capture_output=True, text=True)
+    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
     assert proc.returncode == 2

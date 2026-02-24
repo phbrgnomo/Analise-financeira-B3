@@ -35,11 +35,12 @@ def _sanitize_env_value(val: str) -> str:
 def _resolve_allowed_roots(
     base: Path, extra_allowed: Sequence[Union[str, Path]] | None
 ) -> list[Path]:
-    """Resolve and return a list of Path roots from base and extra_allowed.
+    """Resolve e retorna raízes `Path` a partir de `base` e `extra_allowed`.
 
-    `base` is expected to already be a sanitized, resolved `Path` provided by
-    the caller. This helper centralizes resolution logic for additional
-    allowed roots (which may still be strings coming from environment).
+    `base` espera-se que já seja um `Path` sanitizado e resolvido fornecido
+    pelo chamador. Este helper centraliza a lógica de resolução para raízes
+    adicionais permitidas (que ainda podem ser strings originadas do
+    ambiente).
     """
     roots: list[Path] = [base]
     if extra_allowed:

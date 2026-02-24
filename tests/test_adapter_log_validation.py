@@ -230,20 +230,12 @@ def test_log_adapter_validation_error_paths(
     original_import = builtins.__import__
 
     def fake_import(name, *args, **kwargs):
-        # Use a lookup to decide behavior for specific module imports and
-        # delegate to the real import for everything else without an
-        # explicit conditional branch.
-        def _raise_import(*a, **k):
+        # Simplified: if the import requested is `src.validation`, raise
+        # ImportError to simulate an import failure; otherwise delegate
+        # to the original import implementation.
+        if name == "src.validation":
             raise ImportError("cannot import")
-
-        handlers = {
-            "src.validation": _raise_import,
-        }
-
-        try:
-            return handlers[name](name, *args, **kwargs)
-        except KeyError:
-            return original_import(name, *args, **kwargs)
+        return original_import(name, *args, **kwargs)
 
     log_invalid_rows_mock = MagicMock()
     # set side_effect conditionally via expression to avoid branching
