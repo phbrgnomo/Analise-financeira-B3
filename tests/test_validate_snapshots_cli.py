@@ -19,6 +19,12 @@ def _write_csv(path: Path) -> None:
 
 
 def test_update_writes_manifest(tmp_path: Path):
+    """Gera um manifesto a partir de um diretório e verifica que o arquivo é escrito.
+
+    Cenário: invoca `scripts/validate_snapshots.py --update --allow-external`
+    em um diretório temporário contendo um CSV de amostra e verifica que
+    o manifesto gerado contém a chave `files` com um mapping.
+    """
     cur_dir = tmp_path / "cur"
     cur_dir.mkdir()
     f = cur_dir / "SAMPLE.csv"
@@ -38,14 +44,22 @@ def test_update_writes_manifest(tmp_path: Path):
     ]
 
     proc = subprocess.run(cmd, capture_output=True, text=True)
-    assert proc.returncode == 0, proc.stderr
+    assert proc.returncode == 0, (
+        f"Falha na geração do manifesto: {proc.stderr}\n{proc.stdout}"
+    )
     assert manifest.exists()
     data = json.loads(manifest.read_text())
-    assert "files" in data and isinstance(data["files"], dict)
+    assert "files" in data
+    assert isinstance(data["files"], dict)
 
 
 def test_allow_external_remap_collision(tmp_path: Path):
-    # create two files with same basename under different subdirs
+    """Verifica que colisões de basename com `--allow-external` causam erro.
+
+    Cria dois arquivos com o mesmo basename em subdiretórios diferentes e
+    espera que o comando falhe com código 3 indicando colisão.
+    """
+    # cria dois arquivos com mesmo basename em subdirs diferentes
     d = tmp_path / "d"
     p1 = d / "a" / "same.csv"
     p2 = d / "b" / "same.csv"
@@ -65,12 +79,16 @@ def test_allow_external_remap_collision(tmp_path: Path):
     ]
 
     proc = subprocess.run(cmd, capture_output=True, text=True)
-    # collision should cause exit code 3 (SystemExit(3))
+    # colisão deve provocar código de saída 3 (SystemExit(3))
     assert proc.returncode == 3
 
 
 def test_invalid_manifest_path_errors(tmp_path: Path):
-    # calling with manifest outside snapshots without --allow-external should fail
+    """Chama o validador com um manifesto fora de `snapshots/` e espera falha.
+
+    Sem `--allow-external` a execução deve retornar código 2.
+    """
+    # chamar com manifesto fora de snapshots/ sem --allow-external deve falhar
     d = tmp_path / "d"
     d.mkdir()
     p = d / "ok.csv"
