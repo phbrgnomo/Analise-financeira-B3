@@ -14,7 +14,7 @@ import os
 import sys
 import tempfile
 from pathlib import Path
-from typing import Union
+from typing import Sequence, Union
 
 try:
     import pandas as pd
@@ -31,7 +31,7 @@ def _sanitize_env_value(val: str) -> str:
 
 
 def _resolve_allowed_roots(
-    base: Union[str, Path], extra_allowed: list[Union[str, Path]] | None
+    base: Union[str, Path], extra_allowed: Sequence[Union[str, Path]] | None
 ):
     """Resolve and return a list of Path roots from base and extra_allowed.
 
@@ -52,7 +52,7 @@ def _resolve_allowed_roots(
 def safe_path_under(
     base: Union[str, Path],
     user_value: str,
-    extra_allowed: list[Union[str, Path]] | None = None,
+    extra_allowed: Sequence[Union[str, Path]] | None = None,
 ) -> Path:
     """
     Constrói um `Path` a partir de `user_value` e garante que o resultado
@@ -183,7 +183,7 @@ def choose_snapshot_dir(repo_root: Path) -> Path:  # noqa: C901
 def validate_snapshot_dir(
     snapshot_dir: Path,
     repo_root: Path,
-    extra_allowed: list[Path] | None = None,
+    extra_allowed: Sequence[Path] | None = None,
 ) -> None:
     """Valida que `snapshot_dir` está dentro de `repo_root`, do temp do sistema,
     ou de quaisquer raízes adicionais fornecidas em `extra_allowed`.
