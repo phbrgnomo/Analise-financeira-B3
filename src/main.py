@@ -3,6 +3,8 @@ from typing import Optional
 
 import typer
 
+import src.db as _db
+import src.retorno as _retorno
 from src.paths import DATA_DIR
 
 # Instância principal da aplicação de linha de comando usando Typer
@@ -221,6 +223,39 @@ def _compute_and_print_stats(a: str) -> None:
     print(f"Retorno médio ao ano: {round((retorno_anual * 100), 4)}%")
     print(f"Risco ao ano: {round(risco_anual * 100, 4)}%")
     print(f"Coeficiente de variação(dia):{rt.coef_var(risco, retorno_medio)}")
+
+
+@app.command("compute-returns")
+def compute_returns(
+    ticker: str = typer.Option(
+        ..., help="Ticker to compute returns for, e.g. PETR4.SA"
+    ),
+    start: Optional[str] = typer.Option(
+        None, help="Start date YYYY-MM-DD"
+    ),
+    end: Optional[str] = typer.Option(
+        None, help="End date YYYY-MM-DD"
+    ),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Do not persist, only show results"
+    ),
+):
+    """Compute daily returns for a ticker and persist to DB (returns table)."""
+    conn = _db._connect(None)
+    try:
+        df = _retorno.compute_returns(
+            ticker, start=start, end=end, conn=conn, dry_run=dry_run
+        )
+        if df is None or df.empty:
+            print("No returns computed for given inputs")
+            return
+        print(f"Computed {len(df)} return rows for {ticker}")
+        if dry_run:
+            print(df.head())
+        else:
+            print("Persisted returns to DB")
+    finally:
+        conn.close()
 
 
 @app.command()

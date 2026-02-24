@@ -458,3 +458,72 @@ def read_prices(
     finally:
         if close_conn:
             conn.close()
+
+
+def write_returns(
+    df: pd.DataFrame,
+    conn: Optional[sqlite3.Connection] = None,
+    db_path: Optional[str] = None,
+    return_type: str = "daily",
+):
+    """Persist returns DataFrame into `returns` table using upsert semantics.
+
+    Expects DataFrame columns: `ticker`, `date` (datetime or string), `return`,
+    optionally `return_type` and `created_at`. The function is idempotent and
+    will create the `returns` table if missing.
+    """
+    close_conn = False
+    if conn is None:
+        conn = _connect(db_path)
+        close_conn = True
+
+    try:
+        cur = conn.cursor()
+        # Ensure returns table exists with unique constraint for upsert
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS returns (
+                ticker TEXT,
+                date TEXT,
+                return REAL,
+                return_type TEXT,
+                created_at TEXT,
+                UNIQUE(ticker, date, return_type)
+            )
+            """
+        )
+
+        # Normalize DataFrame
+        df2 = df.copy()
+        if "date" in df2.columns:
+            df2["date"] = pd.to_datetime(df2["date"]).dt.tz_localize(None)
+        else:
+            raise ValueError("DataFrame must contain 'date' column")
+
+        if "return_type" not in df2.columns:
+            df2["return_type"] = return_type
+        if "created_at" not in df2.columns:
+            df2["created_at"] = datetime.now(timezone.utc).isoformat()
+
+        # Prepare rows for insertion
+        rows = []
+        for _, r in df2.iterrows():
+            rows.append(
+                (
+                    r["ticker"],
+                    r["date"].strftime("%Y-%m-%d"),
+                    float(r["return"]),
+                    r["return_type"],
+                    r["created_at"],
+                )
+            )
+
+        sql = (
+            "INSERT OR REPLACE INTO returns (ticker, date, return, "
+            "return_type, created_at) VALUES (?,?,?,?,?)"
+        )
+        cur.executemany(sql, rows)
+        conn.commit()
+    finally:
+        if close_conn:
+            conn.close()

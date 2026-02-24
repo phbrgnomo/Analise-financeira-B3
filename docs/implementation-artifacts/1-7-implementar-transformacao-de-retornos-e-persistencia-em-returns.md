@@ -2,7 +2,7 @@
 generated_by: create-story workflow
 story_key: 1-7-implementar-transformacao-de-retornos-e-persistencia-em-returns
 story_id: 1.7
-status: ready-for-dev
+status: review
 ---
 
 # Story 1.7: Implementar transformação de retornos e persistência em returns
@@ -27,14 +27,14 @@ so that downstream notebooks and modeling code can read precomputed returns.
 
 ## Tasks / Subtasks
 
-- [ ] Implement `compute_returns(ticker: str, start: Optional[date]=None, end: Optional[date]=None)` routine
-  - [ ] Load canonical `prices` for ticker via `db.read_prices(ticker, start, end)`
-  - [ ] Compute simple daily returns: `return = price.close.pct_change()` (preserve date alignment)
-  - [ ] Populate `returns` DataFrame with columns: `ticker, date, return, return_type, created_at`
-  - [ ] Upsert into `returns` table by `(ticker, date, return_type)` using `INSERT OR REPLACE` / `ON CONFLICT` semantics
-  - [ ] Add telemetry/logging (job_id, rows_written, duration_ms) to `ingest_logs` or `metrics` as appropriate
-- [ ] Add unit tests in `tests/` for happy path and edge cases (missing dates, duplicated runs)
-- [ ] Add minimal CLI entrypoint: `main compute-returns --ticker <TICKER> [--start] [--end] [--dry-run]`
+- [x] Implement `compute_returns(ticker: str, start: Optional[date]=None, end: Optional[date]=None)` routine
+  - [x] Load canonical `prices` for ticker via `db.read_prices(ticker, start, end)`
+  - [x] Compute simple daily returns: `return = price.close.pct_change()` (preserve date alignment)
+  - [x] Populate `returns` DataFrame with columns: `ticker, date, return, return_type, created_at`
+  - [x] Upsert into `returns` table by `(ticker, date, return_type)` using `INSERT OR REPLACE` / `ON CONFLICT` semantics
+  - [x] Add telemetry/logging (job_id, rows_written, duration_ms) to `ingest_logs` or `metrics` as appropriate
+- [x] Add unit tests in `tests/` for happy path and edge cases (missing dates, duplicated runs)
+- [x] Add minimal CLI entrypoint: `main compute-returns --ticker <TICKER> [--start] [--end] [--dry-run]`
 - [ ] Document annualization and conventions in code comments and `docs/` (reference to `conv_retorno` if exists)
 - [ ] Documentar o que foi implantado nessa etapa em `docs/sprint-reports` conforme definido no FR28 (`docs/planning-artifacts/prd.md`)
 
@@ -73,9 +73,18 @@ GPT-5 mini
 
 - Ultimate context engine analysis completed for story 1.7.
 
+### Dev Agent Record — Implementation Notes
+
+- Implementação: adicionado `compute_returns()` em `src/retorno.py` com persistência delegada para `src/db.write_returns()`; telemetria registrada via `db.record_snapshot_metadata()` (job_id, rows_written, duration_ms).
+- Testes: criado `tests/test_returns.py` com casos: happy path, idempotência e intervalo. Testes passaram localmente (3 testes novos).
+- CLI: adicionado comando `compute-returns` em `src/main.py`.
+
 ### File List
 
-- docs/planning-artifacts/epics.md (source)
-- docs/implementation-artifacts/sprint-status.yaml (updated)
+- src/retorno.py
+- src/db.py
+- src/main.py
+- tests/test_returns.py
+- docs/implementation-artifacts/sprint-status.yaml
 
 Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/120

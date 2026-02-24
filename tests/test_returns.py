@@ -1,0 +1,104 @@
+import sqlite3
+from datetime import datetime
+
+import pandas as pd
+
+
+def _count_returns(
+    conn: sqlite3.Connection,
+    ticker: str,
+    return_type: str = "daily",
+) -> int:
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT COUNT(*) FROM returns WHERE ticker = ? AND return_type = ?",
+        (ticker, return_type),
+    )
+    return cur.fetchone()[0]
+
+
+def _fetch_returns_df(
+    conn: sqlite3.Connection,
+    ticker: str,
+    return_type: str = "daily",
+) -> pd.DataFrame:
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT date, return FROM returns WHERE ticker = ?"
+        " AND return_type = ? ORDER BY date",
+        (ticker, return_type),
+    )
+    rows = cur.fetchall()
+    df = pd.DataFrame(rows, columns=["date", "return"]) if rows else pd.DataFrame()
+    if not df.empty:
+        df["date"] = pd.to_datetime(df["date"]).dt.tz_localize(None)
+        df = df.set_index("date")
+    return df
+
+
+def test_compute_returns_happy_path(sample_db):
+    """Compute returns for sample ticker and verify rows written and numeric sanity."""
+    import src.retorno as retorno
+
+    ticker = "PETR4.SA"
+
+    # Run compute_returns (should create `returns` table and insert rows)
+    retorno.compute_returns(ticker, conn=sample_db)
+
+    # Expect N-1 returns for N price rows in fixture
+    cur = sample_db.cursor()
+    cur.execute("SELECT COUNT(*) FROM prices WHERE ticker = ?", (ticker,))
+    n_prices = cur.fetchone()[0]
+
+    n_returns = _count_returns(sample_db, ticker)
+    assert n_returns == max(0, n_prices - 1)
+
+    # Numeric sanity: compare first return with pct_change computed locally
+    # Load prices from DB to compute expected values
+    df_prices = pd.read_sql_query(
+        "SELECT date, close FROM prices WHERE ticker = ? ORDER BY date",
+        sample_db,
+        params=(ticker,),
+        parse_dates=["date"],
+    ).set_index("date")
+
+    expected = df_prices["close"].pct_change().dropna()
+    df_ret = _fetch_returns_df(sample_db, ticker)
+    # Align indices and compare values
+    for d, row in expected.items():
+        assert d in df_ret.index
+        assert abs(df_ret.loc[d, "return"] - row) < 1e-9
+
+
+def test_compute_returns_idempotent(sample_db):
+    """Running compute_returns twice should not create duplicate rows."""
+    import src.retorno as retorno
+
+    ticker = "PETR4.SA"
+
+    retorno.compute_returns(ticker, conn=sample_db)
+    first_count = _count_returns(sample_db, ticker)
+
+    # Run again
+    retorno.compute_returns(ticker, conn=sample_db)
+    second_count = _count_returns(sample_db, ticker)
+
+    assert first_count == second_count
+
+
+def test_compute_returns_range(sample_db):
+    """compute_returns with start/end writes only rows within the requested range."""
+    import src.retorno as retorno
+
+    ticker = "PETR4.SA"
+
+    # Choose a sub-range from fixtures (middle dates)
+    start = datetime(2023, 1, 3)
+    end = datetime(2023, 1, 5)
+
+    retorno.compute_returns(ticker, start=start, end=end, conn=sample_db)
+
+    df_ret = _fetch_returns_df(sample_db, ticker)
+    assert not df_ret.empty
+    assert df_ret.index.min() >= pd.to_datetime(start)
+    assert df_ret.index.max() <= pd.to_datetime(end)
