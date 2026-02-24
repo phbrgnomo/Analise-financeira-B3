@@ -151,7 +151,3 @@ chmod -R 600 metadata dados/raw
 Se quiser que o pipeline aplique permissões automaticamente, a função `save_raw_csv` aceita o parâmetro `set_permissions=True` (aplica `chmod 600` em sistemas POSIX).
 
 Nota: a gravação de metadados em JSONL é a escolha atual (append-only, auditável); uma migração para SQLite/Postgres pode ser feita posteriormente quando for necessário transacionamento/concorrência.
-
----
-
-Se você quiser, eu posso: gerar badges adicionais (coverage, PyPI quando aplicável), adicionar exemplos de uso com parâmetros do `src.main`, ou abrir um PR com pré-commit configurado. Qual próximo passo prefere?
