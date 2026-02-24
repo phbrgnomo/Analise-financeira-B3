@@ -101,6 +101,20 @@ def safe_path_under(
 
 
 def _choose_from_snapshot_env(repo_root: Path) -> Path | None:
+    """Decide um `snapshot_dir` a partir da variável de ambiente `SNAPSHOT_DIR`.
+
+    Inputs:
+    - `repo_root`: raiz do repositório usada como referência para caminhos relativos.
+
+    Saída:
+    - `Path` resolvido se `SNAPSHOT_DIR` for válido e seguro; caso contrário `None`.
+
+    Segurança:
+    - Usa `safe_path_under` para impedir path traversal. Se `safe_path_under`
+      rejeitar o valor, esta função NÃO reconstrói `Path(sanitized)` (isso
+      evitaria contornar a checagem) e retorna `None` para permitir que o
+      fluxo de fallback continue com segurança.
+    """
     raw_snapshot_dir = os.environ.get("SNAPSHOT_DIR")
     if raw_snapshot_dir is None:
         return None
@@ -120,12 +134,18 @@ def _choose_from_snapshot_env(repo_root: Path) -> Path | None:
             if runner_sanitized := _sanitize_env_value(runner_env):
                 extra_roots.append(Path(runner_sanitized))
 
+    # Conformidade de segurança: não reconstrua um `Path` a partir do valor
+    # sanitizado se `safe_path_under` falhar — isso preserva a proteção
+    # contra path traversal.
     try:
         candidate = safe_path_under(repo_root, sanitized, extra_allowed=extra_roots)
     except ValueError:
-        candidate = Path(sanitized)
-        if not candidate.is_absolute():
-            candidate = repo_root / candidate
+        # Mensagem curta para não exceder o limite de comprimento de linha
+        print(
+            "Aviso: SNAPSHOT_DIR inválida ou insegura; usando fallback.",
+            file=sys.stderr,
+        )
+        return None
 
     try:
         validate_snapshot_dir(candidate, repo_root, extra_allowed=extra_roots)
@@ -139,6 +159,11 @@ def _choose_from_snapshot_env(repo_root: Path) -> Path | None:
 
 
 def _choose_from_runner_temp(repo_root: Path) -> Path | None:
+    """Escolhe `RUNNER_TEMP/snapshots_test` se `RUNNER_TEMP` estiver definido.
+
+    Security: valida `raw_runner` via `_sanitize_env_value` e `safe_path_under`
+    para garantir que a base é segura; retorna `None` em caso de erro.
+    """
     raw_runner_env = os.environ.get("RUNNER_TEMP")
     if raw_runner_env is None:
         return None
