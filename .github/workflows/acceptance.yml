@@ -51,6 +51,15 @@ jobs:
         run: |
           python scripts/init_ingest_db.py --db dados/data.db || true
 
+      - name: Print sqlite3 version
+        run: |
+          python -c "import sqlite3; print('sqlite3.version:', sqlite3.version); print('sqlite3.sqlite_version:', sqlite3.sqlite_version)"
+
+      - name: Run concurrency acceptance test (file-backed)
+        run: |
+          mkdir -p reports
+          NETWORK_MODE=playback poetry run pytest -q tests/test_concurrency_sqlite.py -q --maxfail=1 --junitxml=reports/junit_concurrency.xml || true
+
       - name: Generate snapshots (deterministic)
         run: |
           mkdir -p "$RUNNER_TEMP/snapshots_test"

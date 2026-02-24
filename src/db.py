@@ -190,7 +190,47 @@ def _connect(db_path: Optional[str]) -> sqlite3.Connection:
     dirname = os.path.dirname(os.path.abspath(db_path))
     if dirname:
         os.makedirs(dirname, exist_ok=True)
-    return sqlite3.connect(db_path)
+    # Use a reasonable Python-side timeout to reduce OperationalError race
+    # conditions when multiple writers contend for the same file.
+    conn = sqlite3.connect(db_path, timeout=30.0)
+
+    # Apply PRAGMAs in best-effort mode for file-backed DBs. Skip applying
+    # PRAGMAs for explicit in-memory connections to avoid breaking tests that
+    # rely on :memory: semantics.
+    try:
+        file_mode_memory = (
+            isinstance(db_path, str)
+            and db_path.startswith("file:")
+            and "mode=memory" in db_path
+        )
+        is_memory = (
+            db_path == ":memory:"
+            or db_path == "memory"
+            or file_mode_memory
+        )
+        if not is_memory:
+            cur = conn.cursor()
+            try:
+                cur.execute("PRAGMA journal_mode=WAL;")
+            except Exception:
+                # Best-effort: some SQLite builds (or platforms) may not
+                # support WAL for certain filesystem types or in-memory
+                # configurations. Ignore failures and continue.
+                pass
+            try:
+                cur.execute("PRAGMA busy_timeout=30000;")
+            except Exception:
+                pass
+            # Some PRAGMAs return rows; consume to avoid surprises.
+            try:
+                _ = cur.fetchall()
+            except Exception:
+                pass
+    except Exception:
+        # Defensive: ensure _connect never raises due to PRAGMA issues.
+        pass
+
+    return conn
 
 
 def init_db(db_path: Optional[str] = None, allow_external: bool = False) -> None:
@@ -214,6 +254,25 @@ def init_db(db_path: Optional[str] = None, allow_external: bool = False) -> None
     conn = _connect(db_path)
     try:
         _ensure_schema(conn)
+        # Re-apply PRAGMAs after schema creation in best-effort mode. This
+        # ensures a freshly-created file-backed DB receives the same
+        # configuration even if _connect was changed in the future.
+        try:
+            cur = conn.cursor()
+            try:
+                cur.execute("PRAGMA journal_mode=WAL;")
+            except Exception:
+                pass
+            try:
+                cur.execute("PRAGMA busy_timeout=30000;")
+            except Exception:
+                pass
+            try:
+                _ = cur.fetchall()
+            except Exception:
+                pass
+        except Exception:
+            pass
     finally:
         conn.close()
 

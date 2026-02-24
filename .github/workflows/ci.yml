@@ -92,6 +92,10 @@ jobs:
           poetry config virtualenvs.in-project true
           poetry install --no-interaction
 
+      - name: Print sqlite3 version
+        run: |
+          python -c "import sqlite3; print('sqlite3.version:', sqlite3.version); print('sqlite3.sqlite_version:', sqlite3.sqlite_version)"
+
       - name: Run tests (pytest)
         run: |
           mkdir -p reports
