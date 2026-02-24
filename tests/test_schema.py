@@ -56,10 +56,12 @@ def test_example_matches_schema():
     iso_re = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
     hex_re = re.compile(r"^[0-9a-f]{64}$")
 
-    for r in rows:
-        if not date_re.match(r["date"]):
-            raise AssertionError(f"date invalid: {r['date']}")
-        if not iso_re.match(r["fetched_at"]):
-            raise AssertionError(f"fetched_at invalid: {r['fetched_at']}")
-        if not hex_re.match(r["raw_checksum"]):
-            raise AssertionError(f"raw_checksum invalid: {r['raw_checksum']}")
+    # Locate the first invalid row for each check and fail with a clear message.
+    bad = next((r for r in rows if not date_re.match(r["date"])), None)
+    assert bad is None, f"date invalid: {bad['date']}"
+
+    bad = next((r for r in rows if not iso_re.match(r["fetched_at"])), None)
+    assert bad is None, f"fetched_at invalid: {bad['fetched_at']}"
+
+    bad = next((r for r in rows if not hex_re.match(r["raw_checksum"])), None)
+    assert bad is None, f"raw_checksum invalid: {bad['raw_checksum']}"

@@ -173,7 +173,7 @@ def _finalize_candidate_within_data(candidate: str, data_dir_resolved: str) -> s
             )
         return resolved
 
-    if any(part == ".." for part in candidate.split(os.path.sep)):
+    if ".." in candidate.split(os.path.sep):
         raise ValueError(
             (
                 "Relative paths containing '..' are not allowed when "

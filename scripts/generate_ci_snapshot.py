@@ -8,8 +8,10 @@ serialização canônica do projeto (determinística).
 O destino padrão é `$SNAPSHOT_DIR` se definido, senão `$RUNNER_TEMP/snapshots_test`,
 senão `./snapshots_test`.
 """
+
 from __future__ import annotations
 
+import contextlib
 import os
 import sys
 import tempfile
@@ -39,25 +41,14 @@ def _resolve_allowed_roots(
     linters while centralizing resolution logic.
     """
     # Sanitize and resolve base (base may come from env in some callers)
-    if isinstance(base, str):
-        base_val = _sanitize_env_value(base)
-    else:
-        base_val = str(base)
-
+    base_val = _sanitize_env_value(base) if isinstance(base, str) else str(base)
     roots: list[Path] = []
-    try:
+    with contextlib.suppress(Exception):
         roots.append(Path(base_val).resolve())
-    except Exception:
-        # If base cannot be resolved, fallback empty list (caller will handle)
-        pass
-
     if extra_allowed:
         for r in extra_allowed:
             try:
-                if isinstance(r, str):
-                    r_val = _sanitize_env_value(r)
-                else:
-                    r_val = str(r)
+                r_val = _sanitize_env_value(r) if isinstance(r, str) else str(r)
                 roots.append(Path(r_val).resolve())
             except Exception:
                 # ignore invalid extras
@@ -112,88 +103,85 @@ def safe_path_under(
     raise ValueError("Caminho fora do diretório permitido")
 
 
-def choose_snapshot_dir(repo_root: Path) -> Path:  # noqa: C901
+def _choose_from_snapshot_env(repo_root: Path) -> Path | None:
+    raw_snapshot_dir = os.environ.get("SNAPSHOT_DIR")
+    if raw_snapshot_dir is None:
+        return None
+
+    try:
+        sanitized = _sanitize_env_value(raw_snapshot_dir)
+    except ValueError:
+        sanitized = ""
+
+    if not sanitized:
+        return None
+
+    # Preparar raízes extras (RUNNER_TEMP se presente)
+    extra_roots: list[Path] = []
+    if runner_env := os.environ.get("RUNNER_TEMP"):
+        with contextlib.suppress(ValueError):
+            if runner_sanitized := _sanitize_env_value(runner_env):
+                extra_roots.append(Path(runner_sanitized))
+
+    try:
+        candidate = safe_path_under(repo_root, sanitized, extra_allowed=extra_roots)
+    except ValueError:
+        candidate = Path(sanitized)
+
+    try:
+        validate_snapshot_dir(candidate, repo_root, extra_allowed=extra_roots)
+        return candidate.resolve()
+    except ValueError as exc:
+        print(
+            f"Aviso: variável SNAPSHOT_DIR inválida: {exc}; usando fallback.",
+            file=sys.stderr,
+        )
+        return None
+
+
+def _choose_from_runner_temp(repo_root: Path) -> Path | None:
+    raw_runner_env = os.environ.get("RUNNER_TEMP")
+    if raw_runner_env is None:
+        return None
+
+    try:
+        raw_runner = _sanitize_env_value(raw_runner_env)
+    except ValueError:
+        raw_runner = ""
+
+    if not raw_runner:
+        return None
+
+    try:
+        runner_base = safe_path_under(tempfile.gettempdir(), raw_runner)
+    except ValueError:
+        return None
+
+    candidate = runner_base / "snapshots_test"
+    try:
+        validate_snapshot_dir(candidate, repo_root, extra_allowed=[runner_base])
+        return candidate.resolve()
+    except ValueError as exc:
+        msg = (
+            "Aviso: RUNNER_TEMP inválido ou fora dos diretórios permitidos: "
+            f"{exc}; usando fallback."
+        )
+        print(msg, file=sys.stderr)
+        return None
+
+
+def choose_snapshot_dir(repo_root: Path) -> Path:
     """Decide e retorna o `snapshot_dir` preferido com validação básica.
 
     Prioridade: `SNAPSHOT_DIR` > `RUNNER_TEMP/snapshots_test` > repo_root/snapshots_test
     """
-    snapshot_dir = None
+    if snap := _choose_from_snapshot_env(repo_root):
+        return snap
 
-    raw_snapshot_dir = os.environ.get("SNAPSHOT_DIR")
-    if raw_snapshot_dir is not None:
-        # Sanitizar e tratar valores vazios/whitespace como não definidos
-        try:
-            sanitized = _sanitize_env_value(raw_snapshot_dir)
-        except ValueError:
-            sanitized = ""
+    if snap := _choose_from_runner_temp(repo_root):
+        return snap
 
-        if sanitized:
-            # Construir candidate e validar contra repo_root, system tmp e
-            # RUNNER_TEMP (se presente).
-            # Preparar raízes extras antes de tentar resolver o candidate via
-            # `safe_path_under` para evitar usar variável indefinida.
-            extra_roots: list[Path] = []
-            runner_env = os.environ.get("RUNNER_TEMP")
-            if runner_env:
-                try:
-                    runner_sanitized = _sanitize_env_value(runner_env)
-                    if runner_sanitized:
-                        # normalize and keep as Path for type consistency; resolution
-                        # will happen later in safe_path_under or validate functions
-                        extra_roots.append(Path(runner_sanitized))
-                except ValueError:
-                    pass
-
-            # Construir candidate de forma segura considerando raízes adicionais
-            # (ex.: RUNNER_TEMP) — a validação final é feita por
-            # `validate_snapshot_dir`, mas aqui usamos `safe_path_under` para
-            # reduzir superfícies de criação de `Path` inseguras.
-            try:
-                candidate = safe_path_under(
-                    repo_root, sanitized, extra_allowed=extra_roots
-                )
-            except ValueError:
-                # fallback para comportamento legado: construir Path e deixar
-                # validate_snapshot_dir emitir erro mais detalhado
-                candidate = Path(sanitized)
-
-            try:
-                validate_snapshot_dir(candidate, repo_root, extra_allowed=extra_roots)
-                snapshot_dir = candidate.resolve()
-            except ValueError as exc:
-                msg = (
-                    "Aviso: variável SNAPSHOT_DIR inválida: "
-                    f"{exc}; usando fallback."
-                )
-                print(msg, file=sys.stderr)
-
-    if snapshot_dir is None and os.environ.get("RUNNER_TEMP"):
-        try:
-            raw_runner = _sanitize_env_value(os.environ["RUNNER_TEMP"])
-            # Garantir que RUNNER_TEMP esteja dentro do tmp do sistema ou
-            # de raízes permitidas; safe_path_under valida e resolve o caminho.
-            try:
-                runner_base = safe_path_under(tempfile.gettempdir(), raw_runner)
-            except ValueError:
-                raise
-
-            candidate = runner_base / "snapshots_test"
-            try:
-                validate_snapshot_dir(candidate, repo_root, extra_allowed=[runner_base])
-                snapshot_dir = candidate.resolve()
-            except ValueError as exc:
-                msg = (
-                    "Aviso: RUNNER_TEMP inválido ou fora dos diretórios permitidos: "
-                    f"{exc}; usando fallback."
-                )
-                print(msg, file=sys.stderr)
-        except Exception:
-            print("Aviso: RUNNER_TEMP inválido; usando fallback.", file=sys.stderr)
-
-    if snapshot_dir is None:
-        snapshot_dir = repo_root / "snapshots_test"
-
-    return snapshot_dir
+    return repo_root / "snapshots_test"
 
 
 def validate_snapshot_dir(
