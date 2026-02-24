@@ -30,16 +30,42 @@ def _sanitize_env_value(val: str) -> str:
     return val.split("\x00", 1)[0].strip()
 
 
-def safe_path_under(base: Union[str, Path], user_value: str) -> Path:
+def _resolve_allowed_roots(
+    base: Union[str, Path], extra_allowed: list[Union[str, Path]] | None
+):
+    """Resolve and return a list of Path roots from base and extra_allowed.
+
+    This helper keeps `safe_path_under` smaller to satisfy complexity
+    linters while centralizing resolution logic.
+    """
+    roots: list[Path] = [Path(base).resolve()]
+    if extra_allowed:
+        for r in extra_allowed:
+            try:
+                roots.append(Path(r).resolve())
+            except Exception:
+                # ignore invalid extras
+                continue
+    return roots
+
+
+def safe_path_under(
+    base: Union[str, Path],
+    user_value: str,
+    extra_allowed: list[Union[str, Path]] | None = None,
+) -> Path:
     """
     Constrói um `Path` a partir de `user_value` e garante que o resultado
-    esteja dentro de `base`. Lança `ValueError` se o caminho ficar fora.
+    esteja dentro de `base` ou de quaisquer caminhos em `extra_allowed`.
+
+    Lança `ValueError` se o caminho for inválido ou ficar fora das raízes
+    permitidas. Esta função centraliza sanitização e validação para reduzir
+    superfícies de ataque de path traversal quando lidamos com variáveis
+    de ambiente.
     """
     base_path = Path(base).resolve()
     val = _sanitize_env_value(user_value)
 
-    # Rejeitar explicitamente valores vazios após sanitização para evitar
-    # que Path("") seja resolvido para CWD e escape do `base_path`.
     if not val:
         raise ValueError("Valor de caminho vazio ou inválido")
 
@@ -52,19 +78,22 @@ def safe_path_under(base: Union[str, Path], user_value: str) -> Path:
         candidate = base_path / candidate
 
     try:
-        # Usar strict=False para evitar FileNotFoundError em caminhos não-existentes
         candidate = candidate.resolve(strict=False)
     except Exception as exc:
         raise ValueError("Falha ao resolver o caminho do usuário") from exc
 
-    try:
-        if not candidate.is_relative_to(base_path):
-            raise ValueError("Caminho fora do diretório permitido")
-    except AttributeError:
-        if os.path.commonpath([str(base_path), str(candidate)]) != str(base_path):
-            raise ValueError("Caminho fora do diretório permitido") from None
+    # Construir lista de raízes permitidas (base + extras) via helper
+    allowed_roots = _resolve_allowed_roots(base_path, extra_allowed)
 
-    return candidate
+    for root in allowed_roots:
+        try:
+            if candidate.is_relative_to(root):
+                return candidate
+        except AttributeError:
+            if os.path.commonpath([str(root), str(candidate)]) == str(root):
+                return candidate
+
+    raise ValueError("Caminho fora do diretório permitido")
 
 
 def choose_snapshot_dir(repo_root: Path) -> Path:  # noqa: C901
@@ -85,19 +114,32 @@ def choose_snapshot_dir(repo_root: Path) -> Path:  # noqa: C901
         if sanitized:
             # Construir candidate e validar contra repo_root, system tmp e
             # RUNNER_TEMP (se presente).
-            candidate = Path(sanitized)
-            if not candidate.is_absolute():
-                candidate = repo_root / candidate
-
+            # Preparar raízes extras antes de tentar resolver o candidate via
+            # `safe_path_under` para evitar usar variável indefinida.
             extra_roots: list[Path] = []
             runner_env = os.environ.get("RUNNER_TEMP")
             if runner_env:
                 try:
                     runner_sanitized = _sanitize_env_value(runner_env)
                     if runner_sanitized:
+                        # normalize and keep as Path for type consistency; resolution
+                        # will happen later in safe_path_under or validate functions
                         extra_roots.append(Path(runner_sanitized))
                 except ValueError:
                     pass
+
+            # Construir candidate de forma segura considerando raízes adicionais
+            # (ex.: RUNNER_TEMP) — a validação final é feita por
+            # `validate_snapshot_dir`, mas aqui usamos `safe_path_under` para
+            # reduzir superfícies de criação de `Path` inseguras.
+            try:
+                candidate = safe_path_under(
+                    repo_root, sanitized, extra_allowed=extra_roots
+                )
+            except ValueError:
+                # fallback para comportamento legado: construir Path e deixar
+                # validate_snapshot_dir emitir erro mais detalhado
+                candidate = Path(sanitized)
 
             try:
                 validate_snapshot_dir(candidate, repo_root, extra_allowed=extra_roots)
@@ -112,7 +154,13 @@ def choose_snapshot_dir(repo_root: Path) -> Path:  # noqa: C901
     if snapshot_dir is None and os.environ.get("RUNNER_TEMP"):
         try:
             raw_runner = _sanitize_env_value(os.environ["RUNNER_TEMP"])
-            runner_base = Path(raw_runner).resolve()
+            # Garantir que RUNNER_TEMP esteja dentro do tmp do sistema ou
+            # de raízes permitidas; safe_path_under valida e resolve o caminho.
+            try:
+                runner_base = safe_path_under(tempfile.gettempdir(), raw_runner)
+            except ValueError:
+                raise
+
             candidate = runner_base / "snapshots_test"
             try:
                 validate_snapshot_dir(candidate, repo_root, extra_allowed=[runner_base])
