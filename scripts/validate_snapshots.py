@@ -323,12 +323,11 @@ def _remap_external_current(current: Dict[str, Dict[str, str]], allow_external: 
             orig_map[key] = k
 
     if collisions:
-        _extracted_from__remap_external_current_24(collisions)
+        _report_basename_collisions(collisions)
     return remapped
 
 
-# TODO Rename this here and in `_remap_external_current`
-def _extracted_from__remap_external_current_24(collisions):
+def _report_basename_collisions(collisions):
     # Mensagens em PT-BR, quebradas em linhas curtas para ruff
     print(
         "Erro: nomes base duplicados detectados ao remapear",
@@ -336,7 +335,7 @@ def _extracted_from__remap_external_current_24(collisions):
     )
     print("diretório externo:", file=sys.stderr)
     for key, paths in collisions.items():
-            # imprimir fontes conflitantes de forma legível
+        # imprimir fontes conflitantes de forma legível
         print(" -", key, "de:", ", ".join(paths), file=sys.stderr)
     print("Renomeie os arquivos ou execute sem", file=sys.stderr)
     print("--allow-external para evitar ambiguidade.", file=sys.stderr)
