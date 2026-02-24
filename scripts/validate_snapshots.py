@@ -182,9 +182,13 @@ def _prepare_manifest_target(path: Path, allow_external: bool) -> Path:
 
     target = Path(path).resolve()
     parent = target.parent
-    parent.mkdir(parents=True, exist_ok=True)
+
+    # Detect symlinks before creating directories to avoid creating
+    # directories under a symlink target.
     if parent.exists() and parent.is_symlink():
         raise OSError("Refusing to write manifest into symlinked directory")
+
+    parent.mkdir(parents=True, exist_ok=True)
     return target
 
 
