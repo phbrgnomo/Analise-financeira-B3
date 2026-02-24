@@ -247,13 +247,25 @@ def test_log_adapter_validation_error_paths(
     )
 
     # Select the appropriate patch context explicitly to avoid ambiguity
-    import_ctx = (
-        patch.dict(
-            "sys.modules",
-            {"src.validation": mock_validation_module},
-        ),
-        patch("builtins.__import__", side_effect=fake_import),
-    )[import_raises]
+    def _make_import_ctx(should_raise: bool):
+        """Return the appropriate context manager for the import behavior.
+
+        Implemented via a mapping to avoid inline conditionals in the test
+        body while keeping behavior explicit and local.
+        """
+
+        mapping = {
+            True: patch("builtins.__import__", side_effect=fake_import),
+            False: (
+                patch.dict(
+                    "sys.modules",
+                    {"src.validation": mock_validation_module},
+                )
+            ),
+        }
+        return mapping[should_raise]
+
+    import_ctx = _make_import_ctx(import_raises)
 
     caplog.set_level(logging.DEBUG, logger=logger.name)
 

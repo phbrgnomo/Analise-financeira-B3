@@ -42,12 +42,14 @@ def _resolve_allowed_roots(
     adicionais permitidas (que ainda podem ser strings originadas do
     ambiente).
     """
-    roots: list[Path] = [base]
+    # Ensure base is resolved without requiring the path to exist (strict=False)
+    roots: list[Path] = [base.resolve(strict=False)]
     if extra_allowed:
         for r in extra_allowed:
             try:
                 r_val = _sanitize_env_value(r) if isinstance(r, str) else str(r)
-                roots.append(Path(r_val).resolve())
+                # Resolve extras without strict resolution to avoid raising
+                roots.append(Path(r_val).resolve(strict=False))
             except Exception:
                 # ignore invalid extras
                 continue
@@ -68,12 +70,33 @@ def safe_path_under(
     superfícies de ataque de path traversal quando lidamos com variáveis
     de ambiente.
     """
-    base_path = Path(base).resolve()
+    # Resolve base without strict mode to avoid exceptions for non-existent
+    # but intended temporary or generated directories.
+    base_path = Path(base).resolve(strict=False)
     val = _sanitize_env_value(user_value)
 
     if not val:
         raise ValueError("Valor de caminho vazio ou inválido")
 
+    candidate = _build_candidate(base_path, val)
+
+    # Construir lista de raízes permitidas (base + extras) via helper
+    # Reuse _build_allowed_roots to keep allowed-root construction
+    # consistente com `validate_snapshot_dir`.
+    allowed_roots = _build_allowed_roots(base_path, extra_allowed)
+
+    if _is_within_allowed_roots(candidate, allowed_roots):
+        return candidate
+
+    raise ValueError("Caminho fora do diretório permitido")
+
+
+def _build_candidate(base_path: Path, val: str) -> Path:
+    """Cria e resolve um `Path` candidato a partir do valor do usuário.
+
+    Resolve com `strict=False` porque a existência do caminho não é um
+    requisito para a validação de contenção.
+    """
     try:
         candidate = Path(val)
     except Exception:
@@ -83,22 +106,57 @@ def safe_path_under(
         candidate = base_path / candidate
 
     try:
-        candidate = candidate.resolve(strict=False)
+        return candidate.resolve(strict=False)
     except Exception as exc:
         raise ValueError("Falha ao resolver o caminho do usuário") from exc
 
-    # Construir lista de raízes permitidas (base + extras) via helper
-    allowed_roots = _resolve_allowed_roots(base_path, extra_allowed)
 
+def _is_within_allowed_roots(candidate: Path, allowed_roots: Sequence[Path]) -> bool:
+    """Retorna True se `candidate` estiver sob qualquer uma das `allowed_roots`.
+
+    Usa `resolve(strict=False)` nas raízes para evitar comportamento diferente
+    quando diretórios ainda não existem.
+    """
     for root in allowed_roots:
         try:
-            if candidate.is_relative_to(root):
-                return candidate
-        except AttributeError:
-            if os.path.commonpath([str(root), str(candidate)]) == str(root):
-                return candidate
+            root_res = root.resolve(strict=False)
+        except Exception:
+            root_res = root
 
-    raise ValueError("Caminho fora do diretório permitido")
+        try:
+            if candidate.is_relative_to(root_res):
+                return True
+        except AttributeError:
+            try:
+                if os.path.commonpath([str(root_res), str(candidate)]) == str(root_res):
+                    return True
+            except Exception:
+                continue
+
+    return False
+
+
+def _build_allowed_roots(
+    repo_root: Path, extra_allowed: Sequence[os.PathLike[str] | str] | None
+) -> list[Path]:
+    """Retorna uma lista de raízes permitidas (resolvidas com strict=False).
+
+    Inclui `repo_root`, o diretório temporário do sistema e quaisquer
+    `extra_allowed` fornecidos, ignorando entradas inválidas.
+
+    Aceita caminhos adicionais como `Path`, `os.PathLike` ou `str`.
+    """
+    repo_resolved = repo_root.resolve(strict=False)
+    system_tmp = Path(tempfile.gettempdir()).resolve(strict=False)
+
+    roots: list[Path] = [repo_resolved, system_tmp]
+    if extra_allowed:
+        for r in extra_allowed:
+            try:
+                roots.append(Path(r).resolve(strict=False))
+            except Exception:
+                continue
+    return roots
 
 
 def _choose_from_snapshot_env(repo_root: Path) -> Path | None:
@@ -219,38 +277,16 @@ def validate_snapshot_dir(
 
     Lança `ValueError` se inválido.
     """
-    resolved_snapshot = snapshot_dir.resolve()
-    allowed = False
-    repo_resolved = repo_root.resolve()
-    system_tmp = Path(tempfile.gettempdir()).resolve()
+    # Use non-strict resolve because existence isn't required for containment
+    # validation (useful for CI temporary dirs that may be created later).
+    resolved_snapshot = snapshot_dir.resolve(strict=False)
 
-    roots: list[Path] = [repo_resolved, system_tmp]
-    if extra_allowed:
-        for r in extra_allowed:
-            try:
-                roots.append(Path(r).resolve())
-            except Exception:
-                # ignore invalid extra roots
-                continue
+    roots = _build_allowed_roots(repo_root, extra_allowed)
 
-    for root in roots:
-        try:
-            if resolved_snapshot.is_relative_to(root):
-                allowed = True
-                break
-        except AttributeError:
-            import os as _os
+    if _is_within_allowed_roots(resolved_snapshot, roots):
+        return
 
-            try:
-                common = _os.path.commonpath([str(root), str(resolved_snapshot)])
-                if common == str(root):
-                    allowed = True
-                    break
-            except Exception:
-                continue
-
-    if not allowed:
-        raise ValueError("Diretório de snapshot fora dos diretórios permitidos")
+    raise ValueError("Diretório de snapshot fora dos diretórios permitidos")
 
 
 def main() -> int:

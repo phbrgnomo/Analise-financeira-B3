@@ -27,8 +27,10 @@ def main(argv: list[str] | None = None) -> int:
 
     cmd = [sys.executable, str(validate)] + list(argv)
     try:
-        rc = subprocess.call(cmd)
-        return rc
+        # Use subprocess.run with a list of arguments and shell=False to avoid
+        # shell interpretation of user-provided input (mitigates CWE-78).
+        proc = subprocess.run(cmd, shell=False)
+        return proc.returncode
     except KeyboardInterrupt:
         raise
     except Exception as e:

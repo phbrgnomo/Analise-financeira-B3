@@ -1,6 +1,7 @@
 import sqlite3
 from datetime import datetime
 
+import numpy as np
 import pandas as pd
 
 
@@ -64,10 +65,12 @@ def test_compute_returns_happy_path(sample_db):
 
     expected = df_prices["close"].pct_change().dropna()
     df_ret = _fetch_returns_df(sample_db, ticker)
-    # Align indices and compare values
-    for d, row in expected.items():
-        assert d in df_ret.index
-        assert abs(df_ret.loc[d, "return"] - row) < 1e-9
+    # Align indices and compare values vectorized to avoid loops in tests
+    expected = expected.sort_index()
+    df_ret = df_ret.sort_index()
+    ret_vals = np.asarray(df_ret["return"].reindex(expected.index).values, dtype=float)
+    exp_vals = np.asarray(expected.values, dtype=float)
+    np.testing.assert_allclose(ret_vals, exp_vals, atol=1e-9, rtol=0)
 
 
 def test_compute_returns_idempotent(sample_db):

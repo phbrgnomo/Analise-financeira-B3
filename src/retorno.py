@@ -1,8 +1,9 @@
+import contextlib
 import math
 import sqlite3
 import time
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Optional, Tuple, Union
 
 import numpy as np
@@ -17,8 +18,8 @@ TRADING_DAYS = 252
 
 def compute_returns(
     ticker: str,
-    start: Optional[object] = None,
-    end: Optional[object] = None,
+    start: Optional[Union[str, date, datetime]] = None,
+    end: Optional[Union[str, date, datetime]] = None,
     conn: sqlite3.Connection | None = None,
     dry_run: bool = False,
 ) -> pd.DataFrame | None:
@@ -35,15 +36,13 @@ def compute_returns(
         raise ValueError(
             "compute_returns requires a sqlite3.Connection via conn parameter"
         )
+    # Normalize params and load prices via DB helper
+    qstart = _normalize_param(start)
+    qend = _normalize_param(end)
 
-    # Prefer using the shared DB read helper to load canonical prices so the
-    # routine follows the project's DB API contract (read_prices).
-    df_prices = db.read_prices(ticker, start=start, end=end, conn=conn)
+    df_prices = db.read_prices(ticker, start=qstart, end=qend, conn=conn)
     if df_prices.empty:
-        if dry_run:
-            return pd.DataFrame()
-        return None
-
+        return pd.DataFrame() if dry_run else None
     # Choose best price column (adj_close preferred)
     price_candidates = ("adj_close", "Adj Close", "close", "Close")
     price_col = next(
@@ -60,11 +59,7 @@ def compute_returns(
     returns = series.pct_change().dropna()
 
     if returns.empty:
-        # Nothing to persist
-        if dry_run:
-            return pd.DataFrame()
-        return None
-
+        return pd.DataFrame() if dry_run else None
     out_df = returns.rename("return").to_frame()
     out_df["ticker"] = ticker
     out_df["return_type"] = "daily"
@@ -73,19 +68,55 @@ def compute_returns(
 
     if dry_run:
         return out_df
+    # Persist results and record telemetry
+    _persist_returns(out_df, ticker, conn=conn)
+    return out_df
 
-    # Telemetry: record job id, rows written, duration
+
+def _normalize_param(p: Optional[Union[str, date, datetime]]) -> Optional[str]:
+    if p is None:
+        return None
+    if isinstance(p, (datetime, date)):
+        return p.strftime("%Y-%m-%d")
+    if isinstance(p, str):
+        return p
+    raise TypeError("start/end must be str, date, datetime or None")
+
+
+def _choose_price_column(df: pd.DataFrame) -> str:
+    """Return the preferred price column name from DataFrame or raise KeyError."""
+    for c in ("adj_close", "Adj Close", "close", "Close"):
+        if c in df.columns:
+            return c
+    raise KeyError(
+        "Nenhuma coluna de preço encontrada em `prices` para cálculo "
+        "de retornos"
+    )
+
+
+def _compute_returns_series(df: pd.DataFrame, price_col: str) -> pd.Series:
+    return df[price_col].astype(float).pct_change().dropna()
+
+
+def _build_out_df(returns: pd.Series, ticker: str) -> pd.DataFrame:
+    out_df = returns.rename("return").to_frame()
+    out_df["ticker"] = ticker
+    out_df["return_type"] = "daily"
+    out_df["created_at"] = datetime.now(timezone.utc).isoformat()
+    return out_df.reset_index()
+
+
+def _persist_returns(
+    out_df: pd.DataFrame,
+    ticker: str,
+    conn: sqlite3.Connection | None = None,
+) -> None:
     job_id = uuid.uuid4().hex
     start_ts = time.time()
-
-    # Delegate persistence to DB layer
     db.write_returns(out_df, conn=conn, return_type="daily")
-
     duration_ms = int((time.time() - start_ts) * 1000)
     rows_written = len(out_df)
-
-    # Record metadata/telemetry using DB helper (stores into snapshots table)
-    try:
+    with contextlib.suppress(Exception):
         db.record_snapshot_metadata(
             {
                 "job_id": job_id,
@@ -97,11 +128,6 @@ def compute_returns(
             },
             conn=conn,
         )
-    except Exception:
-        # Telemetry should not break main flow; swallow errors gracefully
-        pass
-
-    return out_df
 
 
 def _read_price_series(ticker, start, end, conn: sqlite3.Connection) -> pd.Series:
@@ -111,11 +137,10 @@ def _read_price_series(ticker, start, end, conn: sqlite3.Connection) -> pd.Serie
     cur = conn.cursor()
     cur.execute("PRAGMA table_info(prices)")
     cols = [row[1] for row in cur.fetchall()]
-    price_col = None
-    for c in ("adj_close", "Adj Close", "close", "Close"):
-        if c in cols:
-            price_col = c
-            break
+    price_col = next(
+        (c for c in ("adj_close", "Adj Close", "close", "Close") if c in cols),
+        None,
+    )
     if price_col is None:
         raise KeyError(
             "Nenhuma coluna de preço encontrada em `prices` para cálculo de retornos"
@@ -141,7 +166,7 @@ def _read_price_series(ticker, start, end, conn: sqlite3.Connection) -> pd.Serie
 def r_linear(
     p_fin: Union[float, int, pd.Series, np.ndarray],
     p_ini: Union[float, int, pd.Series, np.ndarray],
-) -> Union[float, pd.Series]:
+) -> Union[float, pd.Series, np.ndarray]:
     """Calcula retorno linear (p_fin / p_ini) - 1.
 
     Suporta scalars e pandas Series/arrays.
@@ -152,7 +177,7 @@ def r_linear(
 def r_log(
     p_fin: Union[float, int, pd.Series, np.ndarray],
     p_ini: Union[float, int, pd.Series, np.ndarray],
-) -> Union[float, pd.Series]:
+) -> Union[float, pd.Series, np.ndarray]:
     """Calcula retorno logarítmico: ln(p_fin / p_ini)."""
     return np.log(p_fin / p_ini)
 
@@ -163,12 +188,14 @@ def retorno_periodo(_df: pd.DataFrame) -> Tuple[float, float, float]:
     Retorna uma tupla: (retorno_total, retorno_medio_diario, desvio)
     """
     df = _df.copy()
-    # Preferência por colunas ajustadas
-    price_col = None
-    for c in ("adj_close", "Adj Close", "close", "Close"):
-        if c in df.columns:
-            price_col = c
-            break
+    price_col = next(
+        (
+            c
+            for c in ("adj_close", "Adj Close", "close", "Close")
+            if c in df.columns
+        ),
+        None,
+    )
     if price_col is None:
         raise KeyError("Nenhuma coluna de preço encontrada")
 
@@ -204,7 +231,7 @@ def correlacao(ativos: list[str]) -> pd.DataFrame:
         try:
             fp = DATA_DIR / f"{a}.csv"
             df1 = pd.read_csv(fp)
-        except (FileNotFoundError, OSError) as e:
+        except OSError as e:
             print(f"Dados de {a} não encontrados: {e}")
             continue
         df1.rename({"Return": f"{a}"}, axis=1, inplace=True)

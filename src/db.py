@@ -145,15 +145,13 @@ def _get_upsert_sql(schema_cols: list) -> str:
             continue
         qc = _quote_identifier(c)
         update_items.append(f"{qc}=excluded.{qc}")
-    update_set = ",".join(update_items)
-
     # Parse sqlite3.sqlite_version defensively in case of non-numeric suffixes
     # e.g. "3.44.0-alpha" -> (3, 44, 0)
     sqlite_version = _sqlite_version_tuple()
     supports_upsert = sqlite_version >= (3, 24, 0)
 
     if supports_upsert:
-        if update_set:
+        if update_set := ",".join(update_items):
             return (
                 "INSERT INTO prices ({cols}) VALUES ({vals}) "
                 "ON CONFLICT(ticker,date) DO UPDATE SET {updates}"
@@ -423,41 +421,50 @@ def read_prices(
         close_conn = True
 
     try:
-        cur = conn.cursor()
-        params = [ticker]
-        schema = _load_canonical_schema()
-        schema_cols = [c["name"] for c in schema.get("columns", [])]
-        # ensure date is selected first
-        select_cols = [c for c in schema_cols if c != "date"]
-        select_cols = ["date"] + select_cols
-        # Validate and quote column identifiers for the SELECT clause to avoid
-        # SQL injection or malformed queries when schema contains unexpected
-        # names. Column names used as DataFrame columns remain unquoted.
-        quoted_select = [_quote_identifier(c) for c in select_cols]
-        sql = f"SELECT {', '.join(quoted_select)} FROM prices WHERE ticker = ?"
-        if start and end:
-            sql += " AND date BETWEEN ? AND ?"
-            params.extend([start, end])
-        elif start:
-            sql += " AND date >= ?"
-            params.append(start)
-        elif end:
-            sql += " AND date <= ?"
-            params.append(end)
-
-        sql += " ORDER BY date"
-        cur.execute(sql, params)
-        rows = cur.fetchall()
-        cols = select_cols
-        df = pd.DataFrame(rows, columns=cols)
-        if df.empty:
-            return df
-        df["date"] = pd.to_datetime(df["date"])
-        df = df.set_index("date")
-        return df
+        return _read_prices_core(conn, ticker, start, end)
     finally:
         if close_conn:
             conn.close()
+
+
+def _read_prices_core(
+    conn: sqlite3.Connection,
+    ticker: str,
+    start: Optional[str],
+    end: Optional[str],
+) -> pd.DataFrame:
+    cur = conn.cursor()
+    params = [ticker]
+    schema = _load_canonical_schema()
+    schema_cols = [c["name"] for c in schema.get("columns", [])]
+    # ensure date is selected first
+    select_cols = [c for c in schema_cols if c != "date"]
+    select_cols = ["date"] + select_cols
+    # Validate and quote column identifiers for the SELECT clause to avoid
+    # SQL injection or malformed queries when schema contains unexpected
+    # names. Column names used as DataFrame columns remain unquoted.
+    quoted_select = [_quote_identifier(c) for c in select_cols]
+    sql = f"SELECT {', '.join(quoted_select)} FROM prices WHERE ticker = ?"
+    if start and end:
+        sql += " AND date BETWEEN ? AND ?"
+        params.extend([start, end])
+    elif start:
+        sql += " AND date >= ?"
+        params.append(start)
+    elif end:
+        sql += " AND date <= ?"
+        params.append(end)
+
+    sql += " ORDER BY date"
+    cur.execute(sql, params)
+    rows = cur.fetchall()
+    cols = select_cols
+    df = pd.DataFrame(rows, columns=cols)
+    if df.empty:
+        return df
+    df["date"] = pd.to_datetime(df["date"])
+    df = df.set_index("date")
+    return df
 
 
 def write_returns(
@@ -478,10 +485,18 @@ def write_returns(
         close_conn = True
 
     try:
-        cur = conn.cursor()
-        # Ensure returns table exists with unique constraint for upsert
-        cur.execute(
-            """
+        _extracted_from_write_returns_19(conn, df, return_type)
+    finally:
+        if close_conn:
+            conn.close()
+
+
+# TODO Rename this here and in `write_returns`
+def _extracted_from_write_returns_19(conn, df, return_type):
+    cur = conn.cursor()
+    # Ensure returns table exists with unique constraint for upsert
+    cur.execute(
+        """
             CREATE TABLE IF NOT EXISTS returns (
                 ticker TEXT,
                 date TEXT,
@@ -491,55 +506,46 @@ def write_returns(
                 UNIQUE(ticker, date, return_type)
             )
             """
+    )
+
+    # Normalize DataFrame
+    df2 = df.copy()
+    if "date" in df2.columns:
+        df2["date"] = pd.to_datetime(df2["date"]).dt.tz_localize(None)
+    else:
+        raise ValueError("DataFrame must contain 'date' column")
+
+    if "return_type" not in df2.columns:
+        df2["return_type"] = return_type
+    if "created_at" not in df2.columns:
+        df2["created_at"] = datetime.now(timezone.utc).isoformat()
+
+    rows = [
+        (
+            r["ticker"],
+            r["date"].strftime("%Y-%m-%d"),
+            float(r["return"]),
+            r["return_type"],
+            r["created_at"],
         )
+        for _, r in df2.iterrows()
+    ]
+    # Prefer modern UPSERT syntax when supported by the SQLite runtime to
+    # preserve finer-grained update semantics (e.g., avoid overwriting
+    # created_at unless necessary). Fallback to INSERT OR REPLACE for
+    # older SQLite versions.
+    sqlite_version = _sqlite_version_tuple()
+    supports_upsert = sqlite_version >= (3, 24, 0)
 
-        # Normalize DataFrame
-        df2 = df.copy()
-        if "date" in df2.columns:
-            df2["date"] = pd.to_datetime(df2["date"]).dt.tz_localize(None)
-        else:
-            raise ValueError("DataFrame must contain 'date' column")
-
-        if "return_type" not in df2.columns:
-            df2["return_type"] = return_type
-        if "created_at" not in df2.columns:
-            df2["created_at"] = datetime.now(timezone.utc).isoformat()
-
-        # Prepare rows for insertion
-        rows = []
-        for _, r in df2.iterrows():
-            rows.append(
-                (
-                    r["ticker"],
-                    r["date"].strftime("%Y-%m-%d"),
-                    float(r["return"]),
-                    r["return_type"],
-                    r["created_at"],
-                )
-            )
-
-        # Prefer modern UPSERT syntax when supported by the SQLite runtime to
-        # preserve finer-grained update semantics (e.g., avoid overwriting
-        # created_at unless necessary). Fallback to INSERT OR REPLACE for
-        # older SQLite versions.
-        sqlite_version = _sqlite_version_tuple()
-        supports_upsert = sqlite_version >= (3, 24, 0)
-
-        if supports_upsert:
-            sql = (
-                "INSERT INTO returns (ticker, date, return, return_type, created_at) "
-                "VALUES (?,?,?,?,?) "
-                "ON CONFLICT(ticker,date,return_type) DO UPDATE SET "
-                "return=excluded.return, "
-                "created_at=COALESCE(returns.created_at, excluded.created_at)"
-            )
-        else:
-            sql = (
-                "INSERT OR REPLACE INTO returns (ticker, date, return, "
-                "return_type, created_at) VALUES (?,?,?,?,?)"
-            )
-        cur.executemany(sql, rows)
-        conn.commit()
-    finally:
-        if close_conn:
-            conn.close()
+    sql = (
+        "INSERT INTO returns (ticker, date, return, return_type, created_at) "
+        "VALUES (?,?,?,?,?) "
+        "ON CONFLICT(ticker,date,return_type) DO UPDATE SET "
+        "return=excluded.return, "
+        "created_at=COALESCE(returns.created_at, excluded.created_at)"
+        if supports_upsert
+        else "INSERT OR REPLACE INTO returns (ticker, date, return, "
+        "return_type, created_at) VALUES (?,?,?,?,?)"
+    )
+    cur.executemany(sql, rows)
+    conn.commit()
