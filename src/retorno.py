@@ -10,12 +10,12 @@ from typing import Optional, Tuple, Union
 import numpy as np
 import pandas as pd
 
+from src import metrics  # noqa: E402
 from src.db_client import DatabaseClient, DefaultDatabaseClient
 from src.paths import DATA_DIR
 from src.time_utils import now_utc_iso
 
 logger = logging.getLogger(__name__)
-from src import metrics
 
 # Convenção de dias de negociação para anualização
 TRADING_DAYS = 252
