@@ -105,3 +105,58 @@ def test_compute_returns_range(sample_db):
     assert not df_ret.empty
     assert df_ret.index.min() >= pd.to_datetime(start)
     assert df_ret.index.max() <= pd.to_datetime(end)
+
+
+def test_write_returns_preserves_created_at_when_upsert_supported(sample_db):
+    """Re-running compute_returns should preserve created_at timestamps."""
+    import src.retorno as retorno
+
+    ticker = "PETR4.SA"
+
+    retorno.compute_returns(ticker, conn=sample_db)
+
+    cur = sample_db.cursor()
+    cur.execute(
+        "SELECT created_at FROM returns WHERE ticker = ? ORDER BY date LIMIT 1",
+        (ticker,),
+    )
+    first_created = cur.fetchone()[0]
+
+    # Re-run and ensure created_at remains the same for existing rows
+    retorno.compute_returns(ticker, conn=sample_db)
+    cur.execute(
+        "SELECT created_at FROM returns WHERE ticker = ? ORDER BY date LIMIT 1",
+        (ticker,),
+    )
+    second_created = cur.fetchone()[0]
+
+    assert first_created == second_created
+
+
+def test_compute_returns_empty_and_single_price(sample_db):
+    """Handle empty ticker (no prices) and single-price series gracefully."""
+    import src.retorno as retorno
+
+    # Empty ticker: should not raise and produce zero rows
+    retorno.compute_returns("EMPTY_TICKER", conn=sample_db)
+    # If `returns` table was never created (no prices), treat as zero rows.
+    try:
+        assert _count_returns(sample_db, "EMPTY_TICKER") == 0
+    except sqlite3.OperationalError:
+        # Table missing -> zero rows
+        assert True
+
+    # Single price row: insert one price and expect zero returns
+    cur = sample_db.cursor()
+    cur.execute(
+        "INSERT INTO prices (ticker,date,open,high,low,close,volume,source) VALUES (?,?,?,?,?,?,?,?)",
+        ("SINGLE", "2023-01-01", 100.0, 100.0, 100.0, 100.0, 100, "fixture"),
+    )
+    sample_db.commit()
+
+    retorno.compute_returns("SINGLE", conn=sample_db)
+    try:
+        assert _count_returns(sample_db, "SINGLE") == 0
+    except sqlite3.OperationalError:
+        # Table missing -> zero rows
+        assert True

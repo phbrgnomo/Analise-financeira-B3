@@ -47,3 +47,66 @@ src.db.write_returns(out, conn=conn)
 ```
 
 Referência: `docs/implementation-artifacts/1-7-implementar-transformacao-de-retornos-e-persistencia-em-returns.md`.
+
+## Quickstart para consumidores
+
+1. Rodar o CLI (dry-run):
+
+```bash
+poetry run python -m src.main compute-returns --ticker PETR4.SA --dry-run
+```
+
+2. Persistir retornos e checar algumas linhas:
+
+```bash
+poetry run python -m src.main compute-returns --ticker PETR4.SA
+sqlite3 dados/data.db "SELECT ticker, date, return, created_at FROM returns WHERE ticker='PETR4.SA' ORDER BY date DESC LIMIT 5;"
+```
+
+3. Exemplo rápido em Python (pandas):
+
+```py
+import sqlite3
+import pandas as pd
+from datetime import timezone, datetime
+
+conn = sqlite3.connect('dados/data.db')
+df = pd.read_sql_query("SELECT date, return FROM returns WHERE ticker='PETR4.SA' ORDER BY date", conn, parse_dates=['date']).set_index('date')
+df['cum_return'] = (1 + df['return']).cumprod() - 1
+print(df.tail())
+```
+
+## Exemplos SQL úteis
+
+- Últimos 100 retornos de um ativo:
+
+```sql
+SELECT ticker, date, return
+FROM returns
+WHERE ticker = 'PETR4'
+ORDER BY date DESC
+LIMIT 100;
+```
+
+- Média e desvio por ano:
+
+```sql
+SELECT ticker, AVG(return) AS mean_return, (AVG(return*return)-AVG(return)*AVG(return)) AS var_return
+FROM returns
+WHERE date BETWEEN '2025-01-01' AND '2025-12-31'
+GROUP BY ticker;
+```
+
+- Retorno acumulado (geométrico) por janela:
+
+```sql
+SELECT ticker, date,
+  EXP(SUM(LOG(1 + return)) OVER (PARTITION BY ticker ORDER BY date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)) - 1
+  AS cumulative_return
+FROM returns;
+```
+
+## Nota de compatibilidade SQLite
+
+Recomendamos executar com SQLite >= 3.24.0 para garantir suporte a `ON CONFLICT ... DO UPDATE`.
+Em ambientes onde isso não é possível, a implementação usa um fallback transacional (UPDATE→INSERT) para preservar metadados; ainda assim avaliar migrar para Postgres em cenários com múltiplos escritores concorrentes.

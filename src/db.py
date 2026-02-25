@@ -2,20 +2,23 @@
 import contextlib
 import hashlib
 import json
+import logging
 import os
 import re
 import sqlite3
-from datetime import datetime, timezone
 from typing import Any, Optional
 
 import pandas as pd
 
 from src.paths import DATA_DIR
+from src.time_utils import now_utc_iso
 
 DEFAULT_DB_PATH = str(DATA_DIR / "data.db")
 DEFAULT_SCHEMA_PATH = os.path.join(
     os.path.dirname(os.path.dirname(__file__)), "docs", "schema.json"
 )
+
+logger = logging.getLogger(__name__)
 
 
 def _load_canonical_schema(schema_path: Optional[str] = None) -> dict:
@@ -235,7 +238,7 @@ def _row_tuple_from_series(
     )
 
     vals["raw_checksum"] = hashlib.sha256(payload.encode("utf-8")).hexdigest()
-    vals["fetched_at"] = fetched_at or datetime.now(timezone.utc).isoformat()
+    vals["fetched_at"] = fetched_at or now_utc_iso()
 
     return _build_row_tuple(vals, schema_cols)
 
@@ -281,6 +284,21 @@ def init_db(db_path: Optional[str] = None, allow_external: bool = False) -> None
         _ensure_schema(conn)
         # Re-apply PRAGMAs after schema creation in best-effort mode.
         _apply_pragmas(conn, db_path)
+        # Apply SQL migrations if present
+        try:
+            from src.db_migrator import apply_migrations
+
+            apply_migrations(conn)
+        except Exception:
+            # Migration failures should bubble up in production; for init we
+            # log and re-raise to avoid silent schema drift.
+            conn.close()
+            raise
+        # Log successful initialization (best-effort; do not fail init on logging)
+        try:
+            logger.info("database_initialized", extra={"db_path": db_path})
+        except Exception:
+            pass
     finally:
         conn.close()
 
@@ -328,10 +346,7 @@ def _upsert_snapshot_metadata(
             json.dumps(metadata, sort_keys=True).encode("utf-8")
         ).hexdigest()
     )
-    created_at = (
-        metadata.get("created_at")
-        or datetime.now(timezone.utc).isoformat()
-    )
+    created_at = metadata.get("created_at") or now_utc_iso()
     ticker = metadata.get("ticker") or metadata.get("symbol") or None
     sql = (
         "INSERT OR REPLACE INTO snapshots(id, ticker, created_at, payload) "
@@ -521,7 +536,7 @@ def _write_returns_core(conn, df, return_type):
     if "return_type" not in df2.columns:
         df2["return_type"] = return_type
     if "created_at" not in df2.columns:
-        df2["created_at"] = datetime.now(timezone.utc).isoformat()
+        df2["created_at"] = now_utc_iso()
 
     rows = [
         (
@@ -552,10 +567,31 @@ def _write_returns_core(conn, df, return_type):
             f"{qr}=excluded.{qr}, "
             f"{qc}=COALESCE({qtab}.{qc}, excluded.{qc})"
         )
+        cur.executemany(sql, rows)
+        conn.commit()
     else:
-        sql = (
-            f"INSERT OR REPLACE INTO returns ({cols_sql}) "
-            f"VALUES (?,?,?,?,?)"
+        # Safe transactional fallback for older SQLite runtimes that do not
+        # support the UPSERT syntax. Instead of using `INSERT OR REPLACE` (which
+        # may overwrite existing rows and lose metadata like `created_at`), we
+        # perform an UPDATE first and INSERT only when no existing row was
+        # updated. This preserves `created_at` and avoids destructive replaces.
+        update_sql = (
+            f"UPDATE returns SET {qr} = ? "
+            f"WHERE {qt} = ? AND {qd} = ? AND {qrt} = ?"
         )
-    cur.executemany(sql, rows)
-    conn.commit()
+        insert_sql = f"INSERT INTO returns ({cols_sql}) VALUES (?,?,?,?,?)"
+
+        logger = logging.getLogger(__name__)
+        try:
+            conn.execute("BEGIN")
+            for row in rows:
+                # row order: ticker, date, return, return_type, created_at
+                ticker_val, date_val, return_val, rtype_val, created_at_val = row
+                cur.execute(update_sql, (return_val, ticker_val, date_val, rtype_val))
+                if cur.rowcount == 0:
+                    cur.execute(insert_sql, row)
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            logger.exception("Failed transactional upsert fallback for returns")
+            raise

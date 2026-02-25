@@ -1,3 +1,4 @@
+import os
 from datetime import date, timedelta
 from typing import Optional
 
@@ -5,7 +6,20 @@ import typer
 
 import src.db as _db
 import src.retorno as _retorno
+from src import metrics
+from src.logging_config import configure_logging
 from src.paths import DATA_DIR
+
+# Configure structured logging early
+configure_logging()
+
+# Optionally start Prometheus metrics server when requested via env var
+if os.getenv("PROMETHEUS_METRICS"):
+    try:
+        metrics.start_metrics_server(int(os.getenv("PROMETHEUS_METRICS_PORT", "8000")))
+    except Exception:
+        # Don't fail startup if metrics server can't start
+        pass
 
 # Instância principal da aplicação de linha de comando usando Typer
 app = typer.Typer()

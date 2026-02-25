@@ -1,16 +1,21 @@
 import contextlib
+import logging
 import math
 import sqlite3
 import time
 import uuid
-from datetime import date, datetime, timezone
+from datetime import date, datetime
 from typing import Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
 
-import src.db as db
+from src.db_client import DatabaseClient, DefaultDatabaseClient
 from src.paths import DATA_DIR
+from src.time_utils import now_utc_iso
+
+logger = logging.getLogger(__name__)
+from src import metrics
 
 # Convenção de dias de negociação para anualização
 TRADING_DAYS = 252
@@ -20,6 +25,7 @@ def compute_returns(
     ticker: str,
     start: str | date | datetime | None = None,
     end: str | date | datetime | None = None,
+    repo: Optional[DatabaseClient] = None,
     conn: sqlite3.Connection | None = None,
     dry_run: bool = False,
 ) -> pd.DataFrame | None:
@@ -32,15 +38,14 @@ def compute_returns(
       using `INSERT OR REPLACE` for SQLite compatibility.
     - If `dry_run` is True returns the computed DataFrame without persisting.
     """
-    if conn is None:
-        raise ValueError(
-            "compute_returns requires a sqlite3.Connection via conn parameter"
-        )
+    # Choose DB access path: prefer injected repo adapter, else use legacy conn/db functions
+    if repo is None:
+        repo = DefaultDatabaseClient()
     # Normalize params and load prices via DB helper
     qstart = _normalize_param(start)
     qend = _normalize_param(end)
 
-    df_prices = db.read_prices(ticker, start=qstart, end=qend, conn=conn)
+    df_prices = repo.read_prices(ticker, start=qstart, end=qend, conn=conn)
     if df_prices.empty:
         return pd.DataFrame() if dry_run else None
 
@@ -56,7 +61,7 @@ def compute_returns(
     if dry_run:
         return out_df
     # Persist results and record telemetry
-    _persist_returns(out_df, ticker, conn=conn)
+    _persist_returns(out_df, ticker, repo=repo, conn=conn)
     return out_df
 
 
@@ -89,22 +94,41 @@ def _build_out_df(returns: pd.Series, ticker: str) -> pd.DataFrame:
     out_df = returns.rename("return").to_frame()
     out_df["ticker"] = ticker
     out_df["return_type"] = "daily"
-    out_df["created_at"] = datetime.now(timezone.utc).isoformat()
+    out_df["created_at"] = now_utc_iso()
     return out_df.reset_index()
 
 
 def _persist_returns(
     out_df: pd.DataFrame,
     ticker: str,
+    repo: Optional[DatabaseClient] = None,
     conn: sqlite3.Connection | None = None,
 ) -> None:
     job_id = uuid.uuid4().hex
     start_ts = time.time()
-    db.write_returns(out_df, conn=conn, return_type="daily")
+    if repo is None:
+        repo = DefaultDatabaseClient()
+    repo.write_returns(out_df, conn=conn, return_type="daily")
     duration_ms = int((time.time() - start_ts) * 1000)
     rows_written = len(out_df)
+    logger.info(
+        "persisted_returns",
+        extra={
+            "job_id": job_id,
+            "ticker": ticker,
+            "rows_written": rows_written,
+            "duration_ms": duration_ms,
+        },
+    )
+    # Metrics: increment a counter and observe duration histogram (no-op when
+    # prometheus_client not installed).
+    try:
+        metrics.increment_counter("compute_returns_total")
+        metrics.observe_histogram("compute_returns_duration_ms", float(duration_ms))
+    except Exception:
+        logger.debug("metrics recording failed", exc_info=True)
     with contextlib.suppress(Exception):
-        db.record_snapshot_metadata(
+        repo.record_snapshot_metadata(
             {
                 "job_id": job_id,
                 "action": "compute_returns",

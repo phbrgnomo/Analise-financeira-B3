@@ -4,6 +4,11 @@ TL;DR
 
 Corrigir a operação de upsert para ser atômica e segura em runtimes antigos, endurecer testes (bordas, concorrência, preservação de metadados), entregar docs e notebook consumidor, refatorar persistência para um adapter DB injetável, adicionar migrações, utilitários de tempo, CI/pre-commit e observabilidade. Isso reduz risco operacional e facilita rollout para consumidores (notebooks/modelagem).
 
+INSTRUCOES:
+
+- rastreie a execução utilizando #tool:todo
+- verifique a estrutura do codiog usando #tool:sehejjain.lsp-mcp-bridge/*
+
 Steps
 
 1. Corrigir upsert transacional (alta)
