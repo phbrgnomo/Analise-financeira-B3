@@ -229,12 +229,10 @@ def test_log_adapter_validation_error_paths(
     # capture original import to avoid recursion when patching builtins.__import__
     original_import = builtins.__import__
 
-    def fake_import(name, *args, **kwargs):
-        # Simplified: if the import requested is `src.validation`, raise
-        # ImportError to simulate an import failure; otherwise delegate
-        # to the original import implementation.
-        if name == "src.validation":
-            raise ImportError("cannot import")
+    def fake_import_raise(name, *args, **kwargs):
+        raise ImportError("cannot import")
+
+    def fake_import_delegate(name, *args, **kwargs):
         return original_import(name, *args, **kwargs)
 
     log_invalid_rows_mock = MagicMock()
@@ -255,7 +253,7 @@ def test_log_adapter_validation_error_paths(
         """
 
         mapping = {
-            True: patch("builtins.__import__", side_effect=fake_import),
+            True: patch("builtins.__import__", side_effect=fake_import_raise),
             False: (
                 patch.dict(
                     "sys.modules",
