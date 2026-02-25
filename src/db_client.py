@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-import sqlite3
 import abc
-from typing import Optional, Dict, Any
+import sqlite3
+from typing import Any, Dict, Optional
 
 import pandas as pd
 

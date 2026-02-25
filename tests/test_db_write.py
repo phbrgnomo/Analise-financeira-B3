@@ -1,10 +1,10 @@
+import json
 import os
 import sqlite3
 
 import pandas as pd
 
 import src.db as dbmod
-import json
 
 
 def _load_sample_df():

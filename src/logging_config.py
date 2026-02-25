@@ -3,7 +3,6 @@ import logging
 import sys
 from datetime import datetime, timezone
 
-
 # Standard LogRecord attributes to exclude from "extra" fields.
 DEFAULT_RECORD_KEYS = {
     "name",
