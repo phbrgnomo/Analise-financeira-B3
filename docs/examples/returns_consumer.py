@@ -1,4 +1,7 @@
-"""Small script example for consumers showing how to read `returns` and compute cumulative return."""
+"""
+Small script example for consumers showing how to read `returns` and
+compute cumulative return.
+"""
 import sqlite3
 from contextlib import closing
 

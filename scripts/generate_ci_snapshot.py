@@ -2,7 +2,7 @@
 """Gerador CI para criar o snapshot `PETR4_snapshot.csv` em um diretório alvo.
 
 Usa a fixture `tests/fixtures/sample_snapshot.csv` e a função
-`src.etl.snapshot.write_snapshot` para escrever o CSV com a 
+`src.etl.snapshot.write_snapshot` para escrever o CSV com a
 serialização canônica do projeto (determinística).
 
 O destino padrão é `$SNAPSHOT_DIR` se definido, senão `$RUNNER_TEMP/snapshots_test`,
@@ -147,7 +147,7 @@ def _choose_from_snapshot_env(repo_root: Path) -> Path | None:
 
     Segurança:
     - Usa `safe_path_under` para impedir path traversal. Se `safe_path_under`
-        rejeitar o valor, esta função NÃO reconstrói `Path(sanitized)` (isso 
+                rejeitar o valor, esta função NÃO reconstrói `Path(sanitized)` (isso
       evitaria contornar a checagem) e retorna `None` para permitir que o
       fluxo de fallback continue com segurança.
     """
