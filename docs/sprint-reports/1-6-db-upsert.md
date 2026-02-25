@@ -68,7 +68,7 @@ Próximos passos recomendados
 - Escrever uma migração / versão do esquema se a tabela `prices` for expandida. Documentar no arquivo `docs/schema.md`.
 - Adicionar um utilitário CLI para inspecionar/compactar o DB (vacuum, permissões, backup).
 - `fetched_at` é agora timezone-aware em UTC (`datetime.now(timezone.utc).isoformat()`); padronize este formato no projeto e documente-o em `docs/schema.md` para evitar inconsistências.
-- Abrir PR com os arquivos criados e este relatório de sprint.
+
 
 Contato
 -

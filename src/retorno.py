@@ -18,8 +18,8 @@ TRADING_DAYS = 252
 
 def compute_returns(
     ticker: str,
-    start: Optional[Union[str, date, datetime]] = None,
-    end: Optional[Union[str, date, datetime]] = None,
+    start: str | date | datetime | None = None,
+    end: str | date | datetime | None = None,
     conn: sqlite3.Connection | None = None,
     dry_run: bool = False,
 ) -> pd.DataFrame | None:
@@ -43,28 +43,15 @@ def compute_returns(
     df_prices = db.read_prices(ticker, start=qstart, end=qend, conn=conn)
     if df_prices.empty:
         return pd.DataFrame() if dry_run else None
-    # Choose best price column (adj_close preferred)
-    price_candidates = ("adj_close", "Adj Close", "close", "Close")
-    price_col = next(
-        (c for c in price_candidates if c in df_prices.columns),
-        None,
-    )
 
-    if price_col is None:
-        raise KeyError(
-            "Nenhuma coluna de preço encontrada em `prices` para cálculo de retornos"
-        )
-
-    series = df_prices[price_col].astype(float)
-    returns = series.pct_change().dropna()
+    # Use shared helpers for selection, computation and assembly
+    price_col = _choose_price_column(df_prices)
+    returns = _compute_returns_series(df_prices, price_col)
 
     if returns.empty:
         return pd.DataFrame() if dry_run else None
-    out_df = returns.rename("return").to_frame()
-    out_df["ticker"] = ticker
-    out_df["return_type"] = "daily"
-    out_df["created_at"] = datetime.now(timezone.utc).isoformat()
-    out_df = out_df.reset_index()  # date becomes a column again
+
+    out_df = _build_out_df(returns, ticker)
 
     if dry_run:
         return out_df
@@ -130,37 +117,7 @@ def _persist_returns(
         )
 
 
-def _read_price_series(ticker, start, end, conn: sqlite3.Connection) -> pd.Series:
-    """Read a single price series from `prices` table choosing the best price
-    column available. Returns a pandas Series indexed by date.
-    """
-    cur = conn.cursor()
-    cur.execute("PRAGMA table_info(prices)")
-    cols = [row[1] for row in cur.fetchall()]
-    price_col = next(
-        (c for c in ("adj_close", "Adj Close", "close", "Close") if c in cols),
-        None,
-    )
-    if price_col is None:
-        raise KeyError(
-            "Nenhuma coluna de preço encontrada em `prices` para cálculo de retornos"
-        )
-
-    sql = f"SELECT date, {price_col} as price FROM prices WHERE ticker = ?"
-    params = [ticker]
-    if start is not None:
-        sql += " AND date >= ?"
-        params.append(str(start))
-    if end is not None:
-        sql += " AND date <= ?"
-        params.append(str(end))
-    sql += " ORDER BY date"
-
-    df = pd.read_sql_query(sql, conn, params=params, parse_dates=["date"])
-    if df.empty:
-        return pd.Series(dtype=float)
-    df = df.set_index("date")
-    return df["price"].astype(float)
+# `_read_price_series` removed: compute_returns uses `db.read_prices` now
 
 
 def r_linear(

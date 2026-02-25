@@ -35,12 +35,8 @@ so that downstream notebooks and modeling code can read precomputed returns.
   - [x] Add telemetry/logging (job_id, rows_written, duration_ms) to `ingest_logs` or `metrics` as appropriate
 - [x] Add unit tests in `tests/` for happy path and edge cases (missing dates, duplicated runs)
 - [x] Add minimal CLI entrypoint: `main compute-returns --ticker <TICKER> [--start] [--end] [--dry-run]`
-- [ ] Document annualization and conventions in code comments and `docs/` (reference to `conv_retorno` if exists)
-- [ ] Documentar o que foi implantado nessa etapa em `docs/sprint-reports` conforme definido no FR28 (`docs/planning-artifacts/prd.md`)
-
 - [x] Document annualization and conventions in code comments and `docs/` (reference to `conv_retorno` if exists)
 - [ ] Documentar o que foi implantado nessa etapa em `docs/sprint-reports` conforme definido no FR28 (`docs/planning-artifacts/prd.md`)
-
 ## Dev Notes
 
 - Technical stack: Python, pandas for ETL, SQLAlchemy or `sqlite3` for persistence, use project's DB layer (`src.retorno` / `src.dados_b3` conventions).

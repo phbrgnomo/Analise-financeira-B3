@@ -56,7 +56,7 @@ canonical_df = to_canonical(raw_df, provider_name="yfinance", ticker="PETR4.SA")
 # e metadata em canonical_df.attrs: raw_checksum, provider, ticker
 
 # Usar com camada de persistência
-from src.db.db import write_prices
+from src.db import write_prices
 write_prices(canonical_df)  # Upsert no SQLite
 ```
 
@@ -72,7 +72,7 @@ Notas de mapeamento:
 
 - [ ] Implementar `Adapter.fetch(ticker) -> pd.DataFrame(raw)` que salva também o `raw_response` localmente.
 - [ ] Implementar `Adapter.normalize(df_raw) -> df_canonical` seguindo os mapeamentos documentados.
-- [ ] Atualizar `docs/planning-artifacts/adapter-mappings.md` com o novo provedor e um exemplo de mapping.
+- [ ] Atualizar `docs/modules/adapter-mappings.md` com o novo provedor e um exemplo de mapping.
 - [ ] Criar testes de contrato que usam o `df_canonical` esperado e validam `write_prices`/`upsert`.
 
 ## Notas finais

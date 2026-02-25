@@ -1,5 +1,5 @@
 ---
-title: "Story 1.7 — Transformação de retornos e persistência em `returns`
+title: "Story 1.7 — Transformação de retornos e persistência em returns"
 date: 2026-02-24
 story: 1-7-implementar-transformacao-de-retornos-e-persistencia-em-returns
 author: Amelia (Dev Agent)

@@ -485,27 +485,30 @@ def write_returns(
         close_conn = True
 
     try:
-        _extracted_from_write_returns_19(conn, df, return_type)
+        _write_returns_core(conn, df, return_type)
     finally:
         if close_conn:
             conn.close()
 
 
-# TODO Rename this here and in `write_returns`
-def _extracted_from_write_returns_19(conn, df, return_type):
+def _write_returns_core(conn, df, return_type):
     cur = conn.cursor()
     # Ensure returns table exists with unique constraint for upsert
+    # Quote identifiers to avoid conflicts with reserved words (e.g. RETURN)
+    qt = _quote_identifier("ticker")
+    qd = _quote_identifier("date")
+    qr = _quote_identifier("return")
+    qrt = _quote_identifier("return_type")
+    qc = _quote_identifier("created_at")
+    qtab = _quote_identifier("returns")
+
     cur.execute(
-        """
-            CREATE TABLE IF NOT EXISTS returns (
-                ticker TEXT,
-                date TEXT,
-                return REAL,
-                return_type TEXT,
-                created_at TEXT,
-                UNIQUE(ticker, date, return_type)
-            )
-            """
+        (
+            "CREATE TABLE IF NOT EXISTS returns ("
+            f"{qt} TEXT, {qd} TEXT, {qr} REAL, {qrt} TEXT, {qc} TEXT, "
+            f"UNIQUE({qt}, {qd}, {qrt})"
+            ")"
+        )
     )
 
     # Normalize DataFrame
@@ -537,15 +540,22 @@ def _extracted_from_write_returns_19(conn, df, return_type):
     sqlite_version = _sqlite_version_tuple()
     supports_upsert = sqlite_version >= (3, 24, 0)
 
-    sql = (
-        "INSERT INTO returns (ticker, date, return, return_type, created_at) "
-        "VALUES (?,?,?,?,?) "
-        "ON CONFLICT(ticker,date,return_type) DO UPDATE SET "
-        "return=excluded.return, "
-        "created_at=COALESCE(returns.created_at, excluded.created_at)"
-        if supports_upsert
-        else "INSERT OR REPLACE INTO returns (ticker, date, return, "
-        "return_type, created_at) VALUES (?,?,?,?,?)"
-    )
+    # Build parameterized INSERT/UPSERT using quoted identifiers to ensure
+    # reserved keywords like `return` are handled safely and consistently.
+    cols_sql = f"{qt}, {qd}, {qr}, {qrt}, {qc}"
+    conflict_sql = f"{qt},{qd},{qrt}"
+
+    if supports_upsert:
+        sql = (
+            f"INSERT INTO returns ({cols_sql}) VALUES (?,?,?,?,?) "
+            f"ON CONFLICT({conflict_sql}) DO UPDATE SET "
+            f"{qr}=excluded.{qr}, "
+            f"{qc}=COALESCE({qtab}.{qc}, excluded.{qc})"
+        )
+    else:
+        sql = (
+            f"INSERT OR REPLACE INTO returns ({cols_sql}) "
+            f"VALUES (?,?,?,?,?)"
+        )
     cur.executemany(sql, rows)
     conn.commit()

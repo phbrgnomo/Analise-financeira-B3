@@ -37,13 +37,19 @@ ON CONFLICT(ticker, date, return_type) DO UPDATE SET
 
 ```py
 # exemplo mínimo
+# Observação: `prices_series`, `ticker` e `conn` são assumidos como
+# definidos anteriormente (por ex. `prices_series` é uma pd.Series de preços,
+# `ticker` é o símbolo string e `conn` é uma sqlite3.Connection).
+from datetime import datetime, timezone
+import src.db as db  # ou: from src.db import write_returns
+
 returns = prices_series.pct_change().dropna()
 out = returns.rename('return').to_frame()
 out['ticker'] = ticker
 out['return_type'] = 'daily'
 out['created_at'] = datetime.now(timezone.utc).isoformat()
-# delegar persistência
-src.db.write_returns(out, conn=conn)
+# delegar persistência (escolha: usar db.write_returns ou importar diretamente)
+db.write_returns(out, conn=conn)
 ```
 
 Referência: `docs/implementation-artifacts/1-7-implementar-transformacao-de-retornos-e-persistencia-em-returns.md`.
