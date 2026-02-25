@@ -140,7 +140,7 @@ O script calcula o SHA256 do arquivo de exemplo `snapshots/PETR4_snapshot_test.c
 
 - Raw CSV files are written to `raw/<provider>/` with pattern `<ticker>-YYYYMMDDTHHMMSSZ.csv`.
 - A SHA256 checksum is written alongside each CSV as `*.checksum`.
-- In this implementation, metadados de ingestão são persistidos em `metadata/ingest_logs.jsonl` (JSON Lines, append-only).
+- Metadados de ingestão são persistidos em `metadata/ingest_logs.jsonl` (JSON Lines, append-only).
 - Recomenda-se proteger artefatos sensíveis com permissões owner-only. Para aplicar localmente:
 
 ```bash

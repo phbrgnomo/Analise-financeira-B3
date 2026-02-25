@@ -12,29 +12,47 @@ from pathlib import Path
 
 
 def main(argv: list[str] | None = None) -> int:
+    """
+    Executa o validador de snapshots em `scripts/validate_snapshots.py`.
+
+    Parâmetros:
+    - argv: lista de argumentos (por padrão usa `sys.argv[1:]`).
+
+    Retorno:
+    - Código de saída retornado pelo script de validação (inteiro).
+
+    Observações:
+    - Este wrapper encaminha os argumentos para o script de validação
+      e retorna seu código de saída. Preserva o tratamento de
+      KeyboardInterrupt e captura erros de execução.
+    """
     if argv is None:
         argv = sys.argv[1:]
 
-    repo_root = Path(__file__).resolve().parent
-    validate = repo_root / "validate_snapshots.py"
-    # Fallback if script is in scripts/ and we run from project root
+    # Definir `repo_root` como a raiz do projeto (um nível acima do pacote
+    # scripts/). Isso garante que checagens de fallback para
+    # `scripts/validate_snapshots.py` funcionem corretamente.
+    repo_root = Path(__file__).resolve().parents[1]
+    validate = repo_root / "scripts" / "validate_snapshots.py"
+    # Fallback: caso o script esteja no diretório do repositório em vez de
+    # scripts/, tente `repo_root / 'validate_snapshots.py'`.
     if not validate.exists():
-        validate = repo_root.parent / "scripts" / "validate_snapshots.py"
+        validate = repo_root / "validate_snapshots.py"
 
     if not validate.exists():
-        print("Error: scripts/validate_snapshots.py not found", file=sys.stderr)
+        print("Erro: scripts/validate_snapshots.py não encontrado", file=sys.stderr)
         return 2
 
-    cmd = [sys.executable, str(validate)] + list(argv)
+    comando = [sys.executable, str(validate)] + list(argv)
     try:
-        # Use subprocess.run with a list of arguments and shell=False to avoid
-        # shell interpretation of user-provided input (mitigates CWE-78).
-        proc = subprocess.run(cmd, shell=False)
-        return proc.returncode
+        # Use subprocess.run com lista de argumentos e shell=False para evitar
+        # interpretação pelo shell de entrada do usuário (mitiga CWE-78).
+        retorno_proc = subprocess.run(comando, shell=False)
+        return retorno_proc.returncode
     except KeyboardInterrupt:
         raise
     except Exception as e:
-        print(f"Error running validation: {e}", file=sys.stderr)
+        print(f"Erro ao executar validação: {e}", file=sys.stderr)
         return 3
 
 

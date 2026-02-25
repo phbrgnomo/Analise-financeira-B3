@@ -23,21 +23,29 @@ def _make_csv_bytes() -> bytes:
 
 
 def test_acceptance_snapshot(tmp_path: Path):
-    # Create a deterministic snapshots dir with files that will be remapped
+    """Verifica o fluxo de validação de snapshots.
+
+    O teste cria um diretório determinístico de snapshots, escreve um arquivo
+    de snapshot e seu checksum, gera um manifesto para esse diretório
+    (usando a opção --update) e executa a validação via wrapper. O teste
+    assegura que a geração do manifesto e a validação retornem sucesso.
+    """
+
+    # Cria um diretório de snapshots determinístico com arquivos que serão remapeados
     out = tmp_path / "snapshots_test"
     out.mkdir()
 
-    # Create a single snapshot file matching the repository manifest basename
+    # Cria um único arquivo de snapshot com o mesmo basename do manifesto do repositório
     name = "PETR4_snapshot.csv"
     fp = out / name
     data = _make_csv_bytes()
     fp.write_bytes(data)
 
-    # write checksum file that mirrors how pipeline writes it
+    # grava arquivo de checksum no mesmo formato que o pipeline usa
     chk = fp.with_suffix(fp.suffix + ".checksum")
     chk.write_text(sha256_bytes(data))
 
-    # First generate a manifest for this tmp dir, then validate against it
+    # Primeiro gera um manifesto para este diretório temporário, depois valida contra ele
     tmp_manifest = tmp_path / "manifest.json"
     gen_cmd = [
         sys.executable,
@@ -49,13 +57,14 @@ def test_acceptance_snapshot(tmp_path: Path):
         "--update",
         "--allow-external",
     ]
-    gen = subprocess.run(gen_cmd, capture_output=True, text=True)
+    gen = subprocess.run(gen_cmd, capture_output=True, text=True, timeout=60)
     assert gen.returncode == 0, (
         f"Manifest generation failed: {gen.stderr}\n{gen.stdout}"
     )
 
-    # Call the wrapper which forwards to scripts/validate_snapshots.py
-    verify = Path.cwd() / "scripts" / "verify_snapshot.py"
+    # Chama o wrapper que encaminha para scripts/validate_snapshots.py
+    # Monta o caminho do script relativo a este arquivo de teste para não depender do CWD
+    verify = Path(__file__).resolve().parent.parent.parent / "scripts" / "verify_snapshot.py"
     validate_cmd = [
         sys.executable,
         str(verify),
@@ -65,7 +74,7 @@ def test_acceptance_snapshot(tmp_path: Path):
         str(tmp_manifest),
         "--allow-external",
     ]
-    proc = subprocess.run(validate_cmd, capture_output=True, text=True)
+    proc = subprocess.run(validate_cmd, capture_output=True, text=True, timeout=60)
     assert proc.returncode == 0, (
         "Snapshot validation failed:\n"
         f"STDOUT: {proc.stdout}\n"

@@ -8,7 +8,7 @@
 - **Dados Sensíveis:** não incluir segredos, tokens ou `.env` no PR.
 - **Documentação:** atualizar `docs/` quando necessário (ex.: instruções de uso, exemplos, changelog).
 - **CI:** pipeline do GitHub Actions deve passar (lint, unit, integration).
-- **Performance/Impact:** explique impactos de performance ou requisitos de infra/ops.
+- **Desempenho/Impacto:** explique impactos de desempenho ou requisitos de infra/ops.
 - **Segurança:** revisar input validation, SQL parameterization e permissões.
 - **Rollback / Compatibilidade:** o PR é compatível com deploys blue/green e tem plano de rollback quando aplicável.
 - **Checklist de reviewers:** indique que tipos de revisão são necessários (arquitetura, segurança, banco, testes).
@@ -20,8 +20,8 @@ Comandos úteis para revisão local:
 poetry install
 
 # rodar lint
-poetry run ruff check src tests || true
-poetry run black --check . || true
+poetry run ruff check src tests
+poetry run black --check .  # optional, if black is configured
 
 # rodar testes
 poetry run pytest -q

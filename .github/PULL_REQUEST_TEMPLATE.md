@@ -2,7 +2,7 @@
 
 ### O que foi feito
 
-- Resumo das mudanças e porquê.
+- Resumo das mudanças e por que foram feitas.
 
 ### Como testar
 
@@ -20,4 +20,4 @@
 
 - Incluir notas operacionais quando mudanças exigirem steps especiais.
 
-Refer to docs/pr_checklist.md for a full review checklist.
+Consulte `docs/pr_checklist.md` para o checklist completo de revisão.

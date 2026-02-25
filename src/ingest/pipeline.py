@@ -202,9 +202,9 @@ def _persist_metadata(
         fh.flush()
         try:
             os.fsync(fh.fileno())
-        except Exception:
-            # Not critical on some platforms; best-effort
-            pass
+        except OSError as exc:
+            # Not critical on some platforms; best-effort, but log for diagnosis
+            logger.warning("fsync failed for metadata path %s: %s", metadata_path, exc)
     metadata["metadata_recorded"] = True
     metadata["metadata_path"] = str(metadata_path)
 

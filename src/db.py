@@ -20,6 +20,9 @@ DEFAULT_SCHEMA_PATH = os.path.join(
 
 logger = logging.getLogger(__name__)
 
+# Track whether we've warned about missing UPSERT support to avoid noisy logs
+_upsert_warned = False
+
 
 def _load_canonical_schema(schema_path: Optional[str] = None) -> dict:
     path = schema_path or DEFAULT_SCHEMA_PATH
@@ -165,17 +168,26 @@ def _get_upsert_sql(schema_cols: list) -> str:
             "ON CONFLICT(ticker,date) DO NOTHING"
         ).format(cols=col_list_sql, vals=placeholders)
 
+    # Ensure the assumed conflict target exists in the schema
+    if "ticker" not in schema_cols or "date" not in schema_cols:
+        raise ValueError(
+            "Schema does not contain required 'ticker' and 'date' columns for upsert; "
+            "check docs/schema.json and _ensure_schema()"
+        )
+
     # Fallback for older SQLite versions: replace entire row
     import warnings
-
-    warnings.warn(
-        (
-            "SQLite version %s does not support UPSERT; falling back to "
-            "INSERT OR REPLACE. Consider upgrading SQLite to >= 3.24.0 "
-            "for safer ON CONFLICT semantics."
-        ) % sqlite3.sqlite_version,
-        stacklevel=2,
-    )
+    global _upsert_warned
+    if not _upsert_warned:
+        warnings.warn(
+            (
+                "SQLite version %s does not support UPSERT; falling back to "
+                "INSERT OR REPLACE. Consider upgrading SQLite to >= 3.24.0 "
+                "for safer ON CONFLICT semantics."
+            ) % sqlite3.sqlite_version,
+            stacklevel=2,
+        )
+        _upsert_warned = True
     return ("INSERT OR REPLACE INTO prices ({cols}) VALUES ({vals})").format(
         cols=col_list_sql, vals=placeholders
     )
@@ -259,6 +271,18 @@ def _connect(db_path: Optional[str]) -> sqlite3.Connection:
     _apply_pragmas(conn, db_path)
 
     return conn
+
+
+def connect(db_path: Optional[str] = None) -> sqlite3.Connection:
+    """Public connection factory.
+
+    Mirrors the internal `_connect` behavior: creates parent directories
+    when needed, applies PRAGMAs in best-effort mode and returns a
+    sqlite3.Connection. The returned connection can be used as a context
+    manager (``with connect(...) as conn:``) or closed manually with
+    ``conn.close()``.
+    """
+    return _connect(db_path)
 
 
 def init_db(db_path: Optional[str] = None, allow_external: bool = False) -> None:

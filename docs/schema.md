@@ -20,13 +20,12 @@ Versionamento:
 - Mudanças 'minor' (adição de colunas opcionais, comentários) -> incrementar versão minor.
 - Mudanças 'breaking' (remoção/renomeação de colunas obrigatórias, troca de tipos) -> incrementar major e seguir processo de migração.
 
-Política de Versionamento e Migração
----
+## Política de Versionamento e Migração
 - `docs/schema.json` é a fonte de verdade. Sempre atualize `schema_version` quando alterar o esquema.
 - Convenção recomendada: usar SemVer-like (major.minor), mas o campo atual é inteiro; incremente para indicar nova versão canônica do esquema.
 - Para mudanças não-break (ex.: adicionar coluna opcional): incrementar a versão e documentar em `metadata.migrations`.
 - Para mudanças breaking (ex.: renomear/remover coluna obrigatória):
-	1. Atualize `docs/schema.json` com nova `schema_version` e adicione uma entrada em `metadata.migrations` descrevendo a mudança.
+ 1. Atualize `docs/schema.json` com nova `schema_version` e adicione uma entrada em `metadata.migrations` descrevendo a mudança.
  2. Implementar código de migração (script SQL ou função Python) que atualize bancos existentes — colocar em `scripts/`.
  3. Atualizar `src/db.py` (se necessário) para aceitar múltiplas versões de schema (ou aplicar migração antes de conectar).
  4. Atualizar testes e snapshots, e rodar full `pytest`.

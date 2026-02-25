@@ -10,6 +10,18 @@ def _count_returns(
     ticker: str,
     return_type: str = "daily",
 ) -> int:
+    """Return the number of return rows for a ticker and return type.
+
+    Counts rows in the `returns` table for the given `ticker` and `return_type`.
+
+    Args:
+        conn (sqlite3.Connection): database connection.
+        ticker (str): ticker symbol.
+        return_type (str): return period/type (default 'daily').
+
+    Returns:
+        int: number of matching return rows.
+    """
     cur = conn.cursor()
     cur.execute(
         "SELECT COUNT(*) FROM returns WHERE ticker = ? AND return_type = ?",
@@ -23,6 +35,21 @@ def _fetch_returns_df(
     ticker: str,
     return_type: str = "daily",
 ) -> pd.DataFrame:
+    """Fetch returns for a ticker as a pandas DataFrame.
+
+    Retrieves rows from the `returns` table for `ticker` and `return_type`,
+    parses the `date` column as datetimes, normalizes timezone information
+    (drops tz), and sets `date` as the DataFrame index.
+
+    Args:
+        conn (sqlite3.Connection): database connection.
+        ticker (str): ticker symbol.
+        return_type (str): return period/type (default 'daily').
+
+    Returns:
+        pandas.DataFrame: DataFrame indexed by date with a `return` column;
+        may be empty if no rows are found.
+    """
     cur = conn.cursor()
     cur.execute(
         "SELECT date, return FROM returns WHERE ticker = ?"
@@ -148,10 +175,22 @@ def test_compute_returns_empty_and_single_price(sample_db):
 
     # Single price row: insert one price and expect zero returns
     cur = sample_db.cursor()
-    cur.execute(
-        "INSERT INTO prices (ticker,date,open,high,low,close,volume,source) VALUES (?,?,?,?,?,?,?,?)",
-        ("SINGLE", "2023-01-01", 100.0, 100.0, 100.0, 100.0, 100, "fixture"),
-    )
+    # Build INSERT dynamically based on actual `prices` table columns to remain
+    # compatible with different test schemas/migrations.
+    cols = ["ticker", "date", "open", "high", "low", "close", "volume", "source"]
+    vals = ["SINGLE", "2023-01-01", 100.0, 100.0, 100.0, 100.0, 100, "fixture"]
+    cur.execute("PRAGMA table_info(prices)")
+    existing_cols = [r[1] for r in cur.fetchall()]
+    if "fetched_at" in existing_cols:
+        cols.append("fetched_at")
+        vals.append("2023-01-01T00:00:00")
+    if "raw_checksum" in existing_cols:
+        cols.append("raw_checksum")
+        vals.append("0" * 64)
+
+    placeholders = ",".join(["?" for _ in cols])
+    sql = f"INSERT INTO prices ({','.join(cols)}) VALUES ({placeholders})"
+    cur.execute(sql, tuple(vals))
     sample_db.commit()
 
     retorno.compute_returns("SINGLE", conn=sample_db)

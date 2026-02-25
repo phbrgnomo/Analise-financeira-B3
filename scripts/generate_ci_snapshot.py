@@ -2,7 +2,7 @@
 """Gerador CI para criar o snapshot `PETR4_snapshot.csv` em um diretório alvo.
 
 Usa a fixture `tests/fixtures/sample_snapshot.csv` e a função
-`src.etl.snapshot.write_snapshot` para escrever o CSV com a
+`src.etl.snapshot.write_snapshot` para escrever o CSV com a 
 serialização canônica do projeto (determinística).
 
 O destino padrão é `$SNAPSHOT_DIR` se definido, senão `$RUNNER_TEMP/snapshots_test`,
@@ -32,30 +32,6 @@ def _sanitize_env_value(val: str) -> str:
     return val.split("\x00", 1)[0].strip()
 
 
-def _resolve_allowed_roots(
-    base: Path, extra_allowed: Sequence[Union[str, Path]] | None
-) -> list[Path]:
-    """Resolve e retorna raízes `Path` a partir de `base` e `extra_allowed`.
-
-    `base` espera-se que já seja um `Path` sanitizado e resolvido fornecido
-    pelo chamador. Este helper centraliza a lógica de resolução para raízes
-    adicionais permitidas (que ainda podem ser strings originadas do
-    ambiente).
-    """
-    # Ensure base is resolved without requiring the path to exist (strict=False)
-    roots: list[Path] = [base.resolve(strict=False)]
-    if extra_allowed:
-        for r in extra_allowed:
-            try:
-                r_val = _sanitize_env_value(r) if isinstance(r, str) else str(r)
-                # Resolve extras without strict resolution to avoid raising
-                roots.append(Path(r_val).resolve(strict=False))
-            except Exception:
-                # ignore invalid extras
-                continue
-    return roots
-
-
 def safe_path_under(
     base: Union[str, Path],
     user_value: str,
@@ -70,8 +46,9 @@ def safe_path_under(
     superfícies de ataque de path traversal quando lidamos com variáveis
     de ambiente.
     """
-    # Resolve base without strict mode to avoid exceptions for non-existent
-    # but intended temporary or generated directories.
+    # Resolve a base em modo não-strito para evitar exceções quando o
+    # diretório ainda não existir (ex.: diretórios temporários gerados
+    # posteriormente).
     base_path = Path(base).resolve(strict=False)
     val = _sanitize_env_value(user_value)
 
@@ -81,7 +58,7 @@ def safe_path_under(
     candidate = _build_candidate(base_path, val)
 
     # Construir lista de raízes permitidas (base + extras) via helper
-    # Reuse _build_allowed_roots to keep allowed-root construction
+    # Reutilize _build_allowed_roots para manter a construção de raízes
     # consistente com `validate_snapshot_dir`.
     allowed_roots = _build_allowed_roots(base_path, extra_allowed)
 
@@ -170,7 +147,7 @@ def _choose_from_snapshot_env(repo_root: Path) -> Path | None:
 
     Segurança:
     - Usa `safe_path_under` para impedir path traversal. Se `safe_path_under`
-      rejeitar o valor, esta função NÃO reconstrói `Path(sanitized)` (isso
+        rejeitar o valor, esta função NÃO reconstrói `Path(sanitized)` (isso 
       evitaria contornar a checagem) e retorna `None` para permitir que o
       fluxo de fallback continue com segurança.
     """
@@ -220,8 +197,8 @@ def _choose_from_snapshot_env(repo_root: Path) -> Path | None:
 def _choose_from_runner_temp(repo_root: Path) -> Path | None:
     """Escolhe `RUNNER_TEMP/snapshots_test` se `RUNNER_TEMP` estiver definido.
 
-    Security: valida `raw_runner` via `_sanitize_env_value` e `safe_path_under`
-    para garantir que a base é segura; retorna `None` em caso de erro.
+    Segurança: valida `raw_runner` via `_sanitize_env_value` e `safe_path_under`
+        para garantir que a base é segura; retorna `None` em caso de erro.
     """
     raw_runner_env = os.environ.get("RUNNER_TEMP")
     if raw_runner_env is None:
@@ -277,8 +254,9 @@ def validate_snapshot_dir(
 
     Lança `ValueError` se inválido.
     """
-    # Use non-strict resolve because existence isn't required for containment
-    # validation (useful for CI temporary dirs that may be created later).
+    # Use resolve não-strito porque a existência não é necessária para
+    # validação de contenção (útil para diretórios temporários de CI que
+    # podem ser criados posteriormente).
     resolved_snapshot = snapshot_dir.resolve(strict=False)
 
     roots = _build_allowed_roots(repo_root, extra_allowed)

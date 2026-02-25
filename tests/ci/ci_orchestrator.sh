@@ -33,13 +33,20 @@ bash tests/ci/integration.sh
 echo "[4.5/5] Acceptance E2E (local)"
 # Run any local E2E tests we added (e.g., tests/e2e/test_acceptance_snapshot.py)
 if command -v poetry >/dev/null 2>&1; then
-  NETWORK_MODE=playback poetry run pytest -q tests/e2e/test_acceptance_snapshot.py || true
+  NETWORK_MODE=playback poetry run pytest -q tests/e2e/test_acceptance_snapshot.py \
+    || echo "CI Orchestrator: [WARN] Acceptance E2E falhou (não bloqueante)" >&2
 else
-  NETWORK_MODE=playback pytest -q tests/e2e/test_acceptance_snapshot.py || true
+  NETWORK_MODE=playback pytest -q tests/e2e/test_acceptance_snapshot.py \
+    || echo "CI Orchestrator: [WARN] Acceptance E2E falhou (não bloqueante)" >&2
 fi
 
-echo "[5/5] Validate snapshots"
-# Validate snapshots produced by the integration step (SNAPSHOT_DIR)
+echo "[6/6] Validate snapshots"
+# Validate snapshots produced by the integration step (SNAPSHOT_DIR).
+# The inline assignment below is intentional: it provides a sensible
+# fallback when running `tests/ci/validate_snapshots.sh` independently
+# (so the script can be invoked directly without requiring the earlier
+# exported SNAPSHOT_DIR). When run via this orchestrator, the value set
+# earlier by `export SNAPSHOT_DIR=...` will be preserved.
 SNAPSHOT_DIR="${SNAPSHOT_DIR:-snapshots}" bash tests/ci/validate_snapshots.sh
 
 echo "CI Orchestrator: all stages passed at $(date -u)"

@@ -7,7 +7,7 @@ Corrigir a operação de upsert para ser atômica e segura em runtimes antigos, 
 INSTRUCOES:
 
 - rastreie a execução utilizando #tool:todo
-- verifique a estrutura do codiog usando #tool:sehejjain.lsp-mcp-bridge/*
+- verifique a estrutura do código usando #tool:sehejjain.lsp-mcp-bridge/*
 
 Steps
 

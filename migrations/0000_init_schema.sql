@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS prices (
     open REAL,
     high REAL,
     low REAL,
-    close REAL,
+    close REAL NOT NULL,
     volume INTEGER,
     source TEXT NOT NULL,
     fetched_at TEXT NOT NULL,
@@ -29,3 +29,6 @@ CREATE TABLE IF NOT EXISTS snapshots (
 );
 
 COMMIT;
+
+-- Reativar verificação de chaves estrangeiras para operações subsequentes
+PRAGMA foreign_keys = ON;

@@ -135,7 +135,7 @@ def _persist_returns(
                 "ticker": ticker,
                 "rows_written": rows_written,
                 "duration_ms": duration_ms,
-                "created_at": datetime.now(timezone.utc).isoformat(),
+                "created_at": now_utc_iso(),
             },
             conn=conn,
         )

@@ -26,9 +26,9 @@ SNAPSHOT_DIR=$PWD/snapshots_test poetry run python scripts/run_save_raw_example.
 4. Validar checksums/manifest:
 
 ```bash
-poetry run python scripts/validate_snapshots.py --dir snapshots_test --manifest snapshots/checksums.json
+poetry run python scripts/validate_snapshots.py --dir snapshots_test --manifest snapshots/checksums.json --allow-external
 # ou usar o wrapper
-poetry run python scripts/verify_snapshot.py --dir snapshots_test --manifest snapshots/checksums.json
+poetry run python scripts/verify_snapshot.py --dir snapshots_test --manifest snapshots/checksums.json --allow-external
 ```
 
 5. Rodar teste E2E localmente (opcional):

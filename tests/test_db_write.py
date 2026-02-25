@@ -4,9 +4,18 @@ import sqlite3
 import pandas as pd
 
 import src.db as dbmod
+import json
 
 
 def _load_sample_df():
+    """Load the `sample_ticker.csv` fixture into a pandas DataFrame.
+
+    Parses the "date" column as datetimes and sets it as the index.
+
+    Returns:
+        pandas.DataFrame: DataFrame with the parsed date index.
+    """
+
     path = os.path.join(os.path.dirname(__file__), "fixtures", "sample_ticker.csv")
     df = pd.read_csv(path, parse_dates=["date"])  # ticker,date,open,...
     # Keep only price columns and set index
@@ -45,7 +54,6 @@ def test_write_and_read_idempotent():
     cur.execute("SELECT value FROM metadata WHERE key='schema_version'")
     row = cur.fetchone()
     # schema_version should match canonical docs/schema.json
-    import json
     schema_path = os.path.join(os.path.dirname(__file__), "..", "docs", "schema.json")
     schema_path = os.path.abspath(schema_path)
     try:

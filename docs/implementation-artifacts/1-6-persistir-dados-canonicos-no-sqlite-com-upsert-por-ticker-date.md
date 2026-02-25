@@ -37,10 +37,8 @@ df = pd.DataFrame({
     # ser preenchidos pelo pipeline ou pelo chamador quando disponíveis.
     "source": ["yfinance", "yfinance"],
 })
-
 # Persistir (idempotente por (ticker, date))
-    db.write_prices(df, ticker="PETR4")
-```
+db.write_prices(df, ticker="PETR4")
 
 - Leitura completa e por intervalo:
 

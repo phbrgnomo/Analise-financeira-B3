@@ -16,7 +16,7 @@ Resumo: este relatório documenta as alterações e artefatos entregues na prime
 
 - `pyproject.toml`
   - Dependências runtime adicionadas: `sqlalchemy`, `typer`, `python-dotenv` (além de `pandas`, `numpy`, `pandas-datareader`).
-  - Dev-dependencies adicionadas: `pytest`, `ruff`, `pre-commit` (black optional).
+  - Dev-dependencies adicionadas: `pytest`, `ruff`, `pre-commit`
   - Script entrypoint corrigido para `main = "src.main:app"`.
 
 - `src/main.py`

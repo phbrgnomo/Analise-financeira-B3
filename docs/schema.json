@@ -3,16 +3,16 @@
   "last_updated": "2026-02-23",
   "metadata": {
     "primary_key": ["ticker", "date"],
-    "description": "Esquema canônico com PK composta e controle de versão. Use this file as source-of-truth for DB DDL generation.",
+    "description": "Esquema canônico com PK composta e controle de versão. Use este arquivo como fonte de verdade para geração do DDL do banco de dados.",
     "migrations": [
       {
         "version": 1,
-        "notes": "Initial schema with core columns",
+        "notes": "Esquema inicial com colunas principais",
         "date": "2024-01-01"
       },
       {
         "version": 2,
-        "notes": "Added schema metadata (primary_key, last_updated, migrations) and formalized versioning policy",
+        "notes": "Adicionado metadados do esquema (primary_key, last_updated, migrations) e formalizada a política de versionamento",
         "date": "2026-02-23"
       }
     ]

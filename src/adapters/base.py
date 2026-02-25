@@ -225,6 +225,17 @@ class Adapter(ABC):
                 }
             ]
             try:
+                # Prefer explicit job_id from log_context when available
+                # Default to empty string for backwards compatibility with
+                # existing callers/tests that expect an empty job_id when none
+                # is available.
+                job_id = ""
+                try:
+                    if isinstance(log_context, dict) and log_context.get("job_id"):
+                        job_id = log_context.get("job_id")
+                except Exception:
+                    job_id = ""
+
                 log_invalid_rows(
                     metadata_path="metadata/ingest_logs.jsonl",
                     provider=provider_name,
@@ -232,7 +243,7 @@ class Adapter(ABC):
                     raw_file="",
                     invalid_filepath="",
                     error_records=error_records,
-                    job_id="",
+                    job_id=job_id,
                 )
             except Exception:
                 logger.debug(

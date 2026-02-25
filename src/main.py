@@ -10,17 +10,6 @@ from src import metrics
 from src.logging_config import configure_logging
 from src.paths import DATA_DIR
 
-# Configure structured logging early
-configure_logging()
-
-# Optionally start Prometheus metrics server when requested via env var
-if os.getenv("PROMETHEUS_METRICS"):
-    try:
-        metrics.start_metrics_server(int(os.getenv("PROMETHEUS_METRICS_PORT", "8000")))
-    except Exception:
-        # Don't fail startup if metrics server can't start
-        pass
-
 # Instância principal da aplicação de linha de comando usando Typer
 app = typer.Typer()
 
@@ -128,6 +117,7 @@ def _fetch_and_prepare_asset(
                 ticker=f"{a}.SA",
                 raw_file=save_meta.get("filepath") or "",
                 ts=save_meta.get("fetched_at") or "",
+                job_id=save_meta.get("job_id"),
                 raw_root="raw",
                 metadata_path="metadata/ingest_logs.jsonl",
                 threshold=validation_tolerance,
@@ -159,8 +149,6 @@ def _fetch_and_prepare_asset(
     # operation: the DB may not be initialized in some environments, but when
     # available we should persist canonical rows for downstream queries.
     try:
-        from src import db as _db
-
         _db.write_prices(canonical, f"{a}.SA")
         print(f"Persisted canonical rows for {a} into DB")
     except Exception as e:
@@ -240,36 +228,35 @@ def _compute_and_print_stats(a: str) -> None:
 
 
 @app.command("compute-returns")
+@app.command("compute-returns")
 def compute_returns(
     ticker: str = typer.Option(
-        ..., help="Ticker to compute returns for, e.g. PETR4.SA"
+        ..., help="Ticker para cálculo de retornos, ex: PETR4.SA"
     ),
     start: Optional[str] = typer.Option(
-        None, help="Start date YYYY-MM-DD"
+        None, help="Data inicial YYYY-MM-DD"
     ),
     end: Optional[str] = typer.Option(
-        None, help="End date YYYY-MM-DD"
+        None, help="Data final YYYY-MM-DD"
     ),
     dry_run: bool = typer.Option(
-        False, "--dry-run", help="Do not persist, only show results"
+        False, "--dry-run", help="Não persiste, apenas exibe resultados"
     ),
 ):
-    """Compute daily returns for a ticker and persist to DB (returns table)."""
-    conn = _db._connect(None)
-    try:
+        """Calcula retornos diários para um ticker e persiste no DB (tabela returns)."""
+        # Use public API: compute_returns will open/close DB connections itself
         df = _retorno.compute_returns(
-            ticker, start=start, end=end, conn=conn, dry_run=dry_run
+            ticker, start=start, end=end, dry_run=dry_run
         )
         if df is None or df.empty:
-            print("No returns computed for given inputs")
+            print("Nenhum retorno calculado para os parâmetros fornecidos")
             return
-        print(f"Computed {len(df)} return rows for {ticker}")
+        print(f"Calculados {len(df)} retornos para {ticker}")
         if dry_run:
+            print("Amostra do resultado (head):")
             print(df.head())
         else:
-            print("Persisted returns to DB")
-    finally:
-        conn.close()
+            print("Retornos persistidos no banco de dados")
 
 
 @app.command()
@@ -316,4 +303,19 @@ def main(
 
 
 if __name__ == "__main__":
+    # Configure structured logging only when executed as a program
+    try:
+        configure_logging()
+    except Exception:
+        # Best-effort: do not prevent CLI execution if logging setup fails
+        pass
+
+    # Optionally start Prometheus metrics server when requested via env var
+    if os.getenv("PROMETHEUS_METRICS"):
+        try:
+            metrics.start_metrics_server(int(os.getenv("PROMETHEUS_METRICS_PORT", "8000")))
+        except Exception:
+            # Don't fail startup if metrics server can't start
+            pass
+
     app()

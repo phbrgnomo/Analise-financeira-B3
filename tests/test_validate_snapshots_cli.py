@@ -9,6 +9,19 @@ from src.utils.checksums import serialize_df_bytes, sha256_bytes
 
 
 def _write_csv(path: Path) -> None:
+    """Write a small CSV and its SHA-256 checksum to disk.
+
+    Creates parent directories as needed, writes deterministic CSV bytes to
+    `path` and writes a companion `.checksum` file containing the SHA-256
+    hex digest.
+
+    Args:
+        path (Path): target file path for the CSV.
+
+    Returns:
+        None
+    """
+
     data = serialize_df_bytes(
         pd.DataFrame({"Date": ["2020-01-01"], "Close": [10.0]}),
         index=False,
@@ -32,9 +45,10 @@ def test_update_writes_manifest(tmp_path: Path):
 
     manifest = tmp_path / "out_manifest.json"
 
+    script = Path(__file__).resolve().parent.parent / "scripts" / "validate_snapshots.py"
     cmd = [
         sys.executable,
-        "scripts/validate_snapshots.py",
+        str(script),
         "--dir",
         str(cur_dir),
         "--manifest",
@@ -68,9 +82,10 @@ def test_allow_external_remap_collision(tmp_path: Path):
 
     manifest = tmp_path / "m.json"
 
+    script = Path(__file__).resolve().parent.parent / "scripts" / "validate_snapshots.py"
     cmd = [
         sys.executable,
-        "scripts/validate_snapshots.py",
+        str(script),
         "--dir",
         str(d),
         "--manifest",
@@ -96,9 +111,10 @@ def test_invalid_manifest_path_errors(tmp_path: Path):
 
     manifest = tmp_path / "out" / "m.json"
 
+    script = Path(__file__).resolve().parent.parent / "scripts" / "validate_snapshots.py"
     cmd = [
         sys.executable,
-        "scripts/validate_snapshots.py",
+        str(script),
         "--dir",
         str(d),
         "--manifest",

@@ -2,7 +2,7 @@
 
 - Comandos para validar e (re)gerar manifest de snapshots.
 
-### Pré-requisitos
+## Pré-requisitos
 - Instalar dependências do projeto: `poetry install`
 
 Validar snapshots usando o manifest existente:

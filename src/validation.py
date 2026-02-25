@@ -596,6 +596,7 @@ def _persist_and_log_invalids(
     metadata_path: str,
     raw_file: str,
     details: Dict[str, Any],
+    job_id: str | None = None,
 ) -> str:
     invalid_filepath = ""
     if persist_invalid and not invalid_df.empty:
@@ -611,7 +612,7 @@ def _persist_and_log_invalids(
             raw_file=raw_file,
             invalid_filepath=invalid_filepath,
             error_records=details.get("error_records", []),
-            job_id="",
+            job_id=job_id,
         )
         details["ingest_log_entry"] = entry
 
@@ -725,6 +726,7 @@ def validate_and_handle(
     threshold: float | None = None,
     abort_on_exceed: bool = True,
     persist_invalid: bool = True,
+    job_id: str | None = None,
 ) -> Tuple[pd.DataFrame, pd.DataFrame, ValidationSummary, dict]:
     """Integration helper: validate dataframe, persist invalid rows,
     log results, and enforce threshold.
@@ -753,6 +755,7 @@ def validate_and_handle(
         metadata_path=metadata_path,
         raw_file=raw_file,
         details=details,
+        job_id=job_id,
     )
 
     # Enforce threshold

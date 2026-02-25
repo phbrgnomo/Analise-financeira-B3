@@ -25,7 +25,7 @@ jobs:
           fetch-depth: 0
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
 
@@ -47,9 +47,10 @@ jobs:
           poetry config virtualenvs.in-project true
           poetry install --no-interaction
 
-      - name: Initialize DB (optional)
+      - name: Initialize DB
         run: |
-          python scripts/init_ingest_db.py --db dados/data.db || true
+          # Fail the job if DB initialization fails so schema problems are visible
+          python scripts/init_ingest_db.py --db dados/data.db
 
       - name: Print sqlite3 version
         run: |
@@ -63,8 +64,8 @@ jobs:
 
       - name: Generate snapshots (deterministic)
         run: |
-          mkdir -p "$GITHUB_WORKSPACE/tmp_snapshots/snapshots_test"
           set -euo pipefail
+          mkdir -p "$GITHUB_WORKSPACE/tmp_snapshots/snapshots_test"
           # Generate deterministic snapshot inside the workspace
           # (allowed by runner and safe for artifact upload).
           SNAPSHOT_DIR="$GITHUB_WORKSPACE/tmp_snapshots/snapshots_test" poetry run python scripts/generate_ci_snapshot.py
@@ -86,6 +87,7 @@ jobs:
           path: reports/**
 
       - name: Upload snapshots artifacts (always)
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: snapshots

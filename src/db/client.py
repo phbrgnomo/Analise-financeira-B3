@@ -31,12 +31,41 @@ class DatabaseClient:
 
 class DefaultDatabaseClient(DatabaseClient):
     """Default adapter that delegates to `src.db` functional API."""
+    def read_prices(
+        self,
+        ticker: str,
+        start: Optional[str] = None,
+        end: Optional[str] = None,
+        conn: Optional[sqlite3.Connection] = None,
+    ) -> pd.DataFrame:
+        """Read prices for ticker."""
+        return _db.read_prices(
+            ticker,
+            start=start,
+            end=end,
+            conn=conn,
+        )
 
-    def read_prices(self, ticker: str, start: Optional[str] = None, end: Optional[str] = None, conn: Optional[sqlite3.Connection] = None) -> pd.DataFrame:
-        return _db.read_prices(ticker, start=start, end=end, conn=conn)
+    def write_returns(
+        self,
+        df: pd.DataFrame,
+        conn: Optional[sqlite3.Connection] = None,
+        return_type: str = "daily",
+    ) -> None:
+        """Write returns to the database."""
+        return _db.write_returns(
+            df,
+            conn=conn,
+            return_type=return_type,
+        )
 
-    def write_returns(self, df: pd.DataFrame, conn: Optional[sqlite3.Connection] = None, return_type: str = "daily") -> None:
-        return _db.write_returns(df, conn=conn, return_type=return_type)
-
-    def record_snapshot_metadata(self, metadata: dict, conn: Optional[sqlite3.Connection] = None) -> None:
-        return _db.record_snapshot_metadata(metadata, conn=conn)
+    def record_snapshot_metadata(
+        self,
+        metadata: dict,
+        conn: Optional[sqlite3.Connection] = None,
+    ) -> None:
+        """Record snapshot metadata in the DB."""
+        return _db.record_snapshot_metadata(
+            metadata,
+            conn=conn,
+        )

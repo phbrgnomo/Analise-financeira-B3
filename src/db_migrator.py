@@ -1,9 +1,10 @@
 import os
 import sqlite3
-from typing import Optional
+from typing import Optional, Set
 
 
 def _ensure_migrations_table(conn: sqlite3.Connection) -> None:
+    """Ensure the schema_migrations table exists in the given SQLite connection."""
     cur = conn.cursor()
     cur.execute(
         """
@@ -16,7 +17,8 @@ def _ensure_migrations_table(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
-def _applied_migrations(conn: sqlite3.Connection) -> set:
+def _applied_migrations(conn: sqlite3.Connection) -> Set[str]:
+    """Query the schema_migrations table and return a set of applied migration ids."""
     cur = conn.cursor()
     cur.execute("SELECT id FROM schema_migrations")
     return set(r[0] for r in cur.fetchall())
@@ -46,7 +48,12 @@ def apply_migrations(conn: sqlite3.Connection, migrations_dir: Optional[str] = N
         with open(path, "r", encoding="utf-8") as f:
             sql = f.read()
         try:
-            cur.executescript(sql)
+            # Execute each statement separately so the migration and the
+            # schema_migrations insert occur within the same transaction.
+            statements = [s.strip() for s in sql.split(";") if s.strip()]
+            for stmt in statements:
+                cur.execute(stmt)
+
             cur.execute("INSERT INTO schema_migrations(id, applied_at) VALUES (?, datetime('now'))", (fname,))
             conn.commit()
         except Exception:

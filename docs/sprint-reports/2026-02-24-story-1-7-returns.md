@@ -117,7 +117,7 @@ poetry run python -m src.main compute-returns --ticker PETR4.SA --dry-run
 ```bash
 # executar sem --dry-run e então abrir o DB
 poetry run python -m src.main compute-returns --ticker PETR4.SA
-sqlite3 dados/data.db "SELECT ticker, date, return FROM returns WHERE ticker='PETR4.SA' ORDER BY date LIMIT 5;"
+sqlite3 dados/data.db "SELECT ticker, date, \"return\" FROM returns WHERE ticker='PETR4.SA' ORDER BY date LIMIT 5;"
 ```
 
 3. Revisar PR com mudanças: https://github.com/phbrgnomo/Analise-financeira-B3/pull/188

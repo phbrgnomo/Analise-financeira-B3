@@ -108,7 +108,7 @@ completedAt: 2026-02-16
 
 ### Party Mode Consolidated Recommendation
 
--- **Starter escolhido:** Custom Lightweight Python starter (Poetry + Typer + pandas + SQLAlchemy + Streamlit + pytest + ruff (black optional) + python-dotenv).
+- **Starter escolhido:** Custom Lightweight Python starter (Poetry + Typer + pandas + SQLAlchemy + Streamlit + pytest + ruff (black optional) + python-dotenv).
 - **Rationale:** leve, alinhado ao PRD, testável, facilita criação de adaptadores e não impõe complexidade desnecessária ao escopo local single-user.
 
 ### Init / Quickstart (exemplo)

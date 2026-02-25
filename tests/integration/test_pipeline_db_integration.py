@@ -8,7 +8,11 @@ from src.ingest.pipeline import save_raw_csv
 
 
 def test_pipeline_write_and_read_prices(tmp_path):
-    # Prepare small DF
+    """Valida o fluxo completo: salvar CSV bruto → mapear canônico → gravar no DB → ler de volta.
+
+    Verifica também que os metadados JSONL contêm a entrada de ingestão correspondente.
+    """
+    # Prepara DataFrame de exemplo
     df = pd.DataFrame(
         {
             "Open": [10.0, 11.0],
