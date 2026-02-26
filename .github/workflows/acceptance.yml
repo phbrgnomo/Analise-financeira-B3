@@ -47,6 +47,12 @@ jobs:
           poetry config virtualenvs.in-project true
           poetry install --no-interaction
 
+      - name: Set PYTHONPATH
+        run: |
+          # ensure the repo root is on PYTHONPATH so helper scripts can import
+          # the `src` package regardless of which python binary is invoked
+          echo "PYTHONPATH=${{ github.workspace }}" >> $GITHUB_ENV
+
       - name: Initialize DB
         run: |
           # Fail the job if DB initialization fails so schema problems are visible
