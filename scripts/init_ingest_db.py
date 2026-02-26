@@ -10,9 +10,12 @@ from __future__ import annotations
 import argparse
 import logging
 import os
+import sys
 from pathlib import Path
 
 from src.paths import DATA_DIR
+
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 logger = logging.getLogger(__name__)
 
