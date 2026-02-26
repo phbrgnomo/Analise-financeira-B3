@@ -229,7 +229,7 @@ def _compute_and_print_stats(a: str) -> None:
 
 
 @app.command("compute-returns")
-def compute_returns(
+def compute_returns_cmd(
     ticker: str = typer.Option(
         ..., help="Ticker para cálculo de retornos, ex: PETR4.SA"
     ),

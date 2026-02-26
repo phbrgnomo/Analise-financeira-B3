@@ -33,8 +33,8 @@ Notas importantes
 - Para testes locais, há fixtures em `tests/fixtures` e snapshots em `snapshots/`.
 
 Smoke tests e CI
-- Há um workflow agendado que executa um `--dry-run` diariamente: [.github/workflows/compute-returns-smoke.yml](.github/workflows/compute-returns-smoke.yml)
-- Há também uma matriz de compatibilidade SQLite: [.github/workflows/sqlite-compat.yml](.github/workflows/sqlite-compat.yml)
+- Há um workflow agendado que executa um `--dry-run` diariamente: [/.github/workflows/compute-returns-smoke.yml](/.github/workflows/compute-returns-smoke.yml)
+- Há também uma matriz de compatibilidade SQLite: [/.github/workflows/sqlite-compat.yml](/.github/workflows/sqlite-compat.yml)
 
 Exemplo rápido para rodar localmente com DB temporário (Linux/macOS):
 

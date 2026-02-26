@@ -2,7 +2,7 @@
 CREATE TABLE IF NOT EXISTS returns (
     ticker TEXT,
     date TEXT,
-    return_value REAL,
+    "return" REAL,
     return_type TEXT,
     created_at TEXT,
     PRIMARY KEY (ticker, date, return_type)

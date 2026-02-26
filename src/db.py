@@ -6,6 +6,7 @@ import logging
 import os
 import re
 import sqlite3
+import warnings
 from typing import Any, Optional
 
 import pandas as pd
@@ -21,7 +22,17 @@ DEFAULT_SCHEMA_PATH = os.path.join(
 logger = logging.getLogger(__name__)
 
 # Track whether we've warned about missing UPSERT support to avoid noisy logs
-_upsert_warned = False
+# Ensure the UPSERT compatibility warning is emitted at most once per process.
+# Use the warnings module "once" filter so we don't need manual synchronization.
+warnings.filterwarnings(
+    "once",
+    message=(
+        r"SQLite version .* does not support UPSERT; falling back to "
+        r"INSERT OR REPLACE\. Consider upgrading SQLite to >= 3\.24\.0 "
+        r"for safer ON CONFLICT semantics\."
+    ),
+    category=UserWarning,
+)
 
 
 def _load_canonical_schema(schema_path: Optional[str] = None) -> dict:
@@ -176,18 +187,14 @@ def _get_upsert_sql(schema_cols: list) -> str:
         )
 
     # Fallback for older SQLite versions: replace entire row
-    import warnings
-    global _upsert_warned
-    if not _upsert_warned:
-        warnings.warn(
-            (
-                "SQLite version %s does not support UPSERT; falling back to "
-                "INSERT OR REPLACE. Consider upgrading SQLite to >= 3.24.0 "
-                "for safer ON CONFLICT semantics."
-            ) % sqlite3.sqlite_version,
-            stacklevel=2,
-        )
-        _upsert_warned = True
+    warnings.warn(
+        (
+            "SQLite version %s does not support UPSERT; falling back to "
+            "INSERT OR REPLACE. Consider upgrading SQLite to >= 3.24.0 "
+            "for safer ON CONFLICT semantics."
+        ) % sqlite3.sqlite_version,
+        stacklevel=2,
+    )
     return ("INSERT OR REPLACE INTO prices ({cols}) VALUES ({vals})").format(
         cols=col_list_sql, vals=placeholders
     )

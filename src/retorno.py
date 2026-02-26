@@ -38,7 +38,8 @@ def compute_returns(
       using `INSERT OR REPLACE` for SQLite compatibility.
     - If `dry_run` is True returns the computed DataFrame without persisting.
     """
-    # Choose DB access path: prefer injected repo adapter, else use legacy conn/db functions
+    # Choose DB access path: prefer injected repo adapter, else use legacy
+    # conn/db functions
     if repo is None:
         repo = DefaultDatabaseClient()
     # Normalize params and load prices via DB helper
@@ -87,7 +88,25 @@ def _choose_price_column(df: pd.DataFrame) -> str:
 
 
 def _compute_returns_series(df: pd.DataFrame, price_col: str) -> pd.Series:
-    return df[price_col].astype(float).pct_change().dropna()
+    """Compute pct-change returns ensuring datetime index and chronological order.
+
+    This enforces that the input DataFrame has a datetime-like index and sorts
+    it chronologically before computing percentage change so downstream code
+    can safely interpret the Series index as dates.
+    """
+    # Work on a copy sorted by index to guarantee chronological pct_change
+    df_sorted = df.sort_index()
+
+    # Best-effort validation: ensure index is datetime-like
+    try:
+        pd.to_datetime(df_sorted.index)
+    except (TypeError, ValueError) as exc:
+        raise TypeError(
+            "Expected DataFrame index to be datetime-like for return computation, "
+            f"but got index of type {type(df_sorted.index).__name__}"
+        ) from exc
+
+    return df_sorted[price_col].astype(float).pct_change().dropna()
 
 
 def _build_out_df(returns: pd.Series, ticker: str) -> pd.DataFrame:
