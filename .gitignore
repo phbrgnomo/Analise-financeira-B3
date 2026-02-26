@@ -67,6 +67,7 @@ tmp_snapshots/
 
 # Local ingest logs (runtime, append-only)
 .metadata/
+metadata/ingest_logs.jsonl
 
 
 .sentry-native/

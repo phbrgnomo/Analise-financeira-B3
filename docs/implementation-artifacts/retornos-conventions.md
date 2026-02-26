@@ -35,24 +35,24 @@ ON CONFLICT(ticker, date, return_type) DO UPDATE SET
 - Implementação preferida: calcular retornos com `pandas` (Series.pct_change()), montar DataFrame com colunas necessárias e persistir via camada do projeto `src.db.write_returns()` que aplica upsert de forma idempotente.
 
 ```py
-# exemplo mínimo
-returns = prices_series.pct_change().dropna()
-out = returns.rename('return').to_frame()
-out['ticker'] = ticker
-out['return_type'] = 'daily'
 import sqlite3
 from datetime import datetime, timezone
 import src.db
 
-# exemplo mínimo
-conn = sqlite3.connect("dados/data.db")
+# Exemplo mínimo (Python)
+# `prices_series` é uma `pandas.Series` indexada por data
 returns = prices_series.pct_change().dropna()
 out = returns.rename('return').to_frame()
 out['ticker'] = ticker
 out['return_type'] = 'daily'
 out['created_at'] = datetime.now(timezone.utc).isoformat()
-# delegar persistência
+
+conn = sqlite3.connect("dados/data.db")
+# delegar persistência para a camada de banco do projeto
 src.db.write_returns(out, conn=conn)
+```
+
+## Uso via CLI
 
 ```bash
 poetry run python -m src.main compute-returns --ticker PETR4.SA --dry-run

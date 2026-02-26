@@ -84,12 +84,7 @@ ignore = ["E203"]
 - CI verification (recommended): include a step in `.github/workflows/ci.yml`:
 
 ```yaml
-- name: Lint & Format Check
-- name: Lint & Format Check
-  run: |
-    pip install pre-commit
-    pre-commit run --all-files --show-diff-on-failure
-    ruff check .
+- CI verification (recommended): include a step in `.github/workflows/ci.yml`:
 
 ### References
 

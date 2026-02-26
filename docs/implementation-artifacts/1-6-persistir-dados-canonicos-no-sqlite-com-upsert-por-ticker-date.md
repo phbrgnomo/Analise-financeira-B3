@@ -40,6 +40,8 @@ df = pd.DataFrame({
 # Persistir (idempotente por (ticker, date))
 db.write_prices(df, ticker="PETR4")
 
+```
+
 - Leitura completa e por intervalo:
 
 ```python
