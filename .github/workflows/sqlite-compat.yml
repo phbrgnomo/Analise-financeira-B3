@@ -2,9 +2,8 @@ name: SQLite Compatibility Matrix
 
 on:
   push:
-    branches: [ master, dev-story-1-7 ]
-  pull_request:
     branches: [ master ]
+  pull_request: {}
 
 jobs:
   tests:
