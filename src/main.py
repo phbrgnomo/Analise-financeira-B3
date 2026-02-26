@@ -227,7 +227,7 @@ def _compute_and_print_stats(a: str) -> None:
     print(f"Coeficiente de variação(dia):{rt.coef_var(risco, retorno_medio)}")
 
 
-@app.command("compute-returns")
+
 @app.command("compute-returns")
 def compute_returns(
     ticker: str = typer.Option(
@@ -313,7 +313,8 @@ if __name__ == "__main__":
     # Optionally start Prometheus metrics server when requested via env var
     if os.getenv("PROMETHEUS_METRICS"):
         try:
-            metrics.start_metrics_server(int(os.getenv("PROMETHEUS_METRICS_PORT", "8000")))
+            port = int(os.getenv("PROMETHEUS_METRICS_PORT", "8000"))
+            metrics.start_metrics_server(port)
         except Exception:
             # Don't fail startup if metrics server can't start
             pass

@@ -160,6 +160,43 @@ def test_write_returns_preserves_created_at_when_upsert_supported(sample_db):
     assert first_created == second_created
 
 
+def test_write_returns_preserves_created_at_when_upsert_not_supported(
+    sample_db, monkeypatch
+):
+    """Force older SQLite runtime (no UPSERT) and ensure created_at is preserved.
+
+    Uses `monkeypatch` to set `sqlite3.sqlite_version` to an old version so the
+    transactional UPDATE->INSERT fallback path in `write_returns` is exercised.
+    """
+    import sqlite3
+
+    import src.retorno as retorno
+
+    # Force an older SQLite version to trigger fallback path
+    monkeypatch.setattr(sqlite3, "sqlite_version", "3.8.0")
+
+    ticker = "PETR4.SA"
+
+    retorno.compute_returns(ticker, conn=sample_db)
+
+    cur = sample_db.cursor()
+    cur.execute(
+        "SELECT created_at FROM returns WHERE ticker = ? ORDER BY date LIMIT 1",
+        (ticker,),
+    )
+    first_created = cur.fetchone()[0]
+
+    # Re-run and ensure created_at remains the same for existing rows
+    retorno.compute_returns(ticker, conn=sample_db)
+    cur.execute(
+        "SELECT created_at FROM returns WHERE ticker = ? ORDER BY date LIMIT 1",
+        (ticker,),
+    )
+    second_created = cur.fetchone()[0]
+
+    assert first_created == second_created
+
+
 def test_compute_returns_empty_and_single_price(sample_db):
     """Handle empty ticker (no prices) and single-price series gracefully."""
     import src.retorno as retorno
