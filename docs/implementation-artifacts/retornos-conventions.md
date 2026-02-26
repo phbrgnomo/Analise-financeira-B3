@@ -12,8 +12,13 @@ Resumo curto das convenções usadas no projeto para cálculo e persistência de
 - Persistência/Upsert (SQLite):
   - Preferir `ON CONFLICT(...) DO UPDATE` quando runtime SQLite suportar (>= 3.24.0) para preservar metadados.
   - Exemplo SQL (preferido):
-
-
+```sql
+INSERT INTO returns (ticker, date, return, return_type, created_at)
+VALUES (?, ?, ?, ?, ?)
+ON CONFLICT(ticker, date, return_type) DO UPDATE SET
+  return = excluded.return,
+  created_at = COALESCE(returns.created_at, excluded.created_at);
+```
 
 - Fallback: `INSERT OR REPLACE` quando `ON CONFLICT` não estiver disponível. Atenção: `INSERT OR REPLACE` sobrescreve a linha inteira e pode perder `created_at` original.
 
