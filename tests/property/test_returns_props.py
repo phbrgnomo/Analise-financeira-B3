@@ -10,7 +10,18 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 
-@given(st.lists(st.floats(min_value=0.01, max_value=1000), min_size=2, max_size=20))
+@given(
+    st.lists(
+        st.floats(
+            min_value=0.01,
+            max_value=1000,
+            allow_nan=False,
+            allow_infinity=False,
+        ),
+        min_size=2,
+        max_size=20,
+    )
+)
 def test_pct_change_matches_returns_for_generated_series(prices):
     """Generate random positive price series and verify pct_change invariants.
 

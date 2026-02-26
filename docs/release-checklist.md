@@ -1,4 +1,4 @@
-## Release checklist
+# Release checklist
 
 - [ ] CI matrix (SQLite compatibility) passing
 - [ ] Unit tests and E2E tests passing

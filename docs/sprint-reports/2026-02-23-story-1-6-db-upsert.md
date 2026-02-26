@@ -5,7 +5,7 @@ story: 1-6-persistir-dados-canonicos-no-sqlite-com-upsert-por-ticker-date
 status: delivered
 ---
 
-Resumo
+## Resumo
 -
 Implementação da camada de persistência SQLite que grava linhas canônicas na tabela `prices` com semântica idempotente de upsert por `(ticker, date)`. O código principal foi adicionado em [src/db.py](src/db.py) e os testes unitários em [tests/test_db_write.py](tests/test_db_write.py). A story foi atualizada em [docs/implementation-artifacts/1-6-persistir-dados-canonicos-no-sqlite-com-upsert-por-ticker-date.md](docs/implementation-artifacts/1-6-persistir-dados-canonicos-no-sqlite-com-upsert-por-ticker-date.md).
 

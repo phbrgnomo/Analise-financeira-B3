@@ -461,6 +461,29 @@ def read_prices(
     conn: Optional[sqlite3.Connection] = None,
     db_path: Optional[str] = None,
 ) -> pd.DataFrame:
+    """Read price rows for `ticker` and return a pandas DataFrame indexed by date.
+
+    Parameters
+    ----------
+    ticker:
+        Ticker identifier (e.g. "PETR4.SA").
+    start, end:
+        Optional date bounds (``YYYY-MM-DD``) to filter rows.
+    conn:
+        Optional ``sqlite3.Connection`` instance to use. When provided, the
+        function will use this connection and will not open/close a new one.
+    db_path:
+        Optional path or URI to an SQLite database file. When ``conn`` is None,
+        the function will open a connection to ``db_path`` (or the default
+        DB path) and close it before returning.
+
+    Returns
+    -------
+    pandas.DataFrame
+        DataFrame indexed by date with columns from the canonical schema. If
+        no rows are found an empty DataFrame is returned.
+    """
+
     close_conn = False
     if conn is None:
         conn = _connect(db_path)
@@ -521,7 +544,7 @@ def write_returns(
 ):
     """Persist returns DataFrame into `returns` table using upsert semantics.
 
-    Expects DataFrame columns: `ticker`, `date` (datetime or string), `return`,
+    Expects DataFrame columns: `ticker`, `date` (datetime or string), `return_value`,
     optionally `return_type` and `created_at`. The function is idempotent and
     will create the `returns` table if missing.
     """
@@ -543,7 +566,7 @@ def _write_returns_core(conn, df, return_type):
     # Quote identifiers to avoid conflicts with reserved words (e.g. RETURN)
     qt = _quote_identifier("ticker")
     qd = _quote_identifier("date")
-    qr = _quote_identifier("return")
+    qr = _quote_identifier("return_value")
     qrt = _quote_identifier("return_type")
     qc = _quote_identifier("created_at")
     qtab = _quote_identifier("returns")
@@ -573,7 +596,7 @@ def _write_returns_core(conn, df, return_type):
         (
             r["ticker"],
             r["date"].strftime("%Y-%m-%d"),
-            float(r["return"]),
+            float(r["return_value"]),
             r["return_type"],
             r["created_at"],
         )

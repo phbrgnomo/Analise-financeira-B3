@@ -89,7 +89,6 @@ def sqlite_version_override(monkeypatch):
     recompiling Python. The test suite uses this to exercise upsert vs
     fallback code paths deterministically.
     """
-    import os
     import sqlite3
 
     if ver := os.environ.get("SQLITE_VERSION"):

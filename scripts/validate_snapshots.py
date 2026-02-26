@@ -20,7 +20,7 @@ import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, Tuple
+from typing import Dict, List, NoReturn, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -301,7 +301,9 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     return p
 
 
-def _remap_external_current(current: Dict[str, Dict[str, str]], allow_external: bool):
+def _remap_external_current(
+    current: Dict[str, Dict[str, str]], allow_external: bool
+) -> Dict[str, Dict[str, str]]:
     if not allow_external:
         return current
 
@@ -327,7 +329,21 @@ def _remap_external_current(current: Dict[str, Dict[str, str]], allow_external: 
     return remapped
 
 
-def _report_basename_collisions(collisions):
+def _report_basename_collisions(collisions: Dict[str, List[str]]) -> NoReturn:
+    """Reporta colisões de nomes base ao remapear caminhos externos.
+
+    Parameters
+    ----------
+    collisions : Dict[str, List[str]]
+        Mapeamento de chave remapeada (ex.: "snapshots/FILE") para a lista de
+        paths originais que colidiram ao usar apenas o nome-base do arquivo.
+
+    Raises
+    ------
+    SystemExit
+        Sempre termina o processo com código de saída 3 quando colisões são
+        detectadas, porque a operação não pode decidir qual arquivo preservar.
+    """
     # Mensagens em PT-BR, quebradas em linhas curtas para ruff
     print(
         "Erro: nomes base duplicados detectados ao remapear",

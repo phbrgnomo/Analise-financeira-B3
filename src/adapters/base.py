@@ -225,10 +225,6 @@ class Adapter(ABC):
                 }
             ]
             try:
-                # Prefer explicit job_id from log_context when available
-                # Default to empty string for backwards compatibility with
-                # existing callers/tests that expect an empty job_id when none
-                # is available.
                 # Prefer explicit job_id from log_context when available.
                 # Default to empty string for backwards compatibility with
                 # existing callers/tests that expect an empty job_id when none

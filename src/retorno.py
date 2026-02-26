@@ -110,7 +110,7 @@ def _compute_returns_series(df: pd.DataFrame, price_col: str) -> pd.Series:
 
 
 def _build_out_df(returns: pd.Series, ticker: str) -> pd.DataFrame:
-    out_df = returns.rename("return").to_frame()
+    out_df = returns.rename("return_value").to_frame()
     out_df["ticker"] = ticker
     out_df["return_type"] = "daily"
     out_df["created_at"] = now_utc_iso()

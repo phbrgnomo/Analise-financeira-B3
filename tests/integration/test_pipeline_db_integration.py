@@ -8,9 +8,10 @@ from src.ingest.pipeline import save_raw_csv
 
 
 def test_pipeline_write_and_read_prices(tmp_path):
-    """Valida o fluxo completo: salvar CSV bruto → mapear canônico → gravar no DB → ler de volta.
+    """Valida o fluxo completo: salvar CSV bruto → mapear canônico → gravar no DB.
 
-    Verifica também que os metadados JSONL contêm a entrada de ingestão correspondente.
+    Verifica também que os metadados JSONL contêm a entrada de ingestão
+    correspondente.
     """
     # Prepara DataFrame de exemplo
     df = pd.DataFrame(

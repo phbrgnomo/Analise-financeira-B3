@@ -32,10 +32,19 @@ def _ensure_metadata_file(metadata_path: Union[str, Path]) -> None:
     """Ensure metadata directory exists and create empty JSONL file if missing."""
     metadata_path = Path(metadata_path)
     metadata_path.parent.mkdir(parents=True, exist_ok=True)
-    if not metadata_path.exists():
-        tmp = metadata_path.with_suffix(".tmp")
-        tmp.write_text("")
-        os.replace(str(tmp), str(metadata_path))
+    # Attempt atomic create: O_CREAT|O_EXCL will fail if the file already exists.
+    # This avoids races involving temporary files and os.replace across processes.
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+    try:
+        fd = os.open(str(metadata_path), flags, 0o644)
+        os.close(fd)
+    except FileExistsError:
+        # Another process created the file concurrently — that's fine.
+        pass
+    except OSError:
+        # Best-effort: ignore errors (e.g., permission issues) to avoid
+        # breaking the pipeline; callers will handle write failures later.
+        pass
 
 
 def log_invalid_rows(

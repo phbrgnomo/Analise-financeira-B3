@@ -1,4 +1,3 @@
-import contextlib
 import sqlite3
 from datetime import datetime
 
@@ -53,7 +52,7 @@ def _fetch_returns_df(
     """
     cur = conn.cursor()
     cur.execute(
-        "SELECT date, return FROM returns WHERE ticker = ?"
+        "SELECT date, return_value AS return FROM returns WHERE ticker = ?"
         " AND return_type = ? ORDER BY date",
         (ticker, return_type),
     )
@@ -205,7 +204,13 @@ def test_compute_returns_empty_and_single_price(sample_db):
     # Empty ticker: should not raise and produce zero rows
     retorno.compute_returns("EMPTY_TICKER", conn=sample_db)
     # If `returns` table was never created (no prices), treat as zero rows.
-    with contextlib.suppress(sqlite3.OperationalError):
+    cur = sample_db.cursor()
+    cur.execute("PRAGMA table_info(returns)")
+    if not cur.fetchall():
+        # Table missing -> treat as zero rows (nothing to assert against)
+        assert True
+    else:
+        # Table exists: explicitly assert count is zero
         assert _count_returns(sample_db, "EMPTY_TICKER") == 0
     # Single price row: insert one price and expect zero returns
     cur = sample_db.cursor()
@@ -227,5 +232,10 @@ def test_compute_returns_empty_and_single_price(sample_db):
     sample_db.commit()
 
     retorno.compute_returns("SINGLE", conn=sample_db)
-    with contextlib.suppress(sqlite3.OperationalError):
+    cur = sample_db.cursor()
+    cur.execute("PRAGMA table_info(returns)")
+    if not cur.fetchall():
+        # No returns table -> treat as zero rows
+        assert True
+    else:
         assert _count_returns(sample_db, "SINGLE") == 0

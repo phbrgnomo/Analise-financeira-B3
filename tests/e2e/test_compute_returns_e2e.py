@@ -6,7 +6,7 @@ import pandas as pd
 from src.retorno import compute_returns
 
 
-def test_compute_returns_e2e_using_snapshot(tmp_path):
+def test_compute_returns_e2e_using_snapshot():
     """End-to-end test: load snapshot CSV into an in-memory DB and run compute_returns.
 
     Verifies that compute_returns writes expected number of rows and values.

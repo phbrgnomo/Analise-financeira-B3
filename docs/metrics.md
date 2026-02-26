@@ -1,4 +1,4 @@
-Telemetria e métricas
+# Telemetria e métricas
 
 Configuração disponível
 - `PROMETHEUS_METRICS`: quando definida (qualquer valor), o CLI tentará

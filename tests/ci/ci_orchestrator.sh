@@ -35,7 +35,7 @@ echo "[4/5] Integration"
 export SNAPSHOT_DIR="${SNAPSHOT_DIR:-$(mktemp -d)}"
 bash tests/ci/integration.sh
 
-echo "[4.5/5] Acceptance E2E (local)"
+echo "[5/5] Acceptance E2E (local)"
 # Run any local E2E tests we added (e.g., tests/e2e/test_acceptance_snapshot.py)
 if command -v poetry >/dev/null 2>&1; then
   NETWORK_MODE=playback poetry run pytest -q tests/e2e/test_acceptance_snapshot.py \

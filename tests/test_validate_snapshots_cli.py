@@ -45,7 +45,11 @@ def test_update_writes_manifest(tmp_path: Path):
 
     manifest = tmp_path / "out_manifest.json"
 
-    script = Path(__file__).resolve().parent.parent / "scripts" / "validate_snapshots.py"
+    script = (
+        Path(__file__).resolve().parent.parent
+        / "scripts"
+        / "validate_snapshots.py"
+    )
     cmd = [
         sys.executable,
         str(script),
@@ -82,7 +86,11 @@ def test_allow_external_remap_collision(tmp_path: Path):
 
     manifest = tmp_path / "m.json"
 
-    script = Path(__file__).resolve().parent.parent / "scripts" / "validate_snapshots.py"
+    script = (
+        Path(__file__).resolve().parent.parent
+        / "scripts"
+        / "validate_snapshots.py"
+    )
     cmd = [
         sys.executable,
         str(script),
@@ -111,7 +119,11 @@ def test_invalid_manifest_path_errors(tmp_path: Path):
 
     manifest = tmp_path / "out" / "m.json"
 
-    script = Path(__file__).resolve().parent.parent / "scripts" / "validate_snapshots.py"
+    script = (
+        Path(__file__).resolve().parent.parent
+        / "scripts"
+        / "validate_snapshots.py"
+    )
     cmd = [
         sys.executable,
         str(script),

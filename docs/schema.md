@@ -30,7 +30,7 @@ Versionamento:
  3. Atualizar `src/db.py` (se necessário) para aceitar múltiplas versões de schema (ou aplicar migração antes de conectar).
  4. Atualizar testes e snapshots, e rodar full `pytest`.
 
-Recomendações operacionais
+## Recomendações operacionais
 ---
 - Ao aplicar mudanças no esquema em ambiente de produção:
 	- Faça backup do arquivo de dados (`dados/data.db`).

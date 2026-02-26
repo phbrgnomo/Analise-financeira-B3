@@ -16,6 +16,11 @@ CREATE TABLE IF NOT EXISTS prices (
     PRIMARY KEY (ticker, date)
 );
 
+-- Index to speed up queries that filter only by `ticker`.
+-- PRIMARY KEY (ticker, date) is good for range queries, but a separate
+-- index on `ticker` improves performance for ticker-only lookups.
+CREATE INDEX IF NOT EXISTS idx_prices_ticker ON prices(ticker);
+
 CREATE TABLE IF NOT EXISTS metadata (
     key TEXT PRIMARY KEY,
     value TEXT

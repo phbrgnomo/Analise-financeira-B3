@@ -47,7 +47,6 @@ def test_save_raw_csv_and_register(tmp_path):
     assert len(found) == 1
 
 
-# TODO Rename this here and in `test_save_raw_csv_and_register`
 def assert_ingest_log_entry(conn, meta):
     cur = conn.cursor()
     cur.execute(

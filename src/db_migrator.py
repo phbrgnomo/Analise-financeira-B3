@@ -21,10 +21,12 @@ def _applied_migrations(conn: sqlite3.Connection) -> Set[str]:
     """Query the schema_migrations table and return a set of applied migration ids."""
     cur = conn.cursor()
     cur.execute("SELECT id FROM schema_migrations")
-    return set(r[0] for r in cur.fetchall())
+    return {r[0] for r in cur.fetchall()}
 
 
-def apply_migrations(conn: sqlite3.Connection, migrations_dir: Optional[str] = None) -> None:
+def apply_migrations(
+    conn: sqlite3.Connection, migrations_dir: Optional[str] = None
+) -> None:
     """Apply SQL migrations found in `migrations_dir` in alphanumeric order.
 
     Records applied migration ids in `schema_migrations` table to avoid re-applying.
@@ -54,7 +56,11 @@ def apply_migrations(conn: sqlite3.Connection, migrations_dir: Optional[str] = N
             for stmt in statements:
                 cur.execute(stmt)
 
-            cur.execute("INSERT INTO schema_migrations(id, applied_at) VALUES (?, datetime('now'))", (fname,))
+            insert_sql = (
+                "INSERT INTO schema_migrations(id, applied_at) "
+                "VALUES (?, datetime('now'))"
+            )
+            cur.execute(insert_sql, (fname,))
             conn.commit()
         except Exception:
             conn.rollback()

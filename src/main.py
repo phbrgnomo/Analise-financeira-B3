@@ -243,20 +243,20 @@ def compute_returns_cmd(
         False, "--dry-run", help="Não persiste, apenas exibe resultados"
     ),
 ):
-        """Calcula retornos diários para um ticker e persiste no DB (tabela returns)."""
-        # Use public API: compute_returns will open/close DB connections itself
-        df = _retorno.compute_returns(
-            ticker, start=start, end=end, dry_run=dry_run
-        )
-        if df is None or df.empty:
-            print("Nenhum retorno calculado para os parâmetros fornecidos")
-            return
-        print(f"Calculados {len(df)} retornos para {ticker}")
-        if dry_run:
-            print("Amostra do resultado (head):")
-            print(df.head())
-        else:
-            print("Retornos persistidos no banco de dados")
+    """Calcula retornos diários para um ticker e persiste no DB (tabela returns)."""
+    # Use public API: compute_returns will open/close DB connections itself
+    df = _retorno.compute_returns(
+        ticker, start=start, end=end, dry_run=dry_run
+    )
+    if df is None or df.empty:
+        print("Nenhum retorno calculado para os parâmetros fornecidos")
+        return
+    print(f"Calculados {len(df)} retornos para {ticker}")
+    if dry_run:
+        print("Amostra do resultado (head):")
+        print(df.head())
+    else:
+        print("Retornos persistidos no banco de dados")
 
 
 @app.command()

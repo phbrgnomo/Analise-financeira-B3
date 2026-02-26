@@ -42,19 +42,21 @@ echo "job_id=$JOB_ID ticker=$TICKER no_network=$NO_NETWORK" > "$LOGFILE"
 
 echo "Running quickstart example for $TICKER (no_network=$NO_NETWORK)..." >> "$LOGFILE"
 
+# Build base command and append conditional flags to avoid duplication
+CMD=(poetry run main)
+CMD+=(--ticker "$TICKER")
+CMD+=(--format "$FORMAT")
 if [[ $NO_NETWORK -eq 1 ]]; then
-  # Use fixtures: call project CLI with flags to use sample tickers
-  if [ -n "$OUTPUTS_DIR" ]; then
-    poetry run main --no-network --ticker "$TICKER" --format "$FORMAT" --sample-tickers tests/fixtures/sample_ticker.csv > "$OUTPUTS_DIR/quickstart_${TIMESTAMP}.out" 2>>"$LOGFILE" || EXIT_CODE=$?
-  else
-    poetry run main --no-network --ticker "$TICKER" --format "$FORMAT" --sample-tickers tests/fixtures/sample_ticker.csv 2>>"$LOGFILE" || EXIT_CODE=$?
-  fi
+  CMD+=(--no-network)
+  CMD+=(--sample-tickers tests/fixtures/sample_ticker.csv)
+fi
+
+# Execute and handle redirections: stdout -> OUTPUTS_DIR file only when set;
+# stderr always appended to LOGFILE. Preserve exit capture semantics.
+if [ -n "$OUTPUTS_DIR" ]; then
+  "${CMD[@]}" >"$OUTPUTS_DIR/quickstart_${TIMESTAMP}.out" 2>>"$LOGFILE" || EXIT_CODE=$?
 else
-  if [ -n "$OUTPUTS_DIR" ]; then
-    poetry run main --ticker "$TICKER" --format "$FORMAT" > "$OUTPUTS_DIR/quickstart_${TIMESTAMP}.out" 2>>"$LOGFILE" || EXIT_CODE=$?
-  else
-    poetry run main --ticker "$TICKER" --format "$FORMAT" 2>>"$LOGFILE" || EXIT_CODE=$?
-  fi
+  "${CMD[@]}" 2>>"$LOGFILE" || EXIT_CODE=$?
 fi
 
 EXIT_CODE=${EXIT_CODE:-0}

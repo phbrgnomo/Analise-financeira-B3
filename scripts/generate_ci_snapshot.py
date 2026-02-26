@@ -20,7 +20,7 @@ from typing import Sequence, Union
 
 try:
     import pandas as pd
-except Exception:  # pragma: no cover - runtime dependency
+except ImportError:  # pragma: no cover - runtime dependency
     print("Erro: pandas é necessário.", file=sys.stderr)
     raise
 

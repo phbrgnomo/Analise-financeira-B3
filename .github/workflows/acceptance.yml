@@ -56,7 +56,7 @@ jobs:
         run: |
           python -c "import sqlite3; print('sqlite3.version:', sqlite3.version); print('sqlite3.sqlite_version:', sqlite3.sqlite_version)"
 
-      - name: Run concurrency acceptance test (file-backed)
+      - name: Run concurrency acceptance test (sqlite-backed)
         run: |
           set -euo pipefail
           mkdir -p reports

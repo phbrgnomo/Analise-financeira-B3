@@ -45,7 +45,8 @@ def test_acceptance_snapshot(tmp_path: Path):
     chk = fp.with_suffix(fp.suffix + ".checksum")
     chk.write_text(sha256_bytes(data))
 
-    # Primeiro gera um manifesto para este diretório temporário, depois valida contra ele
+    # Primeiro gera um manifesto para este diretório temporário,
+    # depois valida contra ele
     tmp_manifest = tmp_path / "manifest.json"
     gen_cmd = [
         sys.executable,
@@ -63,8 +64,13 @@ def test_acceptance_snapshot(tmp_path: Path):
     )
 
     # Chama o wrapper que encaminha para scripts/validate_snapshots.py
-    # Monta o caminho do script relativo a este arquivo de teste para não depender do CWD
-    verify = Path(__file__).resolve().parent.parent.parent / "scripts" / "verify_snapshot.py"
+    # Monta o caminho do script relativo a este arquivo de teste
+    # para não depender do CWD
+    verify = (
+        Path(__file__).resolve().parent.parent.parent
+        / "scripts"
+        / "verify_snapshot.py"
+    )
     validate_cmd = [
         sys.executable,
         str(verify),
