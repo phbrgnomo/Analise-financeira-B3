@@ -8,9 +8,11 @@ Usage:
         --manifest snapshots/checksums.json --update
 """
 
+
 from __future__ import annotations
 
 import argparse
+import contextlib
 import hashlib
 import json
 import logging
@@ -18,7 +20,7 @@ import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, Tuple
+from typing import Dict, List, NoReturn, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -137,18 +139,83 @@ def compare_manifests(
 def write_manifest(
     path: Path, manifest: Dict[str, Dict[str, str]], allow_external: bool = True
 ):
-    # Validate target path to avoid path traversal from untrusted inputs
-    # only when called from the CLI with `allow_external=False`.
-    if not allow_external:
-        _validate_manifest_path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
+    # Delegate to helpers for clarity and to reduce cyclomatic complexity
+    _validate_manifest_structure(manifest)
+    target = _prepare_manifest_target(path, allow_external)
+
     payload = {
-        # Use timezone-aware UTC datetime to avoid DeprecationWarning on Python 3.12+
-        "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "generated_at": datetime.now(timezone.utc).isoformat().replace(
+            "+00:00", "Z"
+        ),
         "files": manifest,
     }
-    with path.open("w", encoding="utf-8") as f:
-        json.dump(payload, f, indent=2, ensure_ascii=False)
+
+    _atomic_write_json(target, payload)
+
+
+def _validate_manifest_structure(manifest: object) -> None:
+    """Validate that manifest is a mapping of str -> mapping of str->str."""
+    if not isinstance(manifest, dict):
+        raise TypeError("manifest must be a mapping of file -> metadata")
+    for k, v in manifest.items():
+        if not isinstance(k, str):
+            raise ValueError("manifest keys must be strings")
+        if not isinstance(v, dict):
+            raise ValueError("manifest values must be mappings/dicts")
+        for sub_k, sub_v in v.items():
+            if not isinstance(sub_k, str) or not isinstance(sub_v, str):
+                raise ValueError("manifest nested keys and values must be strings")
+
+
+def _prepare_manifest_target(path: Path, allow_external: bool) -> Path:
+    """Validate and prepare the target Path; return resolved Path.
+
+    Ensures parent exists and is not a symlink. Performs CLI-only
+    directory restriction when `allow_external` is False.
+    """
+    raw = str(path)
+    if "\x00" in raw:
+        raise ValueError("Invalid manifest path: contains null byte")
+
+    if not allow_external:
+        _validate_manifest_path(path)
+
+    target = Path(path).resolve()
+    parent = target.parent
+
+    # Detect symlinks before creating directories to avoid creating
+    # directories under a symlink target.
+    if parent.exists() and parent.is_symlink():
+        raise OSError("Refusing to write manifest into symlinked directory")
+
+    parent.mkdir(parents=True, exist_ok=True)
+    return target
+
+
+def _atomic_write_json(target: Path, payload: object) -> None:
+    """Atomically write JSON payload into `target` within its directory."""
+    import tempfile
+
+    parent = target.parent
+    temp_name = None
+    tf = tempfile.NamedTemporaryFile(
+        mode="w",
+        encoding="utf-8",
+        dir=str(parent),
+        delete=False,
+    )
+    try:
+        json.dump(payload, tf, indent=2, ensure_ascii=False)
+        tf.flush()
+        os.fsync(tf.fileno())
+        temp_name = tf.name
+        tf.close()
+        os.replace(temp_name, str(target))
+        temp_name = None
+    finally:
+        with contextlib.suppress(Exception):
+            if temp_name and os.path.exists(temp_name):
+                os.unlink(temp_name)
 
 
 def _validate_manifest_path(path):
@@ -193,35 +260,36 @@ def validate_and_resolve(
         raise
     is_abs = os.path.isabs(raw)
     allowed_dir = str(allowed_base)
-    if not allow_external:
-        if is_abs:
-            real = os.path.realpath(raw)
-            try:
-                common = os.path.commonpath([real, allowed_dir])
-            except ValueError as err:
-                raise OSError(
-                    f"Refusing to use path outside snapshots directory: {real}\n"
-                    "Pass --allow-external to override."
-                ) from err
-            if common != allowed_dir:
-                raise OSError(
-                    f"Refusing to use path outside snapshots directory: {real}\n"
-                    "Pass --allow-external to override."
-                )
-            return real
-        else:
-            if ".." in normalized.split(os.path.sep):
-                raise OSError(
-                    f"Refusing to use path outside snapshots directory: {raw}\n"
-                    "Pass --allow-external to override."
-                )
-            return os.path.join(allowed_dir, normalized.lstrip(os.path.sep))
-    else:
+    if allow_external:
         return os.path.realpath(raw)
+    if is_abs:
+        real = os.path.realpath(raw)
+        try:
+            common = os.path.commonpath([real, allowed_dir])
+        except ValueError as err:
+            raise OSError(
+                f"Refusing to use path outside snapshots directory: {real}\n"
+                "Pass --allow-external to override."
+            ) from err
+        if common != allowed_dir:
+            raise OSError(
+                f"Refusing to use path outside snapshots directory: {real}\n"
+                "Pass --allow-external to override."
+            )
+        return real
+    else:
+        if ".." in normalized.split(os.path.sep):
+            raise OSError(
+                f"Refusing to use path outside snapshots directory: {raw}\n"
+                "Pass --allow-external to override."
+            )
+        return os.path.join(allowed_dir, normalized.lstrip(os.path.sep))
 
 
-def main():
-    p = argparse.ArgumentParser(description="Validate or generate snapshot checksums")
+def _build_arg_parser() -> argparse.ArgumentParser:
+    p = argparse.ArgumentParser(
+        description="Validate or generate snapshot checksums",
+    )
     p.add_argument("--dir", type=str, default=None)
     p.add_argument("--manifest", type=str, default=None)
     p.add_argument(
@@ -230,27 +298,78 @@ def main():
         help="Permite usar caminhos fora de snapshots/ (use com cuidado)",
     )
     p.add_argument("--update", action="store_true", help="Regenerate manifest")
-    args = p.parse_args()
+    return p
 
-    # Resolve defaults from `src.paths` only after sys.path has been updated
-    # so running the script directly works in CI and locally.
-    if args.dir is None or args.manifest is None:
-        from src.paths import SNAPSHOTS_DIR as _SNAP
 
-        if args.dir is None:
-            args.dir = str(_SNAP)
-        if args.manifest is None:
-            args.manifest = str(_SNAP / "checksums.json")
+def _remap_external_current(
+    current: Dict[str, Dict[str, str]], allow_external: bool
+) -> Dict[str, Dict[str, str]]:
+    if not allow_external:
+        return current
 
-    # Validate and canonicalize user-provided paths before creating Path objects
-    allow_external = bool(args.allow_external)
+    remapped: Dict[str, Dict[str, str]] = {}
+    orig_map: Dict[str, str] = {}
+    collisions: Dict[str, list] = {}
+    for k, v in current.items():
+        # Use a safe basename to avoid path traversal characters in names
+        if "\x00" in k:
+            raise ValueError(
+                "Invalid file path in current manifest: contains null byte"
+            )
+        name = os.path.basename(k)
+        key = f"snapshots/{name}"
+        if key in remapped:
+            collisions.setdefault(key, [orig_map[key]]).append(k)
+        else:
+            remapped[key] = v
+            orig_map[key] = k
 
-    # validate_and_resolve moved to module-level to reduce complexity of `main()`
+    if collisions:
+        _report_basename_collisions(collisions)
+    return remapped
+
+
+def _report_basename_collisions(collisions: Dict[str, List[str]]) -> NoReturn:
+    """Reporta colisões de nomes base ao remapear caminhos externos.
+
+    Parameters
+    ----------
+    collisions : Dict[str, List[str]]
+        Mapeamento de chave remapeada (ex.: "snapshots/FILE") para a lista de
+        paths originais que colidiram ao usar apenas o nome-base do arquivo.
+
+    Raises
+    ------
+    SystemExit
+        Sempre termina o processo com código de saída 3 quando colisões são
+        detectadas, porque a operação não pode decidir qual arquivo preservar.
+    """
+    # Mensagens em PT-BR, quebradas em linhas curtas para ruff
+    print(
+        "Erro: nomes base duplicados detectados ao remapear",
+        file=sys.stderr,
+    )
+    print("diretório externo:", file=sys.stderr)
+    for key, paths in collisions.items():
+        # imprimir fontes conflitantes de forma legível
+        print(" -", key, "de:", ", ".join(paths), file=sys.stderr)
+    print("Renomeie os arquivos ou execute sem", file=sys.stderr)
+    print("--allow-external para evitar ambiguidade.", file=sys.stderr)
+    raise SystemExit(3)
+
+
+def main():
+    args = _build_arg_parser().parse_args()
+
+    # Resolve defaults and validate paths
     from src.paths import SNAPSHOTS_DIR as _SNAP
 
+    allow_external = bool(args.allow_external)
     try:
-        dir_str = validate_and_resolve(args.dir, _SNAP, allow_external)
-        manifest_str = validate_and_resolve(args.manifest, _SNAP, allow_external)
+        dir_str = validate_and_resolve(args.dir or str(_SNAP), _SNAP, allow_external)
+        manifest_str = validate_and_resolve(
+            args.manifest or str(_SNAP / "checksums.json"), _SNAP, allow_external
+        )
     except (ValueError, OSError) as e:
         print(e)
         raise SystemExit(2) from e
@@ -258,9 +377,9 @@ def main():
     args.dir = Path(dir_str)
     args.manifest = Path(manifest_str)
 
-    # For validation we only consider CSV snapshot files; keep the helper
-    # flexible so tests or other callers can request different patterns.
+    # Generate current manifest (CSV files only) and apply remapping logic
     current = generate_manifest(args.dir, pattern="*.csv")
+    current = _remap_external_current(current, allow_external)
 
     if args.update:
         write_manifest(args.manifest, current, allow_external=allow_external)

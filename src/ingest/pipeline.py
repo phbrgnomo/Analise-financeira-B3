@@ -23,9 +23,9 @@ from src.utils.checksums import serialize_df_bytes, sha256_bytes, sha256_file
 
 logger = logging.getLogger(__name__)
 
-# Legacy DB var kept for compatibility; metadata will be written to JSON
+# Legacy DB var kept for compatibility; metadata will be written to JSONL
 DEFAULT_DB = Path("dados/data.db")
-DEFAULT_METADATA = Path("metadata/ingest_logs.json")
+DEFAULT_METADATA = Path("metadata/ingest_logs.jsonl")
 
 
 def _db_initialized(db_path: Union[str, Path]) -> bool:
@@ -53,16 +53,20 @@ def _db_initialized(db_path: Union[str, Path]) -> bool:
 
 
 def _ensure_metadata_file(metadata_path: Union[str, Path]) -> None:
-    """Ensure metadata directory exists and file is initialized as JSON array.
+    """Ensure metadata directory exists and initialize a JSONL file.
 
-    The file is created with an empty JSON array if it does not exist.
+    For JSONL metadata files this function ensures the parent directory
+    exists and creates an empty file atomically (write to a `.tmp` and
+    `os.replace`) if the target file does not exist. It does not attempt
+    to initialize a JSON array or modify file contents if the file is
+    already present.
     """
     metadata_path = Path(metadata_path)
     metadata_path.parent.mkdir(parents=True, exist_ok=True)
     if not metadata_path.exists():
-        # create an empty JSON array atomically
-        tmp = metadata_path.with_suffix(".json.tmp")
-        tmp.write_text("[]")
+        # create an empty file atomically
+        tmp = metadata_path.with_suffix(".tmp")
+        tmp.write_text("")
         os.replace(str(tmp), str(metadata_path))
 
 
@@ -187,21 +191,20 @@ def _log_metadata_error(msg: str, e_meta: Exception, metadata: Dict[str, Any]) -
 def _persist_metadata(
     metadata: Dict[str, Any], metadata_path: Union[str, Path] = DEFAULT_METADATA
 ) -> None:
+    # JSONL append: write a single JSON object per line in append mode.
     _ensure_metadata_file(metadata_path)
     metadata_path = Path(metadata_path)
 
-    try:
-        existing = json.loads(metadata_path.read_text())
-        if not isinstance(existing, list):
-            existing = []
-    except Exception:
-        existing = []
-
-    existing.append(metadata)
-
-    tmp = metadata_path.with_suffix(".tmp")
-    tmp.write_text(json.dumps(existing, ensure_ascii=False, indent=2))
-    os.replace(str(tmp), str(metadata_path))
+    line = json.dumps(metadata, ensure_ascii=False)
+    # Open, append, flush and fsync for durability
+    with open(metadata_path, "a", encoding="utf-8") as fh:
+        fh.write(line + "\n")
+        fh.flush()
+        try:
+            os.fsync(fh.fileno())
+        except OSError as exc:
+            # Not critical on some platforms; best-effort, but log for diagnosis
+            logger.warning("fsync failed for metadata path %s: %s", metadata_path, exc)
     metadata["metadata_recorded"] = True
     metadata["metadata_path"] = str(metadata_path)
 

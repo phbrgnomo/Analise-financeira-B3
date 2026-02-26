@@ -30,7 +30,7 @@ coverage.xml
 htmlcov/
 .ruff_cache/
 reports/junit.xml
-metadata/
+.hypothesis/
 
 # MyPy cache
 .mypy_cache/
@@ -64,6 +64,12 @@ __pycache__/
 
 # Ignore generated snapshots created during CI/test runs
 snapshots_test/
+tmp_snapshots/
+
+# Local ingest logs (runtime, append-only)
+.metadata/
+metadata/ingest_logs.jsonl
+
 
 .sentry-native/
 

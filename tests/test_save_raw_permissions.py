@@ -14,7 +14,7 @@ def test_save_raw_csv_set_permissions(tmp_path):
     df = pd.DataFrame({"col1": [1], "col2": [2]})
 
     raw_root = tmp_path / "raw"
-    metadata_path = tmp_path / "metadata" / "ingest_logs.json"
+    metadata_path = tmp_path / "metadata" / "ingest_logs.jsonl"
     ts = "20260220T000000Z"
 
     meta = save_raw_csv(

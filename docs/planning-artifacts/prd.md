@@ -197,7 +197,7 @@ Escopo do documento: define requisitos funcionais e não‑funcionais, jornadas 
 - `docs/architecture.md` — fluxos de ingest, ETL, snapshot e geração de portfólio.
 - `docs/playbooks/quickstart-ticker.md` — quickstart passo-a-passo para reproduzir um experimento com um ticker.
 - `docs/playbooks/runbook-ops.md` — runbook de operações (backup, restore, troubleshooting de ingest).
-- `docs/sprint-reports/0-3-pre-commit-implantado.md` — documento de implantação e verificação para a story 0.3 (pre-commit, black, ruff, CI).
+- `docs/sprint-reports/0-3-pre-commit-implantado.md` — documento de implantação e verificação para a story 0.3 (pre-commit, ruff, CI).
 
 ## Project-Type Deep Dive (Step 07)
 
@@ -240,7 +240,7 @@ poetry run main --ticker PETR4.SA --force-refresh
 ### Testing & CI
 - Testes unitários: usar `pytest` com fixtures que criam um SQLite em memória/temporário para testar `db.*` e adaptadores de fonte.
 - Teste de integração (end-to-end): rotina que executa `pipeline.ingest` para um `ticker` de exemplo (mockando chamadas à API em CI) e verifica que o snapshot CSV existe e checksum SHA256 confere com o gerado.
-- CI pipeline mínimo: 1) `poetry install --no-dev` 2) `poetry run pytest -q` 3) checagem de links/formatos Markdown (opcional: `markdown-link-check`) 4) (opcional) linter/formatador (`ruff`/`black`).
+- CI pipeline mínimo: 1) `poetry install --no-dev` 2) `poetry run pytest -q` 3) checagem de links/formatos Markdown (opcional: `markdown-link-check`) 4) (opcional) linter/formatador (`ruff`; `black` opcional).
 
 ## Non-Functional Requirements (Detalhado)
 
@@ -402,7 +402,7 @@ poetry run main --ticker PETR4.SA --force-refresh
 - Provedor secundário: `AlphaVantage` (preferência recomendada pelo `architect` pela maturidade da API).
 - Health‑check CLI: script automático que valida credenciais, quota, latência e gera relatório; deve suportar rollback/fallback quando falha.
 - CSV schema mínimo: cabeçalho padrão + colunas de metadados (`source`,`fetched_at`,`rows`,`checksum`) e amostra de CSV incluída em `docs/`.
-- CI: `poetry install`, `pytest` (unit + integration com mocks), verificação de geração de CSV + checksum; (opcional) `markdown-link-check` e `ruff`/`black` checks.
+- CI: `poetry install`, `pytest` (unit + integration com mocks), verificação de geração de CSV + checksum; (opcional) `markdown-link-check` e `ruff` checks (`black` opcional).
 - Spike e estimativas: sugerido spike de 5–7 dias para prova de conceito de Fase 1 (2 provedores + CLI), Fase 1 completa em 1–2 semanas dependendo alocação.
 - Documentação exigida: `docs/phase-1-report.md` com checklist, comandos reproduzíveis e amostra de CSV; repetido para cada fase (`docs/phase-2-report.md`, ...).
 

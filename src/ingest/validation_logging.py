@@ -21,18 +21,30 @@ from src.utils.checksums import serialize_df_bytes, sha256_bytes
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_INVALID_LOGS = Path("metadata/ingest_logs.json")
+DEFAULT_INVALID_LOGS = Path("metadata/ingest_logs.jsonl")
 DEFAULT_INVALID_DIR = Path("raw")
+# Toggle fsync after writing validation logs. Set to False to improve
+# throughput at the cost of durability on crash.
+VALIDATION_LOG_FSYNC = True
 
 
 def _ensure_metadata_file(metadata_path: Union[str, Path]) -> None:
-    """Ensure metadata directory exists and file is initialized as JSON array."""
+    """Ensure metadata directory exists and create empty JSONL file if missing."""
     metadata_path = Path(metadata_path)
     metadata_path.parent.mkdir(parents=True, exist_ok=True)
-    if not metadata_path.exists():
-        tmp = metadata_path.with_suffix(".json.tmp")
-        tmp.write_text("[]")
-        os.replace(str(tmp), str(metadata_path))
+    # Attempt atomic create: O_CREAT|O_EXCL will fail if the file already exists.
+    # This avoids races involving temporary files and os.replace across processes.
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+    try:
+        fd = os.open(str(metadata_path), flags, 0o644)
+        os.close(fd)
+    except FileExistsError:
+        # Another process created the file concurrently — that's fine.
+        pass
+    except OSError:
+        # Best-effort: ignore errors (e.g., permission issues) to avoid
+        # breaking the pipeline; callers will handle write failures later.
+        pass
 
 
 def log_invalid_rows(
@@ -79,21 +91,20 @@ def log_invalid_rows(
         _ensure_metadata_file(metadata_path)
         metadata_path = Path(metadata_path)
 
-        # Read existing entries
-        try:
-            existing = json.loads(metadata_path.read_text())
-            if not isinstance(existing, list):
-                existing = []
-        except Exception:
-            existing = []
-
-        # Append new entries
-        existing.extend(log_entries)
-
-        # Write atomically using consistent .json.tmp suffix
-        tmp = metadata_path.with_suffix(".json.tmp")
-        tmp.write_text(json.dumps(existing, ensure_ascii=False, indent=2))
-        os.replace(str(tmp), str(metadata_path))
+        # Append entries as JSON Lines
+        # Batch writes to reduce syscall overhead; fsync can be toggled for performance.
+        lines = [json.dumps(entry, ensure_ascii=False) + "\n" for entry in log_entries]
+        if lines:  # Avoid touching the filesystem if there is nothing to log
+            with open(metadata_path, "a", encoding="utf-8") as fh:
+                fh.writelines(lines)
+                fh.flush()
+                if VALIDATION_LOG_FSYNC:
+                    try:
+                        os.fsync(fh.fileno())
+                    except Exception:
+                        # Best-effort durability; ignore fsync issues on platforms
+                        # where it may not be supported or permitted.
+                        pass
 
         logger.info(
             "Logged %d invalid row errors for %s to %s",

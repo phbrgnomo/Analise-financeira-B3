@@ -100,7 +100,7 @@ As instruções completas e o playbook estão em `docs/playbooks/testing-network
 - Formatação e lint:
 
 ```bash
-# Usar ruff e black conforme configuração do projeto
+# Usar ruff conforme configuração do projeto
 poetry run ruff check src tests
 ```
 
@@ -136,22 +136,14 @@ O script calcula o SHA256 do arquivo de exemplo `snapshots/PETR4_snapshot_test.c
 - Guia de implementação de adaptadores: [docs/modules/adapter-guidelines.md](docs/modules/adapter-guidelines.md)
 - Checklist de PR para adaptadores: [docs/modules/adapter-pr-checklist.md](docs/modules/adapter-pr-checklist.md)
 
-## Operational Notes: Raw files & metadata
+## Notas operacionais — arquivos raw e metadados
 
-- Raw CSV files are written to `raw/<provider>/` with pattern `<ticker>-YYYYMMDDTHHMMSSZ.csv`.
-- A SHA256 checksum is written alongside each CSV as `*.checksum`.
-- In this implementation metadados de ingestão são persistidos em `metadata/ingest_logs.json` (JSON array).
-- Recomenda-se proteger artefatos sensíveis com permissões owner-only. Para aplicar localmente:
+- Arquivos CSV raw são gravados em `raw/<provider>/` com o padrão `<ticker>-YYYYMMDDTHHMMSSZ.csv`.
+- Um checksum SHA256 é gerado e gravado ao lado de cada CSV como `*.checksum`.
+- Metadados de ingestão são persistidos em `metadata/ingest_logs.jsonl` (JSON Lines, append-only).
+- Recomenda-se proteger artefatos sensíveis com permissões apenas do dono (owner-only). Para aplicar localmente:
 
 ```bash
 # tornar arquivos de metadados e raw inacessíveis a outros usuários
 chmod -R 600 metadata dados/raw
 ```
-
-Se quiser que o pipeline aplique permissões automaticamente, a função `save_raw_csv` aceita o parâmetro `set_permissions=True` (aplica `chmod 600` em sistemas POSIX).
-
-Nota: a gravação de metadados em JSON é uma escolha inicial; uma migração para SQLite/Postgres pode ser feita posteriormente quando for necessário transacionamento/concorrência.
-
----
-
-Se você quiser, eu posso: gerar badges adicionais (coverage, PyPI quando aplicável), adicionar exemplos de uso com parâmetros do `src.main`, ou abrir um PR com pré-commit configurado. Qual próximo passo prefere?

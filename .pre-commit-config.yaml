@@ -10,4 +10,3 @@ repos:
     rev: v4.4.0
     hooks:
       - id: end-of-file-fixer
-      - id: trailing-whitespace

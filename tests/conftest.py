@@ -81,6 +81,21 @@ def sample_db():
         db.close()
 
 
+@pytest.fixture(autouse=True)
+def sqlite_version_override(monkeypatch):
+    """If `SQLITE_VERSION` env var is set in CI, monkeypatch sqlite3.sqlite_version.
+
+    This allows CI to simulate different SQLite runtime versions without
+    recompiling Python. The test suite uses this to exercise upsert vs
+    fallback code paths deterministically.
+    """
+    import sqlite3
+
+    if ver := os.environ.get("SQLITE_VERSION"):
+        monkeypatch.setattr(sqlite3, "sqlite_version", ver)
+    yield
+
+
 @pytest.fixture(scope="function")
 def sample_db_multi():
     """Creates an in-memory SQLite DB seeded with tests/fixtures/sample_ticker_multi.csv

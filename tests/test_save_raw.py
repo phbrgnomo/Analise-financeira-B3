@@ -22,7 +22,7 @@ def test_save_raw_csv_and_register(tmp_path):
         "TICK",
         ts,
         raw_root=raw_root,
-        metadata_path=metadata_dir / "ingest_logs.json",
+        metadata_path=metadata_dir / "ingest_logs.jsonl",
     )
 
     assert meta["status"] == "success"
@@ -36,15 +36,17 @@ def test_save_raw_csv_and_register(tmp_path):
     # checksum value matches content
     computed = sha256_file(csv_path)
     assert computed == meta["raw_checksum"]
-    # metadata JSON file exists and contains entry
-    metadata_path = metadata_dir / "ingest_logs.json"
+    # metadata JSONL file exists and contains entry
+    metadata_path = metadata_dir / "ingest_logs.jsonl"
     assert metadata_path.exists()
-    content = json.loads(metadata_path.read_text())
-    found = [m for m in content if m.get("job_id") == meta["job_id"]]
+    # read JSONL and find entry
+    text = metadata_path.read_text(encoding="utf-8")
+    lines = [line for line in text.splitlines() if line.strip()]
+    entries = [json.loads(line) for line in lines]
+    found = [m for m in entries if m.get("job_id") == meta["job_id"]]
     assert len(found) == 1
 
 
-# TODO Rename this here and in `test_save_raw_csv_and_register`
 def assert_ingest_log_entry(conn, meta):
     cur = conn.cursor()
     cur.execute(

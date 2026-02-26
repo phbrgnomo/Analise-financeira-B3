@@ -70,15 +70,15 @@ valid_df, invalid_df, summary, details = validate_and_handle(
   `jq`):
 
 ```sh
-jq -c 'select(.reason_code=="ADAPTER_VALIDATION" and .ticker=="PETR4.SA")' metadata/ingest_logs.json
+jq -c 'select(.reason_code=="ADAPTER_VALIDATION" and .ticker=="PETR4.SA")' metadata/ingest_logs.jsonl
 ```
 
 Sugestão de CLI mínima:
 
-- Um comando `ingest-logs query --reason ADAPTER_VALIDATION --ticker PETR4.SA --from 2026-02-01 --to 2026-02-28` que lê `metadata/ingest_logs.json`, aplica filtros e imprime ocorrências paginadas.
+- Um comando `ingest-logs query --reason ADAPTER_VALIDATION --ticker PETR4.SA --from 2026-02-01 --to 2026-02-28` que lê `metadata/ingest_logs.jsonl`, aplica filtros e imprime ocorrências paginadas.
 
 
-Arquivo(s) relevantes
+## Arquivo(s) relevantes
 - `src/adapters/base.py` — checks do adaptador e (novo) logging de falhas
 - `src/validation.py` — validação canônica, persistência de inválidos e logging
-- `metadata/ingest_logs.json` — registro de ingestões e eventos de validação
+- `metadata/ingest_logs.jsonl` — registro de ingestões e eventos de validação (JSON Lines)

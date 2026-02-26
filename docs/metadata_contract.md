@@ -44,5 +44,6 @@ python3 scripts/validate_metadata.py examples/metadata/petr4_snapshot.json
 
 Notas
 
-- O contrato é voltado para snapshots de dados tabulares gerados pelo pipeline. Para metadados de ingestão (logs), mantenha o arquivo `metadata/ingest_logs.json` (array) conforme implementação atual.
+- O contrato é voltado para snapshots de dados tabulares gerados pelo pipeline. Para metadados de ingestão (logs), o projeto utiliza agora um arquivo append-only JSON Lines: `metadata/ingest_logs.jsonl`. Cada linha é um objeto JSON descrevendo um ingest e campos mínimos (ex.: `job_id, source, fetched_at, raw_checksum, rows, filepath, status, created_at`).
+- Quando necessário, sumarizações e índices podem ser gerados a partir do JSONL para facilitar consultas offline; o DB SQLite armazena apenas esquema/meta-resumos (e.g., `schema_version`) via `src.db.record_snapshot_metadata()` quando aplicável.
 - Se for necessário estender o contrato, incremente `schema_version` e registre a compatibilidade.

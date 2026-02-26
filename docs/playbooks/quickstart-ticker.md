@@ -19,9 +19,9 @@ poetry run main --ticker PETR4.SA --force-refresh
 - Snapshot CSV: `snapshots/PETR4_snapshot.csv`
 - Banco SQLite: `dados/data.db`
 - Relatórios derivados: `reports/PETR4_report.csv` (quando aplicável)
- - Raw provider CSVs: `raw/<provider>/<TICKER>-YYYYMMDDTHHMMSSZ.csv`
- - Checksum ao lado do raw CSV: `raw/<provider>/<TICKER>-YYYYMMDDTHHMMSSZ.csv.checksum`
- - Metadados de ingestão (JSON): `metadata/ingest_logs.json` (array de objetos com `job_id, source, fetched_at, raw_checksum, rows, filepath, status, created_at`)
+- Raw provider CSVs: `raw/<provider>/<TICKER>-YYYYMMDDTHHMMSSZ.csv`
+- Checksum ao lado do raw CSV: `raw/<provider>/<TICKER>-YYYYMMDDTHHMMSSZ.csv.checksum`
+- Metadados de ingestão (JSONL, append-only): `metadata/ingest_logs.jsonl` (uma linha JSON por ingest com `job_id, source, fetched_at, raw_checksum, rows, filepath, status, created_at`)
 
 Verificações mínimas
 
@@ -43,10 +43,20 @@ Verificar raw provider e metadados
 
 ```bash
 ls -l raw/yfinance/PETR4.SA-*.csv
-cat metadata/ingest_logs.json | jq '.[-1]'
+# ver última entrada JSONL
+tail -n 1 metadata/ingest_logs.jsonl | jq '.'
 ```
 
-Observação: a implementação atual grava metadados em `metadata/ingest_logs.json`. Para exigir permissões owner-only nos artefatos, chame a função com `set_permissions=True` ou aplique `chmod 600` manualmente.
+Observação: a implementação atual grava metadados em `metadata/ingest_logs.jsonl` (JSON Lines append-only). Para exigir permissões owner-only nos artefatos, chame a função com `set_permissions=True` ou aplique `chmod 600` manualmente.
+
+Banco de dados local
+- Inicialize o banco SQLite (se ainda não existir):
+
+```bash
+poetry run python scripts/init_ingest_db.py --db dados/data.db
+```
+
+O pipeline também tenta persistir automaticamente as linhas canônicas no banco via `db.write_prices()` quando o mapeamento canônico e a validação forem bem-sucedidos.
 
 - Abrir notebook de análise (ex.: `notebooks/quickstart.ipynb`) e executar células necessárias para gerar os plots esperados.
 

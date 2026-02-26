@@ -1,0 +1,54 @@
+name: SQLite Compatibility Matrix
+
+on:
+  push:
+    branches: [ master ]
+  pull_request: {}
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        sqlite_version: ["3.8.0", "3.22.0", "3.24.0", "3.38.0"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install poetry
+          poetry config virtualenvs.create false
+          poetry install --no-interaction --no-ansi
+
+      - name: Run tests with simulated SQLite version ${{ matrix.sqlite_version }}
+        env:
+          SQLITE_VERSION: ${{ matrix.sqlite_version }}
+        run: |
+          # Run unit tests quickly; E2E runs in separate job
+          pytest -q -k "not e2e and not property"
+
+  e2e:
+    runs-on: ubuntu-latest
+    needs: tests
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install poetry
+          poetry config virtualenvs.create false
+          poetry install --no-interaction --no-ansi
+      - name: Run E2E tests
+        run: |
+          pytest -q tests/e2e -k compute_returns_e2e

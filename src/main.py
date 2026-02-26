@@ -1,8 +1,13 @@
+import os
 from datetime import date, timedelta
 from typing import Optional
 
 import typer
 
+import src.db as _db
+import src.retorno as _retorno
+from src import metrics
+from src.logging_config import configure_logging
 from src.paths import DATA_DIR
 
 # Instância principal da aplicação de linha de comando usando Typer
@@ -31,14 +36,14 @@ def _fetch_and_prepare_asset(
         Percentual (0.0-1.0) limite de linhas inválidas aceitáveis para não
         abortar o ingest; `None` significa não aplicar threshold.
 
-    Side effects
-    ------------
-    - Faz download dos dados do provedor (via `src.dados_b3.cotacao_ativo_dia`).
-    - Persiste CSV bruto via `save_raw_csv` em `raw/<provider>/...`.
-    - Mapeia os dados para o esquema canônico com `to_canonical`.
-    - Se o módulo de validação estiver disponível, executa validação
-      (chama `validate_and_handle`) que pode persistir linhas inválidas e
-      registrar entradas em `metadata/ingest_logs.json`.
+        Side effects
+        ------------
+        - Faz download dos dados do provedor (via `src.dados_b3.cotacao_ativo_dia`).
+        - Persiste CSV bruto via `save_raw_csv` em `raw/<provider>/...`.
+        - Mapeia os dados para o esquema canônico com `to_canonical`.
+        - Se o módulo de validação estiver disponível, executa validação
+            (chama `validate_and_handle`) que pode persistir linhas inválidas e
+            registrar entradas em `metadata/ingest_logs.jsonl` (JSONL append-only).
     - Calcula a coluna `Return` (log-return) e salva um CSV em `DATA_DIR/{a}.csv`.
 
     Errors / raises
@@ -112,8 +117,9 @@ def _fetch_and_prepare_asset(
                 ticker=f"{a}.SA",
                 raw_file=save_meta.get("filepath") or "",
                 ts=save_meta.get("fetched_at") or "",
+                job_id=save_meta.get("job_id"),
                 raw_root="raw",
-                metadata_path="metadata/ingest_logs.json",
+                metadata_path="metadata/ingest_logs.jsonl",
                 threshold=validation_tolerance,
                 abort_on_exceed=True,
                 persist_invalid=True,
@@ -138,6 +144,15 @@ def _fetch_and_prepare_asset(
                 print(f"Ingest aborted for {a} due to validation threshold: {e}")
                 return
             print(f"Validation step failed for {a}: {e}")
+
+    # Persist canonical rows to the DB (idempotent upsert). This is a best-effort
+    # operation: the DB may not be initialized in some environments, but when
+    # available we should persist canonical rows for downstream queries.
+    try:
+        _db.write_prices(canonical, f"{a}.SA")
+        print(f"Persisted canonical rows for {a} into DB")
+    except Exception as e:
+        print(f"Warning: failed to persist canonical rows for {a}: {e}")
 
     # Calcula o retorno (usa coluna ajustada quando disponível, senão `close`)
     # Preferir o DataFrame `canonical` (já mapeado/validado) quando disponível.
@@ -200,8 +215,8 @@ def _compute_and_print_stats(a: str) -> None:
     retorno_total = df["Return"].sum()
     retorno_medio = df["Return"].mean()
     risco = df["Return"].std()
-    retorno_anual = rt.conv_retorno(retorno_medio, 252)
-    risco_anual = rt.conv_risco(risco, 252)
+    retorno_anual = rt.conv_retorno(retorno_medio, rt.TRADING_DAYS)
+    risco_anual = rt.conv_risco(risco, rt.TRADING_DAYS)
 
     print(f"\n--------{a}--------")
     print(f"Retorno total do período: {round((retorno_total * 100), 4)}%")
@@ -210,6 +225,38 @@ def _compute_and_print_stats(a: str) -> None:
     print(f"Retorno médio ao ano: {round((retorno_anual * 100), 4)}%")
     print(f"Risco ao ano: {round(risco_anual * 100, 4)}%")
     print(f"Coeficiente de variação(dia):{rt.coef_var(risco, retorno_medio)}")
+
+
+
+@app.command("compute-returns")
+def compute_returns_cmd(
+    ticker: str = typer.Option(
+        ..., help="Ticker para cálculo de retornos, ex: PETR4.SA"
+    ),
+    start: Optional[str] = typer.Option(
+        None, help="Data inicial YYYY-MM-DD"
+    ),
+    end: Optional[str] = typer.Option(
+        None, help="Data final YYYY-MM-DD"
+    ),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Não persiste, apenas exibe resultados"
+    ),
+):
+    """Calcula retornos diários para um ticker e persiste no DB (tabela returns)."""
+    # Use public API: compute_returns will open/close DB connections itself
+    df = _retorno.compute_returns(
+        ticker, start=start, end=end, dry_run=dry_run
+    )
+    if df is None or df.empty:
+        print("Nenhum retorno calculado para os parâmetros fornecidos")
+        return
+    print(f"Calculados {len(df)} retornos para {ticker}")
+    if dry_run:
+        print("Amostra do resultado (head):")
+        print(df.head())
+    else:
+        print("Retornos persistidos no banco de dados")
 
 
 @app.command()
@@ -256,4 +303,20 @@ def main(
 
 
 if __name__ == "__main__":
+    # Configure structured logging only when executed as a program
+    try:
+        configure_logging()
+    except Exception:
+        # Best-effort: do not prevent CLI execution if logging setup fails
+        pass
+
+    # Optionally start Prometheus metrics server when requested via env var
+    if os.getenv("PROMETHEUS_METRICS"):
+        try:
+            port = int(os.getenv("PROMETHEUS_METRICS_PORT", "8000"))
+            metrics.start_metrics_server(port)
+        except Exception:
+            # Don't fail startup if metrics server can't start
+            pass
+
     app()

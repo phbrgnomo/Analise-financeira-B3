@@ -10,8 +10,13 @@ from __future__ import annotations
 import argparse
 import logging
 import os
-import sqlite3
+import sys
 from pathlib import Path
+
+# Ensure `src/` is on sys.path before importing anything from it. Placing
+# this at the top lets the script run correctly when executed directly (e.g.
+# in CI) where the project root may not already be on PYTHONPATH.
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from src.paths import DATA_DIR
 
@@ -70,32 +75,13 @@ def init_db(db_path: Path | str | None = None, allow_external: bool = False) -> 
     sqlite3.Error for database-level failures.
     """
 
+    # Delegate the actual schema creation to src.db.init_db so that schema
+    # logic remains consolidated in the library module.
     resolved_db = _resolve_db_path(db_path, allow_external)
+    import src.db as _src_db
 
-    parent_dir = os.path.dirname(resolved_db)
-    os.makedirs(parent_dir, exist_ok=True)
-
-    try:
-        with sqlite3.connect(resolved_db) as conn:
-            cur = conn.cursor()
-            cur.execute(
-                """
-                CREATE TABLE IF NOT EXISTS ingest_logs (
-                    job_id TEXT PRIMARY KEY,
-                    source TEXT,
-                    fetched_at TEXT,
-                    raw_checksum TEXT,
-                    rows INTEGER,
-                    filepath TEXT,
-                    status TEXT,
-                    error_message TEXT,
-                    created_at TEXT
-                );
-                """
-            )
-    except sqlite3.Error as exc:
-        logger.error("Failed to initialize ingest DB at %s: %s", resolved_db, exc)
-        raise
+    # src.db.init_db is idempotent and will create required tables.
+    _src_db.init_db(resolved_db, allow_external=allow_external)
 
 
 def _resolve_db_path(db_path: Path | str | None, allow_external: bool) -> str:
@@ -193,7 +179,7 @@ def _finalize_candidate_within_data(candidate: str, data_dir_resolved: str) -> s
             )
         return resolved
 
-    if any(part == ".." for part in candidate.split(os.path.sep)):
+    if ".." in candidate.split(os.path.sep):
         raise ValueError(
             (
                 "Relative paths containing '..' are not allowed when "

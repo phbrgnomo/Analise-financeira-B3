@@ -120,7 +120,7 @@ def test_log_adapter_validation_happy_path(
     log_invalid_rows_mock.assert_called_once()
     call_kwargs = log_invalid_rows_mock.call_args.kwargs
 
-    assert call_kwargs["metadata_path"] == "metadata/ingest_logs.json"
+    assert call_kwargs["metadata_path"] == "metadata/ingest_logs.jsonl"
     assert call_kwargs["provider"] == provider_name
     assert call_kwargs["ticker"] == ticker
     assert call_kwargs["raw_file"] == ""
@@ -226,15 +226,14 @@ def test_log_adapter_validation_error_paths(
     log_context = {}
 
     # Prepare import behavior without explicit conditionals using selection
-    def fake_import(name, *args, **kwargs):
-        def _raise_import(*a, **k):
-            raise ImportError("cannot import")
-        # If the import requested is "src.validation" simulate ImportError,
-        # otherwise delegate to the real builtins.__import__ implementation.
-        if name == "src.validation":
-            return _raise_import(name, *args, **kwargs)
+    # capture original import to avoid recursion when patching builtins.__import__
+    original_import = builtins.__import__
 
-        return builtins.__import__(name, *args, **kwargs)
+    def fake_import_raise(name, *args, **kwargs):
+        raise ImportError("cannot import")
+
+    def fake_import_delegate(name, *args, **kwargs):
+        return original_import(name, *args, **kwargs)
 
     log_invalid_rows_mock = MagicMock()
     # set side_effect conditionally via expression to avoid branching
@@ -246,13 +245,25 @@ def test_log_adapter_validation_error_paths(
     )
 
     # Select the appropriate patch context explicitly to avoid ambiguity
-    import_ctx = (
-        patch.dict(
-            "sys.modules",
-            {"src.validation": mock_validation_module},
-        ),
-        patch("builtins.__import__", side_effect=fake_import),
-    )[import_raises]
+    def _make_import_ctx(should_raise: bool):
+        """Return the appropriate context manager for the import behavior.
+
+        Implemented via a mapping to avoid inline conditionals in the test
+        body while keeping behavior explicit and local.
+        """
+
+        mapping = {
+            True: patch("builtins.__import__", side_effect=fake_import_raise),
+            False: (
+                patch.dict(
+                    "sys.modules",
+                    {"src.validation": mock_validation_module},
+                )
+            ),
+        }
+        return mapping[should_raise]
+
+    import_ctx = _make_import_ctx(import_raises)
 
     caplog.set_level(logging.DEBUG, logger=logger.name)
 

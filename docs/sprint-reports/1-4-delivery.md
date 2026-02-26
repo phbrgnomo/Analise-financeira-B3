@@ -6,14 +6,14 @@ story: 1-4
 
 Resumo
 
-Esta entrega implementa a persistência das respostas brutas dos provedores em CSV (`raw/<provider>/`) com checksum SHA256 e registro de metadados de ingestão em `metadata/ingest_logs.json`.
+Esta entrega implementa a persistência das respostas brutas dos provedores em CSV (`raw/<provider>/`) com checksum SHA256 e registro de metadados de ingestão em `metadata/ingest_logs.jsonl` (JSON Lines, append-only).
 
 O que foi implementado
 
 - Função `save_raw_csv` em `src/ingest/pipeline.py`:
   - grava CSV atômico sem índice (`index=False`)
   - calcula e grava checksum SHA256 em `*.checksum`
-  - persiste metadados em `metadata/ingest_logs.json` de forma atômica
+  - persiste metadados em `metadata/ingest_logs.jsonl` de forma append-only (uma linha JSON por ingest)
   - opção `set_permissions=True` para aplicar `chmod 600` em sistemas POSIX
 - Testes adicionados/atualizados:
   - `tests/test_save_raw.py` — valida escrita, checksum e gravação de metadados
@@ -32,7 +32,7 @@ Arquivos alterados/criados
 - README.md (modificado)
 - docs/playbooks/quickstart-ticker.md (modificado)
 - docs/implementation-artifacts/1-4-salvar-resposta-bruta-em-raw-provider-e-registrar-metadados.md (atualizado)
-- metadata/ingest_logs.json (criável em runtime)
+- metadata/ingest_logs.jsonl (criável em runtime)
 
 Observações e próximos passos
 
@@ -64,5 +64,5 @@ poetry run pytest -q
 ```bash
 poetry run main
 ls raw/yfinance/
-cat metadata/ingest_logs.json | jq '.[-1]'
+tail -n 1 metadata/ingest_logs.jsonl | jq '.'
 ```
