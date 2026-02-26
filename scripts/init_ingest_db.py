@@ -13,9 +13,12 @@ import os
 import sys
 from pathlib import Path
 
-from src.paths import DATA_DIR
-
+# Ensure `src/` is on sys.path before importing anything from it. Placing
+# this at the top lets the script run correctly when executed directly (e.g.
+# in CI) where the project root may not already be on PYTHONPATH.
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+
+from src.paths import DATA_DIR
 
 logger = logging.getLogger(__name__)
 
