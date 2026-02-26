@@ -217,10 +217,9 @@ def test_compute_returns_empty_and_single_price(sample_db):
     existing_cols = [r[1] for r in cur.fetchall()]
     # Add optional columns present in the DB schema in table-order
     defaults = {"fetched_at": "2023-01-01T00:00:00", "raw_checksum": "0" * 64}
-    present = [(c, defaults[c]) for c in existing_cols if c in defaults]
-    for c, v in present:
-        cols.append(c)
-        vals.append(v)
+    present_cols = [c for c in existing_cols if c in defaults]
+    cols.extend(present_cols)
+    vals.extend([defaults[c] for c in present_cols])
 
     placeholders = ",".join(["?" for _ in cols])
     sql = f"INSERT INTO prices ({','.join(cols)}) VALUES ({placeholders})"
