@@ -92,8 +92,7 @@ def sqlite_version_override(monkeypatch):
     import os
     import sqlite3
 
-    ver = os.environ.get("SQLITE_VERSION")
-    if ver:
+    if ver := os.environ.get("SQLITE_VERSION"):
         monkeypatch.setattr(sqlite3, "sqlite_version", ver)
     yield
 

@@ -1,3 +1,4 @@
+import contextlib
 import sqlite3
 from datetime import datetime
 
@@ -204,12 +205,8 @@ def test_compute_returns_empty_and_single_price(sample_db):
     # Empty ticker: should not raise and produce zero rows
     retorno.compute_returns("EMPTY_TICKER", conn=sample_db)
     # If `returns` table was never created (no prices), treat as zero rows.
-    try:
+    with contextlib.suppress(sqlite3.OperationalError):
         assert _count_returns(sample_db, "EMPTY_TICKER") == 0
-    except sqlite3.OperationalError:
-        # Table missing -> zero rows
-        assert True
-
     # Single price row: insert one price and expect zero returns
     cur = sample_db.cursor()
     # Build INSERT dynamically based on actual `prices` table columns to remain
@@ -218,12 +215,12 @@ def test_compute_returns_empty_and_single_price(sample_db):
     vals = ["SINGLE", "2023-01-01", 100.0, 100.0, 100.0, 100.0, 100, "fixture"]
     cur.execute("PRAGMA table_info(prices)")
     existing_cols = [r[1] for r in cur.fetchall()]
-    if "fetched_at" in existing_cols:
-        cols.append("fetched_at")
-        vals.append("2023-01-01T00:00:00")
-    if "raw_checksum" in existing_cols:
-        cols.append("raw_checksum")
-        vals.append("0" * 64)
+    # Add optional columns present in the DB schema in table-order
+    defaults = {"fetched_at": "2023-01-01T00:00:00", "raw_checksum": "0" * 64}
+    present = [(c, defaults[c]) for c in existing_cols if c in defaults]
+    for c, v in present:
+        cols.append(c)
+        vals.append(v)
 
     placeholders = ",".join(["?" for _ in cols])
     sql = f"INSERT INTO prices ({','.join(cols)}) VALUES ({placeholders})"
@@ -231,8 +228,5 @@ def test_compute_returns_empty_and_single_price(sample_db):
     sample_db.commit()
 
     retorno.compute_returns("SINGLE", conn=sample_db)
-    try:
+    with contextlib.suppress(sqlite3.OperationalError):
         assert _count_returns(sample_db, "SINGLE") == 0
-    except sqlite3.OperationalError:
-        # Table missing -> zero rows
-        assert True

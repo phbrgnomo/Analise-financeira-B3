@@ -1,4 +1,5 @@
 import os
+import sqlite3
 
 import pandas as pd
 
@@ -14,9 +15,7 @@ def test_compute_returns_e2e_using_snapshot(tmp_path):
     csv_path = os.path.join(curdir, "..", "..", "snapshots", "PETR4_snapshot.csv")
     df = pd.read_csv(csv_path, parse_dates=["date"])
 
-    # Build a minimal prices DB using fixture_utils helper
-    from tests.fixture_utils import create_prices_db_from_rows
-
+    # Build a minimal prices DB in-memory without importing test helpers
     rows = [
         (
             "PETR4.SA",
@@ -31,7 +30,29 @@ def test_compute_returns_e2e_using_snapshot(tmp_path):
         for _, r in df.iterrows()
     ]
 
-    conn = create_prices_db_from_rows(rows)
+    # create in-memory DB and insert rows
+    conn = sqlite3.connect(":memory:")
+    cur = conn.cursor()
+    cur.execute(
+        """
+        CREATE TABLE prices (
+            ticker TEXT,
+            date TEXT,
+            open REAL,
+            high REAL,
+            low REAL,
+            close REAL,
+            volume INTEGER,
+            source TEXT
+        )
+        """
+    )
+    insert_sql = (
+        "INSERT INTO prices (ticker,date,open,high,low,close,volume,source)"
+        " VALUES (?,?,?,?,?,?,?,?)"
+    )
+    cur.executemany(insert_sql, rows)
+    conn.commit()
     try:
         compute_returns("PETR4.SA", conn=conn)
         cur = conn.cursor()
