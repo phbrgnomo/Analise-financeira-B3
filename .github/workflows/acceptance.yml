@@ -56,7 +56,8 @@ jobs:
       - name: Initialize DB
         run: |
           # Fail the job if DB initialization fails so schema problems are visible
-          python scripts/init_ingest_db.py --db dados/data.db
+          # run inside poetry-managed virtualenv so project deps (pandas, etc.)
+          poetry run python scripts/init_ingest_db.py --db dados/data.db
 
       - name: Print sqlite3 version
         run: |
