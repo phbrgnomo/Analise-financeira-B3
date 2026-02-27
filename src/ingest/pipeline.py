@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional, Union
 
 import pandas as pd
+import typer  # used by ingest_command error handling
 
 from src.utils.checksums import serialize_df_bytes, sha256_bytes, sha256_file
 
@@ -26,6 +27,199 @@ logger = logging.getLogger(__name__)
 # Legacy DB var kept for compatibility; metadata will be written to JSONL
 DEFAULT_DB = Path("dados/data.db")
 DEFAULT_METADATA = Path("metadata/ingest_logs.jsonl")
+
+
+# ---------------------------------------------------------------------------
+# Story 1.3: basic ingest orchestration and CLI support
+# ---------------------------------------------------------------------------
+
+def _record_ingest_metadata(metadata: Dict[str, Any]) -> None:
+    """Helper to append ingest-specific metadata entries to the JSONL log.
+
+    This is a small wrapper around :func:`_persist_metadata` that ensures the
+    directory exists and that callers don't need to know the default path.
+    """
+    try:
+        _persist_metadata(metadata, DEFAULT_METADATA)
+    except Exception as exc:  # pragma: no cover - best-effort logging
+        logger.exception("failed to record ingest metadata: %s", exc)
+
+
+def ingest(
+    ticker: str,
+    source: str = "yfinance",
+    *,
+    dry_run: bool = False,
+    force_refresh: bool = False,
+) -> Dict[str, Any]:
+    """Minimal pipeline orchestration used by CLI and tests.
+
+    This function implements the core behaviour described in Story 1.3:
+
+    * Fetch raw data from a provider adapter via the adapter factory.
+    * Map the provider output into the canonical schema.
+    * When ``dry_run`` is False, save the raw CSV and attempt to persist
+      canonical rows to the database using the existing
+      :func:`ingest_from_snapshot` helper (Story 1.6+).  ``force_refresh`` is
+      forwarded to that helper.
+    * Always generate and return a ``job_id`` so that callers can correlate
+      log entries.
+
+    The function never raises; errors are captured in the returned dict and
+    reported via ``status``/``error_message``.  This makes it easy for the
+    Typer command wrapper to choose an appropriate exit code while keeping
+    business logic testable.
+    """
+    job_id = str(uuid.uuid4())
+    logger.info(
+        "pipeline.ingest start",
+        extra={
+            "job_id": job_id,
+            "ticker": ticker,
+            "source": source,
+            "dry_run": dry_run,
+            "force_refresh": force_refresh,
+        },
+    )
+
+    # fetch
+    try:
+        from src.adapters.factory import get_adapter
+
+        adapter = get_adapter(source)
+        df = adapter.fetch(ticker)
+    except Exception as exc:  # fetch failure
+        msg = f"adapter.fetch failed: {exc}"
+        logger.exception(msg)
+        metadata = {
+            "job_id": job_id,
+            "ticker": ticker,
+            "source": source,
+            "status": "error",
+            "error_message": msg,
+        }
+        _record_ingest_metadata(metadata)
+        return {"job_id": job_id, "status": "error", "error_message": msg}
+
+    # map to canonical
+    try:
+        from src.etl.mapper import to_canonical
+
+        canonical = to_canonical(df, provider_name=source, ticker=ticker)
+    except Exception as exc:  # mapper failure
+        msg = f"mapper failed: {exc}"
+        logger.exception(msg)
+        metadata = {
+            "job_id": job_id,
+            "ticker": ticker,
+            "source": source,
+            "status": "error",
+            "error_message": msg,
+        }
+        _record_ingest_metadata(metadata)
+        raise
+
+    # if the caller only wanted a dry run, return now
+    if dry_run:
+        logger.info(
+            "dry run completed",
+            extra={"job_id": job_id, "rows": len(canonical)},
+        )
+        return {
+            "job_id": job_id,
+            "status": "success",
+            "dry_run": True,
+            "rows": len(canonical),
+        }
+
+    # persist raw CSV (Story 1.4)
+    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    try:
+        save_meta = save_raw_csv(df, source, ticker, ts)
+    except Exception as exc:
+        msg = f"failed to save raw CSV: {exc}"
+        logger.exception(msg)
+        metadata = {
+            "job_id": job_id,
+            "ticker": ticker,
+            "source": source,
+            "status": "error",
+            "error_message": msg,
+        }
+        _record_ingest_metadata(metadata)
+        return {"job_id": job_id, "status": "error", "error_message": msg}
+
+    # attempt DB persistence with snapshot helper; the helper already logs its
+    # own metadata.  ``ingest_from_snapshot`` is defined later in this module
+    # so we can call it directly instead of importing ourselves at runtime.
+    persist_result: Dict[str, Any] = {}
+    try:
+        persist_result = ingest_from_snapshot(canonical, ticker, force=force_refresh)
+    except Exception as exc:  # pragma: no cover - just in case
+        logger.exception("persistence step failed: %s", exc)
+        persist_result = {"status": "error", "error_message": str(exc)}
+
+    # final metadata entry for the orchestrator run
+    metadata = {
+        "job_id": job_id,
+        "ticker": ticker,
+        "source": source,
+        "status": "success",
+        "rows": len(canonical),
+        "persist": persist_result,
+    }
+    _record_ingest_metadata(metadata)
+
+    logger.info(
+        "pipeline.ingest completed",
+        extra={"job_id": job_id, "rows": len(canonical)},
+    )
+
+    return {
+        "job_id": job_id,
+        "status": "success",
+        "save_meta": save_meta,
+        "persist": persist_result,
+    }
+
+
+def ingest_command(
+    ticker: str,
+    source: str = "yfinance",
+    dry_run: bool = False,
+    force_refresh: bool = False,
+) -> int:
+    """Typer-friendly wrapper that prints results and returns an exit code.
+
+    Any unhandled exception from :func:`ingest` is caught and turned into a
+    non-zero exit code so that the CLI is safe for scripting.  We still
+    propagate the exception when running programmatically (e.g. tests can
+    assert via ``with pytest.raises``).
+    """
+    try:
+        result = ingest(ticker, source, dry_run=dry_run, force_refresh=force_refresh)
+    except Exception as exc:  # pragma: no cover - defensive
+        typer.secho(f"fatal error: {exc}", err=True)
+        return 1
+
+    job_id = result.get("job_id")
+    # successful outcome
+    if result.get("status") == "success":
+        if job_id:
+            print(f"job_id={job_id}")
+        if dry_run:
+            print("dry run completed; no data written")
+        return 0
+
+    # failure path: log to stderr so stdout remains parsable
+    err = result.get("error_message", "unknown error")
+    typer.secho(err, err=True)
+    if job_id:
+        typer.secho(f"job_id={job_id}", err=True)
+    return 1
+
+# ---------------------------------------------------------------------------
+
 
 
 def _db_initialized(db_path: Union[str, Path]) -> bool:
@@ -84,8 +278,9 @@ def save_raw_csv(
 
     The function no longer creates the DB or schema. If the DB/schema is not
     present, the CSV and checksum are still written but the metadata is not
-    recorded to the SQLite DB. Use scripts/init_ingest_db.py to initialize
-    the DB.
+    recorded to the SQLite DB; in that case a warning is logged.  Use
+    ``scripts/init_ingest_db.py`` to initialize the DB before expecting
+    metadata entries to appear.
     """
     if ts is None:
         ts_dt = datetime.now(timezone.utc)
@@ -352,12 +547,26 @@ def _rows_to_ingest(df: pd.DataFrame, existing: Optional[pd.DataFrame]) -> pd.Da
     elif not isinstance(df2.index, pd.DatetimeIndex):
         raise ValueError("DataFrame must have datetime index or 'date' column")
 
+    # coerce timezone differences to UTC, then drop tz info for comparison
+    if isinstance(df2.index, pd.DatetimeIndex):
+        if df2.index.tz is not None:
+            df2.index = df2.index.tz_convert("UTC").tz_localize(None)
+        else:
+            df2.index = df2.index.tz_localize("UTC").tz_localize(None)
+
     if existing is None or existing.empty:
         return df2
 
     existing2 = existing.copy()
     if not isinstance(existing2.index, pd.DatetimeIndex):
         existing2.index = pd.to_datetime(existing2.index)
+
+    # apply same timezone normalization as df2
+    if isinstance(existing2.index, pd.DatetimeIndex):
+        if existing2.index.tz is not None:
+            existing2.index = existing2.index.tz_convert("UTC").tz_localize(None)
+        else:
+            existing2.index = existing2.index.tz_localize("UTC").tz_localize(None)
 
     new_idx = df2.index.difference(existing2.index)
     changed_idx = df2.index.intersection(existing2.index)

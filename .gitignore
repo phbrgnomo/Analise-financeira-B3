@@ -79,8 +79,7 @@ dados/snapshot_cache.json
 snapshots/
 
 # Local ingest logs (runtime, append-only)
-.metadata/
-metadata/ingest_logs.jsonl
+metadata/
 
 
 .sentry-native/
