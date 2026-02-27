@@ -145,14 +145,29 @@ def _fetch_and_prepare_asset(
                 return
             print(f"Validation step failed for {a}: {e}")
 
-    # Persist canonical rows to the DB (idempotent upsert). This is a best-effort
-    # operation: the DB may not be initialized in some environments, but when
-    # available we should persist canonical rows for downstream queries.
+    # Persist canonical rows to the DB (use new snapshot cache + incremental
+    # ingestion logic from story 1-10). The helper itself is idempotent and
+    # will create snapshots/checksums, log metadata and only upsert changed
+    # rows. We fall back to a simple write if anything goes wrong.
     try:
-        _db.write_prices(canonical, f"{a}.SA")
-        print(f"Persisted canonical rows for {a} into DB")
+        from src.ingest.pipeline import ingest_from_snapshot
+
+        resp = ingest_from_snapshot(canonical, f"{a}.SA")
+        if resp.get("cached"):
+            print(f"Cache hit for {a} – no new rows processed.")
+        else:
+            processed = resp.get("rows_processed", 0)
+            print(
+                f"Persisted {processed} rows for {a} into DB (snapshot={resp.get('snapshot_path')})"
+            )
     except Exception as e:
-        print(f"Warning: failed to persist canonical rows for {a}: {e}")
+        # fallback for environments where the new helper may fail (e.g., missing
+        # DB).  Keep the original direct write as a last resort.
+        try:
+            _db.write_prices(canonical, f"{a}.SA")
+            print(f"Persisted canonical rows for {a} into DB (fallback)")
+        except Exception:
+            print(f"Warning: failed to persist canonical rows for {a}: {e}")
 
     # Calcula o retorno (usa coluna ajustada quando disponível, senão `close`)
     # Preferir o DataFrame `canonical` (já mapeado/validado) quando disponível.
@@ -257,6 +272,43 @@ def compute_returns_cmd(
         print(df.head())
     else:
         print("Retornos persistidos no banco de dados")
+
+
+@app.command("ingest-snapshot")
+def ingest_snapshot_cmd(
+    snapshot_path: str,
+    ticker: Optional[str] = typer.Option(
+        None, help="Ticker associado ao snapshot (se não estiver no CSV)"
+    ),
+    force_refresh: bool = typer.Option(
+        False, "--force-refresh", help="Ignora cache e processa novamente"
+    ),
+    ttl: Optional[int] = typer.Option(
+        None, help="TTL do cache em segundos (usa SNAPSHOT_TTL se omitido)"
+    ),
+    cache_file: Optional[str] = typer.Option(
+        None, help="Arquivo JSON usado para armazenar o cache"
+    ),
+):
+    """Ingesta um snapshot CSV com cache e ingestão incremental.
+
+    A função delega para `src.ingest_cli.ingest_snapshot` e imprime o resultado.
+    """
+    from src import ingest_cli
+
+    try:
+        result = ingest_cli.ingest_snapshot(
+            snapshot_path,
+            ticker,
+            force_refresh=force_refresh,
+            ttl=ttl,
+            cache_file=cache_file,
+        )
+    except Exception as e:
+        print(f"Falha ao ingerir snapshot: {e}")
+        raise
+
+    print(result)
 
 
 @app.command()
