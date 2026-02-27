@@ -326,10 +326,8 @@ def init_db(db_path: Optional[str] = None, allow_external: bool = False) -> None
             conn.close()
             raise
         # Log successful initialization (best-effort; do not fail init on logging)
-        try:
+        with contextlib.suppress(Exception):
             logger.info("database_initialized", extra={"db_path": db_path})
-        except Exception:
-            pass
     finally:
         conn.close()
 

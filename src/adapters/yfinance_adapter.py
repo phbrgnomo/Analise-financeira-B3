@@ -165,6 +165,17 @@ class YFinanceAdapter(Adapter):
             **kwargs,
         )
 
+        # Some providers (notably yfinance) return MultiIndex columns when
+        # a ticker argument is provided; e.g. ``('Close','PETR4.SA')``.  We
+        # prefer a flat, predictable column set for downstream consumers, so
+        # collapse any MultiIndex by taking the first level (price name) and
+        # casting to str to avoid tuple-typed column names.
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = [
+                str(c[0]) if isinstance(c, tuple) else str(c)
+                for c in df.columns
+            ]
+
         # Adicionar metadados
         df.attrs["source"] = "yahoo"
         df.attrs["ticker"] = normalized_ticker

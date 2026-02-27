@@ -99,7 +99,7 @@ completedAt: 2026-02-16
 
 ### Developer Next Steps (sugestão imediata)
 
-- Criar esqueleto de adaptador em `src/dados_b3.py` com interface `Adapter.fetch(ticker) -> pd.DataFrame(raw)` e `Adapter.normalize(df) -> pd.DataFrame(canonical)`.
+- Criar esqueleto de adaptador em `src/adapters/` e expor via fábrica (`src.adapters.factory`). O antigo `src/dados_b3.py` servirá apenas como fachada legada.
 - Implementar `src/db.py` com `write_prices(df, ticker)` garantindo upsert por `(ticker, date)`.
 - Adicionar testes: `tests/test_ingest.py` (mock adapters) e `tests/test_db_upsert.py` (fixture SQLite temporário) para validar idempotência e integridade dos snapshots.
 - Adicionar `docs/planning-artifacts/adapter-mappings.md` com exemplos de mapeamento por provedor.
@@ -138,7 +138,8 @@ mkdir -p src tests notebooks docs dados snapshots
 
 ### Party Mode Action Items (para implementação imediata)
 
-- Implementar `src/dados_b3.py` com interface `Adapter.fetch(ticker) -> pd.DataFrame(raw)` e `Adapter.normalize(df) -> pd.DataFrame(canonical)`.
+- Implementar adaptadores em `src/adapters/` (herdando de `Adapter`) e registrar na fábrica;
+  `src/dados_b3.py` pode simplesmente delegar à fábrica.
 - Implementar `src/db.py` com `write_prices(df, ticker)` garantindo upsert por `(ticker, date)`.
 - Criar testes iniciais: `tests/test_ingest.py` (mock adapters) e `tests/test_db_upsert.py` (fixture SQLite temporário).
 -- Incluir `pre-commit` com hooks para `ruff` (black optional).

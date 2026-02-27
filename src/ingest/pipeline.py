@@ -257,3 +257,333 @@ def _apply_posix_permissions(paths: list[Union[str, Path]]) -> None:
                 os.chmod(str(p), 0o600)
     except Exception:
         logger.exception("Falha ao aplicar permissões aos arquivos")
+
+
+# ---------------------------------------------------------------------------
+# Snapshot caching / incremental ingestion helpers (Story 1.10)
+# ---------------------------------------------------------------------------
+
+def _env_bool(name: str) -> bool:
+    """Interpret an environment variable as a boolean flag.
+
+    The implementation is deliberately strict: only a small set of values
+    are recognised as ``True`` or ``False``.  This prevents typos or
+    unexpected strings (``off``, ``flase``) from silently flipping the
+    flag.  Unknown values raise :class:`ValueError` so that misconfiguration
+    fails fast.
+
+    Recognised truthy values (case-insensitive): ``1``, ``true``, ``yes``.
+    Recognised falsy values: ``0``, ``false``, ``no``, ``off`` or the empty
+    string.  If the variable is not defined in the environment the result is
+    ``False``.
+    """
+    val = os.environ.get(name)
+    if val is None:
+        return False
+
+    norm = val.strip().lower()
+    true_set = {"1", "true", "yes"}
+    false_set = {"0", "false", "no", "off", ""}
+
+    if norm in true_set:
+        return True
+    if norm in false_set:
+        return False
+
+    # unknown input; caller probably mis‑typed the variable name/value
+    raise ValueError(f"unexpected boolean env var {name}={val!r}")
+
+
+def get_snapshot_dir() -> Path:
+    """Return the configured snapshot directory.
+
+    Defaults to ``SNAPSHOT_DIR`` environment variable or ``dados/snapshots``
+    when the variable is not defined. The path is *not* created by this
+    helper.
+    """
+    if dir_str := os.environ.get("SNAPSHOT_DIR"):
+        return Path(dir_str)
+    from src.paths import DATA_DIR
+
+    return DATA_DIR / "snapshots"
+
+
+def get_snapshot_ttl() -> float:
+    """Return snapshot TTL in seconds read from ``SNAPSHOT_TTL``.
+
+    The environment variable may contain a floating-point value to allow
+    sub-second expiration during tests.  Invalid or missing values are treated
+    as ``0`` meaning "no expiry" (the cache will be considered fresh
+    indefinitely).
+    """
+    try:
+        return float(os.environ.get("SNAPSHOT_TTL", "0"))
+    except ValueError:
+        return 0.0
+
+
+def force_refresh_flag() -> bool:
+    """Return ``True`` if ``FORCE_REFRESH`` environment variable is truthy.
+
+    Parsing is strict: only ``1``, ``true`` or ``yes`` (case-insensitive) are
+    accepted as true; ``0``, ``false``, ``no`` and ``off`` are false.  Any other
+    value will raise :class:`ValueError` so misconfigured environments fail fast.
+    """
+    return _env_bool("FORCE_REFRESH")
+
+
+
+
+def _rows_to_ingest(df: pd.DataFrame, existing: Optional[pd.DataFrame]) -> pd.DataFrame:
+    """Return the subset of ``df`` that should be written to the database.
+
+    The input frame may have a ``date`` column or a ``DatetimeIndex``; the
+    returned frame is indexed by ``date`` without resetting.  ``existing``
+    represents the canonical data already present for the ticker and may be
+    ``None`` or empty.  This helper encapsulates the incremental diff logic
+    used both by :func:`ingest_from_snapshot` and the CLI path.
+    """
+
+    # normalize caller frame into a datetime index
+    df2 = df.copy()
+    if "date" in df2.columns:
+        df2["date"] = pd.to_datetime(df2["date"])
+        df2 = df2.set_index("date")
+    elif not isinstance(df2.index, pd.DatetimeIndex):
+        raise ValueError("DataFrame must have datetime index or 'date' column")
+
+    if existing is None or existing.empty:
+        return df2
+
+    existing2 = existing.copy()
+    if not isinstance(existing2.index, pd.DatetimeIndex):
+        existing2.index = pd.to_datetime(existing2.index)
+
+    new_idx = df2.index.difference(existing2.index)
+    changed_idx = df2.index.intersection(existing2.index)
+
+    ignore_cols = {"raw_checksum", "fetched_at"}
+    common = (
+        df2.columns.intersection(existing2.columns).difference(list(ignore_cols))
+    )
+    if not common.empty:
+        df_sub = df2.loc[changed_idx, common]
+        ex_sub = existing2.loc[changed_idx, common]
+        df_sub, ex_sub = df_sub.align(ex_sub, join="inner", axis=0)
+        mask_changed = (df_sub != ex_sub).any(axis=1)
+    else:
+        mask_changed = pd.Series(False, index=changed_idx)
+
+    changed = pd.DataFrame() if common.empty else df2.loc[df_sub.index[mask_changed]]
+    return pd.concat([df2.loc[new_idx], changed])
+
+
+def ingest_from_snapshot(  # noqa: C901
+    df: pd.DataFrame,
+    ticker: str,
+    *,
+    snapshot_dir: Optional[Union[str, Path]] = None,
+    ttl: Optional[float] = None,
+    force: Optional[bool] = None,
+    db_path: Optional[Union[str, Path]] = None,
+) -> Dict[str, Any]:
+    """Run cache+incremental ingestion pipeline on a DataFrame.
+
+    The function implements the red/green requirements of story **1-10**:
+    * write a versioned snapshot to disk with accompanying SHA256 checksum and
+      metadata
+    * avoid reprocessing when the checksum is unchanged and the cache has not
+      expired (``ttl``)
+    * when processing is required, ingest *only* new or changed rows into the
+      canonical ``prices`` table using the existing ``db.write_prices`` helper
+      (idempotent upsert semantics)
+
+    Parameters
+    ----------
+    df: pandas.DataFrame
+        Source data for the snapshot. May have a ``date`` column or a
+        ``DatetimeIndex``; the downstream logic requires a datetime index to
+        compute diffs.
+    ticker: str
+        Identifier used in filenames, metadata, and to query the database.
+    snapshot_dir:
+        Optional override for the snapshot directory. When ``None`` the value
+        from :func:`get_snapshot_dir` is used and the directory is created if
+        necessary.
+    ttl:
+        Cache time‑to‑live in seconds. ``None`` means read ``SNAPSHOT_TTL``
+        env var; a non‑positive value bypasses expiration checking.
+    force:
+        When ``True`` skip cache and always re‑write and ingest. ``None`` reads
+        ``FORCE_REFRESH`` environment variable.
+    db_path:
+        Optional path for the SQLite database. Passed through to the various
+        ``db`` helpers so that tests may use a temporary database location.
+
+    Returns
+    -------
+    dict
+        A summary containing at least ``cached`` (bool) and ``rows_processed``
+        (int). When a new snapshot is written additional keys ``snapshot_path``
+        and ``checksum`` are provided.
+    """
+
+    # resolve parameters
+    # normalize parameters ------------------------------------------------
+    # ``snapshot_dir`` is converted to Path later; ``db_path`` may be a
+    # pathlib.Path in tests or user code and the internal :mod:`src.db`
+    # helpers expect a string (or None), so cast it here to keep type checkers
+    # happy and avoid repeated conversions.
+    if db_path is not None:
+        db_path = str(db_path)
+
+    if snapshot_dir is None:
+        snapshot_dir = get_snapshot_dir()
+    snapshot_dir = Path(snapshot_dir)
+    snapshot_dir.mkdir(parents=True, exist_ok=True)
+
+    if ttl is None:
+        ttl = get_snapshot_ttl()
+    if force is None:
+        force = force_refresh_flag()
+
+    # compute checksum of dataframe bytes using same serialization options
+    # employed by :func:`src.etl.snapshot.write_snapshot`.  This ensures the
+    # value stored in metadata (sha returned by write_snapshot) matches the
+    # one used during cache lookup.
+    data_bytes = serialize_df_bytes(
+        df,
+        index=False,
+        date_format="%Y-%m-%d",
+        float_format="%.10g",
+        na_rep="",
+    )
+    checksum = sha256_bytes(data_bytes)
+
+    # attempt to load last metadata entry for ticker from snapshots table
+    import src.db as _db
+
+    # incremental diff helper moved to module scope; continue body below
+
+    last_meta = None
+    conn: Optional[sqlite3.Connection] = None
+    try:
+        conn = _db._connect(db_path)
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT payload FROM snapshots WHERE ticker = ? "
+            "ORDER BY created_at DESC LIMIT 1",
+            (ticker,),
+        )
+        if row := cur.fetchone():
+            try:
+                last_meta = json.loads(row[0])
+            except json.JSONDecodeError as exc:
+                # corrupted payload should not abort the whole run but it is
+                # worth surfacing for later investigation.
+                logger.warning(
+                    "invalid snapshot metadata JSON for %s: %s",
+                    ticker,
+                    exc,
+                )
+                last_meta = None
+    except (OSError, sqlite3.DatabaseError) as exc:
+        # treat database or I/O failures as cache misses; keep ingestion
+        # resilient but surface potential ongoing operational issues.
+        # logged at warning level so that persistent failures in the
+        # ``snapshots`` cache are visible in production monitoring.  Also
+        # increment a telemetry counter when available.
+        logger.warning(
+            "snapshot metadata cache fallback in use; failed to read snapshot "
+            "metadata for %s: %s",
+            ticker,
+            exc,
+        )
+        try:
+            from src import metrics
+
+            metrics.increment_counter("snapshot_metadata_cache_fallback")
+        except Exception:  # pragma: no cover - metrics optional
+            logger.debug("metrics increment failed", exc_info=True)
+        last_meta = None
+    finally:
+        if "conn" in locals() and conn:
+            conn.close()
+
+    cache_hit = False
+    if last_meta and not force:
+        last_sha = last_meta.get("sha256")
+        if last_sha == checksum:
+            if ttl <= 0:
+                cache_hit = True
+            else:
+                last_ts_str = last_meta.get("generated_at")
+                if not last_ts_str:
+                    logger.debug(
+                        "snapshot metadata for %s missing 'generated_at';"
+                        " treating as cache miss",
+                        ticker,
+                    )
+                else:
+                    try:
+                        last_ts = datetime.fromisoformat(
+                            last_ts_str.replace("Z", "+00:00")
+                        )
+                        age = (datetime.now(timezone.utc) - last_ts).total_seconds()
+                        if age < ttl:
+                            cache_hit = True
+                    except Exception:
+                        logger.warning(
+                            "invalid 'generated_at' timestamp in snapshot metadata"
+                            " for %s: %r; treating as cache miss",
+                            ticker,
+                            last_ts_str,
+                        )
+    if cache_hit:
+        logger.info("snapshot cache hit for %s (ttl=%s)", ticker, ttl)
+        return {"cached": True, "rows_processed": 0}
+
+    # write fresh snapshot and record metadata
+    now = datetime.now(timezone.utc)
+    ts = now.strftime("%Y%m%dT%H%M%SZ")
+    safe_ticker = ticker.replace(".", "_")
+    filename = f"{safe_ticker}-{ts}.csv"
+    out_path = snapshot_dir / filename
+
+    from src.etl.snapshot import write_snapshot
+
+    sha = write_snapshot(df, out_path)
+    metadata = {
+        "snapshot_id": filename,
+        "ticker": ticker,
+        "generated_at": now.isoformat().replace("+00:00", "Z"),
+        "rows_count": len(df),
+        "sha256": sha,
+    }
+    try:
+        _db.record_snapshot_metadata(metadata, db_path=db_path)
+    except Exception as e:
+        logger.warning("failed to record snapshot metadata: %s", e)
+
+    # incremental ingestion: compute diff against existing canonical data
+    try:
+        existing = _db.read_prices(ticker, db_path=db_path)
+    except Exception:
+        existing = None
+
+    # delegate diff logic to shared helper so ingest_cli can reuse it
+    rows_to_ingest = _rows_to_ingest(df, existing)
+    rows_processed = len(rows_to_ingest)
+    if rows_processed > 0:
+        _db.write_prices(rows_to_ingest.reset_index(), ticker, db_path=db_path)
+
+    logger.info(
+        "ingest_from_snapshot complete for %s: rows_processed=%d, cached=%s",
+        ticker,
+        rows_processed,
+        False,
+    )
+    result = {"cached": False, "rows_processed": rows_processed}
+    result["snapshot_path"] = str(out_path)
+    result["checksum"] = sha
+    return result

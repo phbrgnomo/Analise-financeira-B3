@@ -54,7 +54,8 @@ jobs:
 
       - name: Ruff check
         run: |
-          poetry run ruff check . --show-files
+          # Limit ruff to python sources; exclude markdown to avoid false positives
+          poetry run ruff check . --show-files --exclude "*.md"
 
   test:
     runs-on: ubuntu-latest

@@ -6,7 +6,7 @@ last_updated: '2026-02-22'
 sections_completed: ['technology_stack','language_rules','framework_rules','testing','code_quality','workflow_rules','critical_rules']
 existing_patterns_found: 7
 status: 'complete'
-rule_count: 28
+rule_count: 29
 optimized_for_llm: true
 ---
 
@@ -43,6 +43,7 @@ Nota: documente e justifique qualquer mudança de versão em `pyproject.toml`; c
 - Cada ativo tem CSV em `dados/`; a coluna `Return` é obrigatória para consumidores.
 - Nunca alterar esquema de CSV/snapshots sem atualizar leitores e testes associados.
 - Snapshots em `snapshots/` exigem checksum SHA256 (`<file>.checksum`); CI deve validar.
+- Scripts utilitários vivem em `scripts/` e servem como helpers de linha de comando (ex.: `validate_snapshots.py`, `init_ingest_db.py`). Leia o cabeçalho antes de alterar ou reutilizar.
 
 ### Testing
 

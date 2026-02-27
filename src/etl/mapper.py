@@ -75,11 +75,16 @@ def load_canonical_schema_from_json(path_or_dict: Union[Path, dict]) -> DataFram
     cols = {c["name"]: _col_from_json(c) for c in data.get("columns", [])}
     df_checks = []
     if "high" in cols and "low" in cols:
-        # ensure that when present, high > low (ignore NaNs)
+        # ensure that when present, high > low (ignore NaNs).
+        # yfinance occasionally returns 0 for both high and low on non-trading
+        # days; treat those rows as benign rather than failing validation.
         df_checks.append(
             Check(
                 lambda df: (
-                    df["high"].isna() | df["low"].isna() | (df["high"] > df["low"])
+                    df["high"].isna()
+                    | df["low"].isna()
+                    | (df["high"] > df["low"])
+                    | ((df["high"] == 0) & (df["low"] == 0))
                 ).all(),
                 element_wise=False,
             )

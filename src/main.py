@@ -16,12 +16,16 @@ app = typer.Typer()
 d_atual = date.today()
 
 
-def _fetch_and_prepare_asset(
+def _fetch_and_prepare_asset(  # noqa: C901
     a: str,
     d_in: str,
     d_fim: str,
     validation_tolerance: Optional[float],
-) -> None:
+    provider: str = "yfinance",
+) -> None:  # noqa: C901
+    # predefine variables so linters know they exist
+    canonical = None
+    save_meta = {}
     """Fetch, persist raw data, map to canonical schema and optionally validate.
 
     Parameters
@@ -38,7 +42,8 @@ def _fetch_and_prepare_asset(
 
         Side effects
         ------------
-        - Faz download dos dados do provedor (via `src.dados_b3.cotacao_ativo_dia`).
+        - Faz download dos dados do provedor usando o adaptador selecionado
+          pela fábrica (`src.adapters.factory.get_adapter`).
         - Persiste CSV bruto via `save_raw_csv` em `raw/<provider>/...`.
         - Mapeia os dados para o esquema canônico com `to_canonical`.
         - Se o módulo de validação estiver disponível, executa validação
@@ -69,19 +74,25 @@ def _fetch_and_prepare_asset(
     from datetime import datetime
     from datetime import timezone as _tz
 
-    import src.dados_b3 as dados
+    # use the factory to obtain an adapter for the requested provider
+    from src.adapters.factory import get_adapter
     from src.ingest.pipeline import save_raw_csv
 
     try:
-        df = dados.cotacao_ativo_dia(a, d_in, d_fim)
+        adapter = get_adapter(provider)
+        df = adapter.fetch(f"{a}.SA", start_date=d_in, end_date=d_fim)
     except Exception as e:
         print(f"Problemas baixando dados: {e}")
         return
 
     ts_raw = datetime.now(_tz.utc).strftime("%Y%m%dT%H%M%SZ")
-    save_meta = save_raw_csv(df, "yfinance", f"{a}.SA", ts_raw)
+    save_meta = save_raw_csv(
+        df, provider, f"{a}.SA", ts_raw
+    )
     if save_meta.get("status") != "success":
-        print(f"Falha ao salvar raw para {a}: {save_meta.get('error_message')}")
+        print(
+            f"Falha ao salvar raw para {a}: {save_meta.get('error_message')}"
+        )
         return
 
     # Mapping: keep failures local and return early if mapper fails
@@ -90,7 +101,7 @@ def _fetch_and_prepare_asset(
 
         canonical = to_canonical(
             df,
-            provider_name="yfinance",
+            provider_name=provider,
             ticker=f"{a}.SA",
             raw_checksum=save_meta.get("raw_checksum"),
             fetched_at=save_meta.get("fetched_at"),
@@ -113,7 +124,7 @@ def _fetch_and_prepare_asset(
         try:
             _valid_df, _invalid_df, summary, _details = validate_and_handle(
                 canonical,
-                provider="yfinance",
+                provider=provider,
                 ticker=f"{a}.SA",
                 raw_file=save_meta.get("filepath") or "",
                 ts=save_meta.get("fetched_at") or "",
@@ -145,14 +156,41 @@ def _fetch_and_prepare_asset(
                 return
             print(f"Validation step failed for {a}: {e}")
 
-    # Persist canonical rows to the DB (idempotent upsert). This is a best-effort
-    # operation: the DB may not be initialized in some environments, but when
-    # available we should persist canonical rows for downstream queries.
+    # Persist canonical rows to the DB (use new snapshot cache + incremental
+    # ingestion logic from story 1-10). The helper itself is idempotent and
+    # will create snapshots/checksums, log metadata and only upsert changed
+    # rows. We fall back to a simple write if anything goes wrong.
     try:
-        _db.write_prices(canonical, f"{a}.SA")
-        print(f"Persisted canonical rows for {a} into DB")
+        from src.ingest.pipeline import ingest_from_snapshot
+
+        resp = ingest_from_snapshot(canonical, f"{a}.SA")
+        if resp.get("cached"):
+            print(f"Cache hit for {a} – no new rows processed.")
+        else:
+            processed = resp.get("rows_processed", 0)
+            print(
+                (
+                    "Persisted %d rows for %s into DB (snapshot=%s)"
+                    % (
+                        processed,
+                        a,
+                        resp.get("snapshot_path"),
+                    )
+                )
+            )
     except Exception as e:
-        print(f"Warning: failed to persist canonical rows for {a}: {e}")
+        # fallback for environments where the new helper may fail (e.g., missing
+        # DB).  Keep the original direct write as a last resort.  Capture the
+        # outer exception in ``e`` and any error from the fallback in ``e2`` so
+        # logs remain accurate.
+        try:
+            _db.write_prices(canonical, f"{a}.SA")
+            print(f"Persisted canonical rows for {a} into DB (fallback)")
+        except Exception as e2:
+            print(
+                f"Warning: failed to persist canonical rows for {a}: {e2}"
+                f" (original error: {e})",
+            )
 
     # Calcula o retorno (usa coluna ajustada quando disponível, senão `close`)
     # Preferir o DataFrame `canonical` (já mapeado/validado) quando disponível.
@@ -259,22 +297,61 @@ def compute_returns_cmd(
         print("Retornos persistidos no banco de dados")
 
 
+@app.command("ingest-snapshot")
+def ingest_snapshot_cmd(
+    snapshot_path: str,
+    ticker: Optional[str] = typer.Option(
+        None, help="Ticker associado ao snapshot (se não estiver no CSV)"
+    ),
+    force_refresh: bool = typer.Option(
+        False, "--force-refresh", help="Ignora cache e processa novamente"
+    ),
+    ttl: Optional[int] = typer.Option(
+        None, help="TTL do cache em segundos (usa SNAPSHOT_TTL se omitido)"
+    ),
+    cache_file: Optional[str] = typer.Option(
+        None, help="Arquivo JSON usado para armazenar o cache"
+    ),
+):
+    """Ingesta um snapshot CSV com cache e ingestão incremental.
+
+    A função delega para `src.ingest_cli.ingest_snapshot` e imprime o resultado.
+    """
+    from src import ingest_cli
+
+    try:
+        result = ingest_cli.ingest_snapshot(
+            snapshot_path,
+            ticker,
+            force_refresh=force_refresh,
+            ttl=ttl,
+            cache_file=cache_file,
+        )
+    except Exception as e:
+        print(f"Falha ao ingerir snapshot: {e}")
+        raise
+
+    print(result)
+
+
 @app.command()
-def main(
+def main(  # noqa: C901
     validation_tolerance: Optional[float] = typer.Option(
         None, "--validation-tolerance", help="Tolerância de inválidas (ex: 0.10)"
     ),
-):  # noqa: C901
+    provider: str = typer.Option(
+        "yfinance",
+        "--provider",
+        help="Nome do provider/adaptador a ser usado (ex: yfinance)",
+    ),
+):
     # importações locais para evitar exigir dependências apenas para `--help`
 
     import src.retorno as rt
-
-    # ativos_entrada = input(
-    #     "Lista de Ativos, separados por vírgula (exemplo: PETR4,BBDC3): "
-    # )
-    # ativos = ativos_entrada.split(',')
-    # data_in = input("Data de inicio (MM-DD-AAAA): ")
-    # data_fim = input("Data de fim (MM-DD-AAAA): ")
+    # O módulo `dados_b3` não é necessário aqui; a lógica de fetch
+    # está encapsulada em `_fetch_and_prepare_asset` que já usa a
+    # fábrica de adaptadores. Mantemos esse comentário para
+    # sinalizar a transição.
 
     # Define ativos a serem pesquisados
     ativos = ["PETR4", "ITUB3", "BBDC4"]
@@ -292,7 +369,9 @@ def main(
             print(f"Dados encontrados para {a}")
             continue
         print(f"Baixando e preparando dados de {a}")
-        _fetch_and_prepare_asset(a, d_in, d_fim, validation_tolerance)
+        _fetch_and_prepare_asset(
+            a, d_in, d_fim, validation_tolerance, provider=provider
+        )  # noqa: E501
 
     for a in ativos:
         _compute_and_print_stats(a)

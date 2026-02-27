@@ -2,7 +2,8 @@
 # Project Guidelines
 
 !!MANDATORY!!
-- before starting any implementation, review `project-context.md`.
+- before starting any implementation, review `project-context.md` and this instructions document; it reflects current conventions and must be kept in sync with code changes.
+- when adding new modules or changing major architecture (e.g. adapter factory), update this instructions file accordingly so future agents are aware.
 
 ## Code Style
 - Linting: `ruff` config is in `pyproject.toml` (line-length 88). Run `poetry run ruff check src tests`.
@@ -13,6 +14,7 @@
 - Single-package Python app: core modules live in `src/` (ex.: `src/db.py`, `src/main.py`, `src/validation.py`).
 - Persistence: lightweight SQLite via SQLAlchemy Core; `dados/` holds runtime DB and data snapshots (`snapshots/`, `dados/`).
 - ETL and adapters live under `src/adapters/`, `src/etl/`, and `scripts/` for small helpers.
+- **The adapter factory (`src/adapters/factory.py`) is the canonical entry point**; all data-provider logic should obtain instances via `get_adapter()` or `register_adapter()`. Legacy helper `src/dados_b3.py` is deprecated and only emits warnings.
 - Adapter guidelines and patterns are in `docs/modules/adapter-guidelines.md` (fetch helpers, retry logic, metadata, testing).
 
 ## Playbooks and Instructions
@@ -27,14 +29,16 @@
 - Run tests: `poetry run pytest -q`.
 - Run CLI/app: `poetry run main` (entrypoint configured in `pyproject.toml`).
 
-## Before Committing the changes
-- Run `poetry run pre-commit --all-files` to apply formatting and lint fixes.
+## MANDATORY: Before Committing the changes
+- Run `poetry run pre-commit run --all-files` to apply formatting and lint fixes.
 - Ensure tests pass: `poetry run pytest`.
 
 ## Project Conventions
-- Data files: small example CSVs are kept in `dados/` and `snapshots/` for tests—avoid committing large raw datasets.
-- DB path default: `dados/data.db`. Tests may override engine/db_path.
-- Idempotency: `src/db.py` computes a `raw_checksum` to avoid unnecessary upserts—respect this behavior when writing adapters.
+- Data files: small example CSVs are kept in `dados/` and `snapshots/` for tests—avoid committing large raw datasets. Place additional sample files under `dados/samples` or `snapshots/` and add a corresponding checksum entry in `snapshots/checksums.json` when needed.
+- Do not add new imports or calls to `src.dados_b3`; use the adapter factory instead.
+- DB path default: `dados/data.db`. Tests typically inject a temporary `engine` or override `db_path` via fixtures; follow patterns in `tests/conftest.py`.
+- Idempotency: `src/db.py` computes a `raw_checksum` to avoid unnecessary upserts—respect this behavior when writing adapters or ETL scripts.
+- CLI helpers: many scripts in `scripts/` (e.g. `validate_snapshots.py`, `init_ingest_db.py`) exist for one-off tasks; read their headers when extending.
 
 ## Integration Points
 - External APIs: `yfinance` (see `pyproject.toml`)—mock network calls in unit tests using fixtures in `tests/fixtures`.

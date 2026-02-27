@@ -24,6 +24,11 @@ Algumas configurações podem ser alteradas via variáveis de ambiente. Um
 exemplo está em `.env.example` — copie para `.env` e ajuste conforme
 necessário.
 
+- **SNAPSHOT_TTL**: tempo em segundos que um cache de snapshot é considerado
+  válido. Padrão `86400` (um dia). Use com o comando `ingest-snapshot`.
+- **SNAPSHOT_CACHE_FILE**: caminho para o arquivo JSON onde o cache é
+  armazenado. Valor padrão `dados/snapshot_cache.json`.
+
 - **VALIDATION_INVALID_PERCENT_THRESHOLD**: limite percentual usado pelo
   processo de validação para considerar uma operação como inválida. Valor
   padrão: `0.1` (10%). Deve ser um número decimal entre `0` e `1` (por
@@ -81,14 +86,31 @@ NETWORK_MODE=record poetry run pytest tests/adapters/test_adapters.py::TestYFina
 As instruções completas e o playbook estão em `docs/playbooks/testing-network-fixtures.md`.
 
 ## Uso e convenções
+- Dados são obtidos através da fábrica de adaptadores (`src.adapters.factory`).
+  O adaptador padrão é `yfinance`, mas outros podem ser registrados.
+  `src/dados_b3.py` existe para compatibilidade e não deve ser usado em
+  código novo.
+
+  Exemplo de uso:
+  ```python
+  from src.adapters.factory import get_adapter
+
+  adapter = get_adapter("yfinance")  # ou outro provider registrado
+  df = adapter.fetch("PETR4.SA", start_date="2022-01-01", end_date="2022-12-31")
+  print(df.head())
+  ```
 - Ao coletar ativos da B3 via Yahoo, adicione o sufixo `.SA` (ex.: `PETR4.SA`).
 - Dados persistidos ficam na pasta `dados/` em CSV com coluna `Return` para retornos diários.
 - Cálculos anuais usam 252 dias úteis por convenção do projeto.
+- O pipeline agora suporta ingestão de snapshots via CLI usando `ingest-snapshot`.
+  Esta rotina aplica cache com TTL e faz ingestão incremental no banco, evitando
+  reprocessamento quando o arquivo não mudou. Veja abaixo para detalhes de
+  flags.
 
 ## Estrutura do repositório (resumo)
 - `src/` — código principal
-  - `src/main.py` — entrypoint do CLI
-  - `src/dados_b3.py` — adaptador / ingestão de preços
+  - `src/main.py` — entrypoint do CLI (usa `src.adapters.factory` para selecionar provedores)
+  - `src/dados_b3.py` — *facade* legado; atualmente delega a fábrica de adaptadores
   - `src/retorno.py` — cálculos de retorno/risco
 - `dados/` — CSVs de séries históricas e outputs gerados
 - `snapshots/` — snapshots e checksums para validação

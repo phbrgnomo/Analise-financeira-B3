@@ -44,9 +44,25 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     comando = [sys.executable, str(validate)] + list(argv)
+
+    # sanity-check all components are simple strings; this is defensive and
+    # documents the assumption that user args do not inject shell metachars.
+    # ``subprocess.run`` is invoked with ``shell=False`` and a sequence, which
+    # already prevents shell interpretation, but static analyzers sometimes
+    # flag the pattern unless we emphasise that ``argv`` elements are safe.
+    for part in comando:
+        if not isinstance(part, str):
+            raise TypeError(f"invalid command component: {part!r}")
+        # forbid line breaks which could confuse some wrappers
+        if "\n" in part or "\r" in part:
+            raise ValueError(f"unsafe argument containing newline: {part!r}")
+
     try:
         # Use subprocess.run com lista de argumentos e shell=False para evitar
         # interpretação pelo shell de entrada do usuário (mitiga CWE-78).
+        # The *argv* list comes directly from our own CLI parsing and is never
+        # concatenated into a string, so there is no opportunity for shell
+        # injection.  We also avoid passing user input to `env` or similar.
         retorno_proc = subprocess.run(comando, shell=False)
         return retorno_proc.returncode
     except KeyboardInterrupt:

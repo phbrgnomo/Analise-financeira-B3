@@ -8,6 +8,7 @@ Covers:
 - Validation using pandera schema
 """
 
+
 import hashlib
 
 import pandas as pd
@@ -88,7 +89,7 @@ class TestToCanonical:
 
         assert "missing required columns" in str(exc_info.value).lower()
 
-    def test_raw_checksum_correctness(self):
+    def test_raw_checksum_is_deterministic(self):
         """Given a known DataFrame, raw_checksum should be deterministic."""
         # Arrange
         dates = pd.date_range("2026-01-01", periods=2, freq="D")
@@ -122,6 +123,27 @@ class TestToCanonical:
         csv_bytes = csv_str.encode("utf-8")
         expected_checksum = hashlib.sha256(csv_bytes).hexdigest()
         assert result1.attrs["raw_checksum"] == expected_checksum
+
+    def test_mapper_allows_zero_high_low(self):
+        """Rows where high==low==0 should pass validation (holiday markers)."""
+        import pandas as pd
+        dates = pd.date_range("2026-01-01", periods=2, freq="D")
+        raw_df = pd.DataFrame(
+            {
+                "Open": [100.0, 0.0],
+                "High": [105.0, 0.0],
+                "Low": [99.0, 0.0],
+                "Close": [104.0, 0.0],
+                "Volume": [1000000, 0],
+            },
+            index=dates,
+        )
+        # Should not raise
+        to_canonical(raw_df, provider_name="test", ticker="TICK")
+
+        # verify shape remains 2 rows and no exception raised
+        canonical = to_canonical(raw_df, provider_name="test", ticker="TICK")
+        assert len(canonical) == 2
 
     def test_canonical_schema_validation(self):
         """Given canonical DataFrame, pandera schema should validate it."""

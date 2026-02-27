@@ -137,7 +137,23 @@ class Adapter(ABC):
                 "Verifique se o ticker é válido e se há dados para o período."
             )
 
-        if missing_columns := set(required_columns_list) - set(df.columns):
+        # some providers (yfinance) may return MultiIndex columns; flatten
+        # them to the first level so the rest of this function can treat the
+        # names uniformly.
+        cols = df.columns
+        if isinstance(cols, pd.MultiIndex):
+            cols = [c[0] if isinstance(c, tuple) else c for c in cols]
+        # perform case-insensitive comparison so we tolerate providers
+        # that return lowercase/uppercase variations of the expected names.
+        # convert to str before lower() to handle non-str column names
+        cols_lower = {str(c).lower() for c in cols}
+        missing_columns = {
+            col
+            for col in required_columns_list
+            if col.lower() not in cols_lower
+        }
+        if missing_columns:
+            # report the original casing to make the error message familiar
             raise ValidationError(
                 f"Colunas obrigatórias ausentes para {ticker}: {missing_columns}"
             )

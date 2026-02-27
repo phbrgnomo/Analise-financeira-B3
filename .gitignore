@@ -62,9 +62,21 @@ Thumbs.db
 .python-version
 __pycache__/
 
+# raw files
+raw/
+dados/*.csv
+# sample snapshots accidentally committed
+snap1.csv
+snap2.csv
+
 # Ignore generated snapshots created during CI/test runs
 snapshots_test/
 tmp_snapshots/
+
+# runtime cache artifacts and local snapshots
+cache.json
+dados/snapshot_cache.json
+snapshots/
 
 # Local ingest logs (runtime, append-only)
 .metadata/
