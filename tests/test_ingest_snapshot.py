@@ -48,13 +48,25 @@ def test_cache_prevents_reprocessing(tmp_path, empty_db):
 
     cache_file = tmp_path / "cache.json"
     # first ingestion should process both rows
-    r1 = ingest_snapshot(snap, ticker="TICK", conn=empty_db, cache_file=cache_file, ttl=3600)
+    r1 = ingest_snapshot(
+        snap,
+        ticker="TICK",
+        conn=empty_db,
+        cache_file=cache_file,
+        ttl=3600,
+    )
     assert not r1["cached"]
     assert r1["processed_rows"] == 2
     assert r1["skipped_rows"] == 0
 
     # second ingestion within TTL should be cached
-    r2 = ingest_snapshot(snap, ticker="TICK", conn=empty_db, cache_file=cache_file, ttl=3600)
+    r2 = ingest_snapshot(
+        snap,
+        ticker="TICK",
+        conn=empty_db,
+        cache_file=cache_file,
+        ttl=3600,
+    )
     assert r2["cached"]
     assert r2["processed_rows"] == 0
 
@@ -85,7 +97,13 @@ def test_ttl_expiration(tmp_path, empty_db):
 
     ingest_snapshot(snap, ticker="TICK", conn=empty_db, cache_file=cache_file, ttl=1)
     time.sleep(1.1)
-    r = ingest_snapshot(snap, ticker="TICK", conn=empty_db, cache_file=cache_file, ttl=1)
+    r = ingest_snapshot(
+        snap,
+        ticker="TICK",
+        conn=empty_db,
+        cache_file=cache_file,
+        ttl=1,
+    )
     assert not r["cached"]
 
 
@@ -110,7 +128,13 @@ def test_incremental_only_new_and_changed(tmp_path, empty_db):
     cache_file = tmp_path / "cache4.json"
 
     # ingest first snapshot
-    ingest_snapshot(snap1, ticker="TICK", conn=empty_db, cache_file=cache_file, ttl=3600)
+    ingest_snapshot(
+        snap1,
+        ticker="TICK",
+        conn=empty_db,
+        cache_file=cache_file,
+        ttl=3600,
+    )
     # verify DB has two rows
     from src.db import read_prices
 
@@ -135,7 +159,13 @@ def test_incremental_only_new_and_changed(tmp_path, empty_db):
     snap2 = tmp_path / "snap5.csv"
     _write_snapshot(snap2, df2)
 
-    r2 = ingest_snapshot(snap2, ticker="TICK", conn=empty_db, cache_file=cache_file, ttl=3600)
+    r2 = ingest_snapshot(
+        snap2,
+        ticker="TICK",
+        conn=empty_db,
+        cache_file=cache_file,
+        ttl=3600,
+    )
     # should skip only the first row, process the modified and new one
     assert r2["processed_rows"] == 2
     assert r2["skipped_rows"] == 1
