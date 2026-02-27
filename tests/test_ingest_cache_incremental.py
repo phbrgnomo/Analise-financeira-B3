@@ -1,5 +1,6 @@
 
 import sqlite3
+import time
 
 import pandas as pd
 import pytest
@@ -122,6 +123,81 @@ def test_cache_hit_for_unchanged_snapshot(tmp_path, monkeypatch):
     assert r2["rows_processed"] == 0
 
     mp.undo()
+
+
+def test_ingest_cache_ttl_expiration(tmp_path, monkeypatch):
+    """TTL should expire even if checksum matches.
+
+    We use a very small TTL and sleep briefly to ensure the entry becomes stale.
+    """
+    db_path = tmp_path / "dados" / "data.db"
+    db.init_db(str(db_path))
+
+    # very tiny TTL so it expires quickly
+    mp, snap_dir = setup_env(tmp_path, ttl="0.001")
+
+    df = make_sample_df(["2026-01-01", "2026-01-02"], values=[10, 20])
+
+    # first ingest should populate cache
+    r1 = ingest_from_snapshot(df, "TTL", db_path=str(db_path))
+    assert not r1["cached"]
+
+    # wait longer than TTL
+    time.sleep(0.01)
+
+    # same snapshot should no longer be cached
+    r2 = ingest_from_snapshot(df, "TTL", db_path=str(db_path))
+    assert not r2["cached"]
+
+    mp.undo()
+    db.init_db(str(db_path))
+
+    # set environment with generous TTL so cache is valid
+    mp, snap_dir = setup_env(tmp_path, ttl="100000")
+
+    df = make_sample_df(["2026-01-01", "2026-01-02"])
+
+    # first ingestion should write all rows
+    r1 = ingest_from_snapshot(df, "TEST", db_path=str(db_path))
+    assert not r1["cached"]
+    assert r1["rows_processed"] == len(df)
+    assert f"{snap_dir}/TEST-" in r1["snapshot_path"]
+
+    # second ingestion with identical df should hit cache
+    r2 = ingest_from_snapshot(df, "TEST", db_path=str(db_path))
+    assert r2["cached"]
+    assert r2["rows_processed"] == 0
+
+    mp.undo()
+
+
+
+
+def test_shared_diff_helper_and_cli_agree():
+    """The extracted helper should produce the same result as the CLI diff."""
+    from src.ingest.pipeline import _rows_to_ingest
+    from src.ingest_cli import _compute_changes, _normalize_df
+
+    # frame with two dates; existing has second row changed
+    df = make_sample_df(["2026-01-01", "2026-01-02"], values=[1, 2])
+    existing = make_sample_df(["2026-01-01", "2026-01-02"], values=[1, 3])
+    # prepare existing as DB would return it
+    existing2 = existing.copy()
+    existing2["date"] = pd.to_datetime(existing2["date"])
+    existing2 = existing2.set_index("date")
+
+    rows = _rows_to_ingest(df, existing2)
+    assert len(rows) == 1
+    assert rows.index[0] == pd.Timestamp("2026-01-02")
+
+    class DummyRepo:
+        def read_prices(self, *args, **kwargs):
+            return existing2
+
+    normalized = _normalize_df(df)
+    out = _compute_changes(normalized, "T", DummyRepo())
+    assert len(out) == 1
+    assert out["date"].iloc[0] == pd.Timestamp("2026-01-02")
 
 
 def test_snapshot_change_triggers_reprocess(tmp_path, monkeypatch):

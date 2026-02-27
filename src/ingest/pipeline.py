@@ -308,16 +308,18 @@ def get_snapshot_dir() -> Path:
     return DATA_DIR / "snapshots"
 
 
-def get_snapshot_ttl() -> int:
+def get_snapshot_ttl() -> float:
     """Return snapshot TTL in seconds read from ``SNAPSHOT_TTL``.
 
-    Invalid or missing values are treated as ``0`` meaning "no expiry" (the
-    cache will be considered fresh indefinitely).
+    The environment variable may contain a floating-point value to allow
+    sub-second expiration during tests.  Invalid or missing values are treated
+    as ``0`` meaning "no expiry" (the cache will be considered fresh
+    indefinitely).
     """
     try:
-        return int(os.environ.get("SNAPSHOT_TTL", "0"))
+        return float(os.environ.get("SNAPSHOT_TTL", "0"))
     except ValueError:
-        return 0
+        return 0.0
 
 
 def force_refresh_flag() -> bool:
@@ -330,12 +332,58 @@ def force_refresh_flag() -> bool:
     return _env_bool("FORCE_REFRESH")
 
 
+
+
+def _rows_to_ingest(df: pd.DataFrame, existing: Optional[pd.DataFrame]) -> pd.DataFrame:
+    """Return the subset of ``df`` that should be written to the database.
+
+    The input frame may have a ``date`` column or a ``DatetimeIndex``; the
+    returned frame is indexed by ``date`` without resetting.  ``existing``
+    represents the canonical data already present for the ticker and may be
+    ``None`` or empty.  This helper encapsulates the incremental diff logic
+    used both by :func:`ingest_from_snapshot` and the CLI path.
+    """
+
+    # normalize caller frame into a datetime index
+    df2 = df.copy()
+    if "date" in df2.columns:
+        df2["date"] = pd.to_datetime(df2["date"])
+        df2 = df2.set_index("date")
+    elif not isinstance(df2.index, pd.DatetimeIndex):
+        raise ValueError("DataFrame must have datetime index or 'date' column")
+
+    if existing is None or existing.empty:
+        return df2
+
+    existing2 = existing.copy()
+    if not isinstance(existing2.index, pd.DatetimeIndex):
+        existing2.index = pd.to_datetime(existing2.index)
+
+    new_idx = df2.index.difference(existing2.index)
+    changed_idx = df2.index.intersection(existing2.index)
+
+    ignore_cols = {"raw_checksum", "fetched_at"}
+    common = (
+        df2.columns.intersection(existing2.columns).difference(list(ignore_cols))
+    )
+    if not common.empty:
+        df_sub = df2.loc[changed_idx, common]
+        ex_sub = existing2.loc[changed_idx, common]
+        df_sub, ex_sub = df_sub.align(ex_sub, join="inner", axis=0)
+        mask_changed = (df_sub != ex_sub).any(axis=1)
+    else:
+        mask_changed = pd.Series(False, index=changed_idx)
+
+    changed = pd.DataFrame() if common.empty else df2.loc[df_sub.index[mask_changed]]
+    return pd.concat([df2.loc[new_idx], changed])
+
+
 def ingest_from_snapshot(  # noqa: C901
     df: pd.DataFrame,
     ticker: str,
     *,
     snapshot_dir: Optional[Union[str, Path]] = None,
-    ttl: Optional[int] = None,
+    ttl: Optional[float] = None,
     force: Optional[bool] = None,
     db_path: Optional[Union[str, Path]] = None,
 ) -> Dict[str, Any]:
@@ -414,6 +462,8 @@ def ingest_from_snapshot(  # noqa: C901
 
     # attempt to load last metadata entry for ticker from snapshots table
     import src.db as _db
+
+    # incremental diff helper moved to module scope; continue body below
 
     last_meta = None
     conn: Optional[sqlite3.Connection] = None
@@ -521,44 +571,8 @@ def ingest_from_snapshot(  # noqa: C901
     except Exception:
         existing = None
 
-    df2 = df.copy()
-    if "date" in df2.columns:
-        df2["date"] = pd.to_datetime(df2["date"])
-        df2 = df2.set_index("date")
-    elif not isinstance(df2.index, pd.DatetimeIndex):
-        raise ValueError("DataFrame must have datetime index or 'date' column")
-
-    if existing is None or existing.empty:
-        rows_to_ingest = df2
-    else:
-        existing2 = existing.copy()
-        if not isinstance(existing2.index, pd.DatetimeIndex):
-            existing2.index = pd.to_datetime(existing2.index)
-        new_idx = df2.index.difference(existing2.index)
-        changed_idx = df2.index.intersection(existing2.index)
-        ignore_cols = {"raw_checksum", "fetched_at"}
-        # compare on shared non-ignored columns
-        # pandas Index.difference expects list-like; convert to list to
-        # satisfy type checkers (Pylance reports set[str] is incompatible).
-        common = (
-            df2.columns.intersection(existing2.columns)
-            .difference(list(ignore_cols))
-        )
-        # predefine to keep static analyzers happy; value only used when
-        # ``common`` is non-empty.
-        df_sub = pd.DataFrame()
-        if not common.empty:
-            df_sub = df2.loc[changed_idx, common]
-            ex_sub = existing2.loc[changed_idx, common]
-            # align on index to keep mask in sync
-            df_sub, ex_sub = df_sub.align(ex_sub, join="inner", axis=0)
-            mask_changed = (df_sub != ex_sub).any(axis=1)
-        else:
-            mask_changed = pd.Series(False, index=changed_idx)
-        changed = (
-            pd.DataFrame() if common.empty else df2.loc[df_sub.index[mask_changed]]
-        )
-        rows_to_ingest = pd.concat([df2.loc[new_idx], changed])
+    # delegate diff logic to shared helper so ingest_cli can reuse it
+    rows_to_ingest = _rows_to_ingest(df, existing)
     rows_processed = len(rows_to_ingest)
     if rows_processed > 0:
         _db.write_prices(rows_to_ingest.reset_index(), ticker, db_path=db_path)

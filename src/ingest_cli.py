@@ -28,12 +28,14 @@ import pandas as pd
 
 from src.db_client import DatabaseClient, DefaultDatabaseClient
 from src.ingest import cache as _cache
+from src.ingest.pipeline import _rows_to_ingest
 from src.utils.checksums import sha256_file
 
 logger = logging.getLogger(__name__)
 
 # defaults -----------------------------------------------------------
-DEFAULT_TTL = int(os.getenv("SNAPSHOT_TTL", "86400"))  # 1 dia em segundos
+DEFAULT_TTL = float(os.getenv("SNAPSHOT_TTL", "86400"))  # 1 day in seconds
+# may be fractional for tests
 DEFAULT_CACHE_FILE = os.getenv("SNAPSHOT_CACHE_FILE") or "dados/snapshot_cache.json"
 
 
@@ -87,20 +89,16 @@ def _compute_changes(
 ) -> pd.DataFrame:
     """Return subset of ``df`` that is new or modified compared to DB.
 
-    This implementation mirrors the algorithm used in
-    :func:`src.ingest.pipeline.ingest_from_snapshot` to keep behaviour
-    consistent between the CLI helper and the broader pipeline.  It does an
-    index-based diff rather than relying on a ``raw_checksum`` column
-    because the database recomputes its own checksums when writing and we
-    cannot trust user-provided values in all cases.
+    This implementation now delegates to the shared helper in
+    :mod:`src.ingest.pipeline`.  The helper already normalizes the frame and
+    guarantees consistent behaviour with :func:`ingest_from_snapshot`.
 
-    The DataFrame must already be normalized (see :func:`_normalize_df`);
-    ``ticker`` must be provided.
+    ``df`` must already be normalized (see :func:`_normalize_df`).
     """
-    # determine date range covered by the snapshot
+    # fetch existing rows for the given date range; helper will handle the
+    # diff logic once the frame is prepared.
     start = df["date"].min()
     end = df["date"].max()
-    # convert pandas Timestamp to plain string to avoid sqlite binding errors
     if hasattr(start, "strftime"):
         start = start.strftime("%Y-%m-%d")
     if hasattr(end, "strftime"):
@@ -113,40 +111,9 @@ def _compute_changes(
         conn=conn,
         db_path=db_path,
     )
-    if existing.empty:
-        return df
 
-    # ensure both DataFrames have datetime indices for reliable comparison
-    existing2 = existing.copy()
-    if not isinstance(existing2.index, pd.DatetimeIndex):
-        existing2.index = pd.to_datetime(existing2.index)
-
-    df2 = df.copy()
-    if "date" in df2.columns:
-        df2["date"] = pd.to_datetime(df2["date"])
-        df2 = df2.set_index("date")
-    elif not isinstance(df2.index, pd.DatetimeIndex):
-        raise ValueError("DataFrame must have a datetime index or a 'date' column")
-
-    new_idx = df2.index.difference(existing2.index)
-    changed_idx = df2.index.intersection(existing2.index)
-
-    # compare on all shared columns except metadata that will always differ
-    ignore_cols = {"raw_checksum", "fetched_at"}
-    common = df2.columns.intersection(existing2.columns).difference(ignore_cols)
-    if not common.empty:
-        df_sub = df2.loc[changed_idx, common]
-        ex_sub = existing2.loc[changed_idx, common]
-        # align indexes for safety
-        df_sub, ex_sub = df_sub.align(ex_sub, join="inner", axis=0)
-        mask_eq = ~(df_sub == ex_sub).all(axis=1)
-    else:
-        mask_eq = pd.Series(False, index=changed_idx)
-
-    changed = df2.loc[changed_idx][mask_eq]
-
-    result = pd.concat([df2.loc[new_idx], changed])
-    return result.reset_index(drop=False)
+    rows = _rows_to_ingest(df, existing)
+    return rows.reset_index(drop=False)
 
 
 # public API ---------------------------------------------------------

@@ -65,6 +65,9 @@ __pycache__/
 # raw files
 raw/
 dados/*.csv
+# sample snapshots accidentally committed
+snap1.csv
+snap2.csv
 
 # Ignore generated snapshots created during CI/test runs
 snapshots_test/
