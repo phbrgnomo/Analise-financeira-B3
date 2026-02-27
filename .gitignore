@@ -66,6 +66,11 @@ __pycache__/
 snapshots_test/
 tmp_snapshots/
 
+# runtime cache artifacts and local snapshots
+cache.json
+dados/snapshot_cache.json
+snapshots/
+
 # Local ingest logs (runtime, append-only)
 .metadata/
 metadata/ingest_logs.jsonl
