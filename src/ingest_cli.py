@@ -224,7 +224,14 @@ def ingest_snapshot(
 
     if ticker is None:
         if "ticker" in df.columns:
-            ticker = df["ticker"].iloc[0]
+            unique = df["ticker"].unique()
+            if len(unique) == 1:
+                ticker = unique[0]
+            else:
+                # snapshot contains more than one ticker; refuse to guess
+                raise ValueError(
+                    f"snapshot contains multiple tickers: {unique.tolist()}"
+                )
         else:
             raise ValueError("ticker argument required when snapshot lacks column")
 

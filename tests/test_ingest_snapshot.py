@@ -71,6 +71,25 @@ def test_cache_prevents_reprocessing(tmp_path, empty_db):
     assert r2["processed_rows"] == 0
 
 
+def test_snapshot_mixed_tickers_raises(tmp_path, empty_db):
+    # create a snapshot containing two different tickers
+    df = pd.DataFrame(
+        {
+            "ticker": ["A", "B"],
+            "date": ["2023-01-01", "2023-01-02"],
+            "open": [1, 2],
+            "high": [1, 2],
+            "low": [1, 2],
+            "close": [1, 2],
+            "volume": [10, 20],
+        }
+    )
+    snap = tmp_path / "mixed.csv"
+    _write_snapshot(snap, df)
+    with pytest.raises(ValueError):
+        ingest_snapshot(snap, conn=empty_db)
+
+
 def test_force_refresh_ignores_cache(tmp_path, empty_db):
     df = pd.DataFrame({"ticker": ["TICK"], "date": ["2023-01-01"], "open": [1]})
     snap = tmp_path / "snap2.csv"

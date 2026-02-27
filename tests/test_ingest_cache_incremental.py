@@ -153,3 +153,42 @@ def test_incremental_ingest_only_new_and_changed_rows(tmp_path, monkeypatch):
     assert len(out) == 3
 
     mp.undo()
+
+
+def test_cache_db_error_is_logged_and_metrics(tmp_path, monkeypatch, caplog):
+    """Database errors reading snapshots should emit warning and metric."""
+    import src.db as _db
+    from src import metrics
+
+    # set up a real file so _connect is callable
+    db_path = tmp_path / "dados" / "data.db"
+    _db.init_db(str(db_path))
+
+    call_count = {"n": 0}
+    orig_connect = _db._connect
+
+    def fake_connect(path):
+        # fail on first connection (metadata read) but succeed thereafter
+        if call_count["n"] == 0:
+            call_count["n"] += 1
+            raise OSError("simulated IO failure")
+        # otherwise delegate to original implementation
+        return orig_connect(path)
+
+    monkeypatch.setattr(_db, "_connect", fake_connect)
+
+    caplog.set_level("WARNING")
+    called = False
+
+    def fake_inc(name):
+        nonlocal called
+        if name == "snapshot_metadata_cache_fallback":
+            called = True
+
+    monkeypatch.setattr(metrics, "increment_counter", fake_inc)
+
+    df = make_sample_df(["2026-01-01"])
+    r = ingest_from_snapshot(df, "TEST", db_path=str(db_path))
+    assert r["cached"] is False
+    assert "cache fallback" in caplog.text.lower()
+    assert called

@@ -58,12 +58,30 @@ def save_cache(path: Path, cache: Dict[str, Any]) -> None:
 
     The parent directory is created if necessary.  A temporary file is written
     and ``os.replace`` is used for atomicity.
+
+    Any failure during serialization or replacement is logged and the temporary
+    file is cleaned up to avoid leaving stale ``.tmp`` files behind.
     """
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(f"{path.suffix}.tmp")
-    with open(tmp, "w", encoding="utf-8") as fh:
-        json.dump(cache, fh, ensure_ascii=False)
-    os.replace(str(tmp), str(path))
+    try:
+        with open(tmp, "w", encoding="utf-8") as fh:
+            json.dump(cache, fh, ensure_ascii=False)
+        os.replace(str(tmp), str(path))
+    except (TypeError, ValueError, OSError):
+        logger.warning(
+            "failed to write snapshot cache %s; leaving existing cache file unchanged",
+            path,
+            exc_info=True,
+        )
+        # Best-effort cleanup of partially written temp file
+        try:
+            if tmp.exists():
+                tmp.unlink()
+        except OSError:
+            logger.debug(
+                "failed to remove temporary snapshot cache file %s", tmp, exc_info=True
+            )
 
 
 def entry_is_fresh(entry: Dict[str, Any], ttl: Optional[int]) -> bool:

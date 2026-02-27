@@ -439,15 +439,25 @@ def ingest_from_snapshot(  # noqa: C901
                 last_meta = None
     except (OSError, sqlite3.DatabaseError) as exc:
         # treat database or I/O failures as cache misses; keep ingestion
-        # resilient while avoiding noisy stack traces in normal operation.
-        logger.debug(
-            "failed to read snapshot metadata for %s: %s",
+        # resilient but surface potential ongoing operational issues.
+        # logged at warning level so that persistent failures in the
+        # ``snapshots`` cache are visible in production monitoring.  Also
+        # increment a telemetry counter when available.
+        logger.warning(
+            "snapshot metadata cache fallback in use; failed to read snapshot "
+            "metadata for %s: %s",
             ticker,
             exc,
         )
+        try:
+            from src import metrics
+
+            metrics.increment_counter("snapshot_metadata_cache_fallback")
+        except Exception:  # pragma: no cover - metrics optional
+            logger.debug("metrics increment failed", exc_info=True)
         last_meta = None
     finally:
-        if 'conn' in locals() and conn:
+        if "conn" in locals() and conn:
             conn.close()
 
     cache_hit = False

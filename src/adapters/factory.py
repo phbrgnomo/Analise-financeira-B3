@@ -5,6 +5,7 @@ Future providers can be registered here; the map drives the CLI
 "provider" option and unit tests can override the factory easily.
 """
 
+import logging
 from typing import Dict, Type
 
 from src.adapters.base import Adapter
@@ -57,4 +58,13 @@ def register_adapter(name: str, adapter_cls: Type[Adapter]) -> None:
             "adapter_cls must inherit from Adapter; got %r" % (adapter_cls,)
         )
 
-    _ADAPTER_REGISTRY[name.lower()] = adapter_cls
+    key = name.lower()
+    if key in _ADAPTER_REGISTRY:
+        # warn when overwriting existing registration to make accidental
+        # collisions visible during startup/tests
+        logging.getLogger(__name__).warning(
+            "re-registering adapter %r, previous %r will be replaced",
+            key,
+            _ADAPTER_REGISTRY[key],
+        )
+    _ADAPTER_REGISTRY[key] = adapter_cls
