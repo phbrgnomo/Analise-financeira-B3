@@ -87,7 +87,7 @@ def _fetch_and_prepare_asset(  # noqa: C901
 
     ts_raw = datetime.now(_tz.utc).strftime("%Y%m%dT%H%M%SZ")
     save_meta = save_raw_csv(
-        df, "yfinance", f"{a}.SA", ts_raw
+        df, provider, f"{a}.SA", ts_raw
     )
     if save_meta.get("status") != "success":
         print(
@@ -101,7 +101,7 @@ def _fetch_and_prepare_asset(  # noqa: C901
 
         canonical = to_canonical(
             df,
-            provider_name="yfinance",
+            provider_name=provider,
             ticker=f"{a}.SA",
             raw_checksum=save_meta.get("raw_checksum"),
             fetched_at=save_meta.get("fetched_at"),
@@ -124,7 +124,7 @@ def _fetch_and_prepare_asset(  # noqa: C901
         try:
             _valid_df, _invalid_df, summary, _details = validate_and_handle(
                 canonical,
-                provider="yfinance",
+                provider=provider,
                 ticker=f"{a}.SA",
                 raw_file=save_meta.get("filepath") or "",
                 ts=save_meta.get("fetched_at") or "",

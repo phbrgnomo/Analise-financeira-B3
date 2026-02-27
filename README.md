@@ -90,6 +90,15 @@ As instruções completas e o playbook estão em `docs/playbooks/testing-network
   O adaptador padrão é `yfinance`, mas outros podem ser registrados.
   `src/dados_b3.py` existe para compatibilidade e não deve ser usado em
   código novo.
+
+  Exemplo de uso:
+  ```python
+  from src.adapters.factory import get_adapter
+
+  adapter = get_adapter("yfinance")  # ou outro provider registrado
+  df = adapter.fetch("PETR4.SA", start_date="2022-01-01", end_date="2022-12-31")
+  print(df.head())
+  ```
 - Ao coletar ativos da B3 via Yahoo, adicione o sufixo `.SA` (ex.: `PETR4.SA`).
 - Dados persistidos ficam na pasta `dados/` em CSV com coluna `Return` para retornos diários.
 - Cálculos anuais usam 252 dias úteis por convenção do projeto.

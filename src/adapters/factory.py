@@ -38,5 +38,23 @@ def register_adapter(name: str, adapter_cls: Type[Adapter]) -> None:
     """Register a new adapter class under the given name.
 
     Used by tests or startup code to make additional providers available.
+
+    The provided ``adapter_cls`` must be a class (not an instance) and must
+    subclass :class:`Adapter`.  We lowercase the key just as in
+    :func:`get_adapter`.
+
+    Raises
+    ------
+    TypeError
+        if ``adapter_cls`` is not a subclass of :class:`Adapter` or is not a
+        class at all.
     """
+    # defensive validation to prevent silent registry corruption
+    if not isinstance(adapter_cls, type):
+        raise TypeError("adapter_cls must be a class")
+    if not issubclass(adapter_cls, Adapter):
+        raise TypeError(
+            "adapter_cls must inherit from Adapter; got %r" % (adapter_cls,)
+        )
+
     _ADAPTER_REGISTRY[name.lower()] = adapter_cls

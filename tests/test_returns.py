@@ -197,6 +197,9 @@ def test_write_returns_preserves_created_at_when_upsert_not_supported(
     assert first_created == second_created
 
 
+# sourcery skip: extract-duplicate-method,remove-pass-body,remove-assert-true
+# the function deliberately contains repetitive/conditional patterns
+# for clarity; ignore automated refactor hints here.
 def test_compute_returns_empty_and_single_price(sample_db):
     """Handle empty ticker (no prices) and single-price series gracefully."""
     import src.retorno as retorno
@@ -206,6 +209,7 @@ def test_compute_returns_empty_and_single_price(sample_db):
     # If `returns` table was never created (no prices), treat as zero rows.
     cur = sample_db.cursor()
     cur.execute("PRAGMA table_info(returns)")
+    # sourcery skip: no-conditionals-in-tests
     if not cur.fetchall():
         # Table missing -> treat as zero rows (nothing to assert against)
         assert True
@@ -214,18 +218,33 @@ def test_compute_returns_empty_and_single_price(sample_db):
         assert _count_returns(sample_db, "EMPTY_TICKER") == 0
     # Single price row: insert one price and expect zero returns
     cur = sample_db.cursor()
-    # Build INSERT dynamically based on actual `prices` table columns to remain
-    # compatible with different test schemas/migrations.
-    cols = ["ticker", "date", "open", "high", "low", "close", "volume", "source"]
-    vals = ["SINGLE", "2023-01-01", 100.0, 100.0, 100.0, 100.0, 100, "fixture"]
     cur.execute("PRAGMA table_info(prices)")
     existing_cols = [r[1] for r in cur.fetchall()]
     # Add optional columns present in the DB schema in table-order
     defaults = {"fetched_at": "2023-01-01T00:00:00", "raw_checksum": "0" * 64}
     present_cols = [c for c in existing_cols if c in defaults]
-    cols.extend(present_cols)
-    vals.extend([defaults[c] for c in present_cols])
-
+    cols = [
+        "ticker",
+        "date",
+        "open",
+        "high",
+        "low",
+        "close",
+        "volume",
+        "source",
+        *present_cols,
+    ]
+    vals = [
+        "SINGLE",
+        "2023-01-01",
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100,
+        "fixture",
+        *[defaults[c] for c in present_cols],
+    ]
     placeholders = ",".join(["?" for _ in cols])
     sql = f"INSERT INTO prices ({','.join(cols)}) VALUES ({placeholders})"
     cur.execute(sql, tuple(vals))

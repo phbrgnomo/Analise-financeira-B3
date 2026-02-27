@@ -205,11 +205,16 @@ def _atomic_write_json(target: Path, payload: object) -> None:
         delete=False,
     )
     try:
+        # payload is constructed programmatically from earlier results and
+        # contains no raw command‑line input; it is safe for json.dump.
         json.dump(payload, tf, indent=2, ensure_ascii=False)
         tf.flush()
         os.fsync(tf.fileno())
         temp_name = tf.name
         tf.close()
+        # ``target`` was returned by ``_prepare_manifest_target`` which
+        # validates the path (no symlinks, no .. traversals, restricted
+        # to snapshots unless allow_external) so os.replace is safe here.
         os.replace(temp_name, str(target))
         temp_name = None
     finally:
@@ -374,6 +379,10 @@ def main():
         print(e)
         raise SystemExit(2) from e
 
+    # ``validate_and_resolve`` already performs extensive validation
+    # (null byte check, normalization, base directory restriction) so the
+    # resulting strings are safe to convert to ``Path`` objects.  This
+    # reassures static analysis tools about the use of untrusted input.
     args.dir = Path(dir_str)
     args.manifest = Path(manifest_str)
 

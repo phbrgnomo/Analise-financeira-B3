@@ -21,6 +21,7 @@ def test_cli_help():
 def test_ingest_snapshot_help():
     runner = CliRunner()
     result = runner.invoke(app, ["ingest-snapshot", "--help"])
+    # sourcery skip: no-conditionals-in-tests
     if result.exit_code != 0:
         # Typer/Click has a known bug with Python 3.14 where help generation
         # raises TypeError, which manifests as a non-zero exit code.  Rather
@@ -76,7 +77,9 @@ def test_fetch_helper_uses_factory(monkeypatch):
             )
 
     import src.adapters.factory as factory
-    monkeypatch.setattr(factory, "get_adapter", lambda name: DummyAdapter())
+    # create a single dummy instance so we can inspect it after the call
+    dummy = DummyAdapter()
+    monkeypatch.setattr(factory, "get_adapter", lambda name: dummy)
 
     # call helper directly; provider dummy is passed through
     _fetch_and_prepare_asset(
@@ -86,5 +89,7 @@ def test_fetch_helper_uses_factory(monkeypatch):
         None,
         provider="dummy",
     )
-    # if we reach here without exception, factory was invoked
-    # (dummy adapter didn't crash)
+    # verify that the dummy adapter was actually used
+    assert dummy.called, (
+        "factory.get_adapter was not used or DummyAdapter.fetch not invoked"
+    )

@@ -301,8 +301,7 @@ def get_snapshot_dir() -> Path:
     when the variable is not defined. The path is *not* created by this
     helper.
     """
-    dir_str = os.environ.get("SNAPSHOT_DIR")
-    if dir_str:
+    if dir_str := os.environ.get("SNAPSHOT_DIR"):
         return Path(dir_str)
     from src.paths import DATA_DIR
 
@@ -382,6 +381,14 @@ def ingest_from_snapshot(  # noqa: C901
     """
 
     # resolve parameters
+    # normalize parameters ------------------------------------------------
+    # ``snapshot_dir`` is converted to Path later; ``db_path`` may be a
+    # pathlib.Path in tests or user code and the internal :mod:`src.db`
+    # helpers expect a string (or None), so cast it here to keep type checkers
+    # happy and avoid repeated conversions.
+    if db_path is not None:
+        db_path = str(db_path)
+
     if snapshot_dir is None:
         snapshot_dir = get_snapshot_dir()
     snapshot_dir = Path(snapshot_dir)
@@ -409,6 +416,7 @@ def ingest_from_snapshot(  # noqa: C901
     import src.db as _db
 
     last_meta = None
+    conn: Optional[sqlite3.Connection] = None
     try:
         conn = _db._connect(db_path)
         cur = conn.cursor()
@@ -417,8 +425,7 @@ def ingest_from_snapshot(  # noqa: C901
             "ORDER BY created_at DESC LIMIT 1",
             (ticker,),
         )
-        row = cur.fetchone()
-        if row:
+        if row := cur.fetchone():
             try:
                 last_meta = json.loads(row[0])
             except json.JSONDecodeError as exc:
@@ -477,7 +484,6 @@ def ingest_from_snapshot(  # noqa: C901
         return {"cached": True, "rows_processed": 0}
 
     # write fresh snapshot and record metadata
-    # write fresh snapshot and record metadata
     now = datetime.now(timezone.utc)
     ts = now.strftime("%Y%m%dT%H%M%SZ")
     safe_ticker = ticker.replace(".", "_")
@@ -522,7 +528,15 @@ def ingest_from_snapshot(  # noqa: C901
         changed_idx = df2.index.intersection(existing2.index)
         ignore_cols = {"raw_checksum", "fetched_at"}
         # compare on shared non-ignored columns
-        common = df2.columns.intersection(existing2.columns).difference(ignore_cols)
+        # pandas Index.difference expects list-like; convert to list to
+        # satisfy type checkers (Pylance reports set[str] is incompatible).
+        common = (
+            df2.columns.intersection(existing2.columns)
+            .difference(list(ignore_cols))
+        )
+        # predefine to keep static analyzers happy; value only used when
+        # ``common`` is non-empty.
+        df_sub = pd.DataFrame()
         if not common.empty:
             df_sub = df2.loc[changed_idx, common]
             ex_sub = existing2.loc[changed_idx, common]
@@ -532,7 +546,7 @@ def ingest_from_snapshot(  # noqa: C901
         else:
             mask_changed = pd.Series(False, index=changed_idx)
         changed = (
-            df2.loc[df_sub.index[mask_changed]] if not common.empty else pd.DataFrame()
+            pd.DataFrame() if common.empty else df2.loc[df_sub.index[mask_changed]]
         )
         rows_to_ingest = pd.concat([df2.loc[new_idx], changed])
     rows_processed = len(rows_to_ingest)

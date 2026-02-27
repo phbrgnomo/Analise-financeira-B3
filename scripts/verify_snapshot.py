@@ -47,6 +47,9 @@ def main(argv: list[str] | None = None) -> int:
     try:
         # Use subprocess.run com lista de argumentos e shell=False para evitar
         # interpretação pelo shell de entrada do usuário (mitiga CWE-78).
+        # The *argv* list comes directly from our own CLI parsing and is never
+        # concatenated into a string, so there is no opportunity for shell
+        # injection.  We also avoid passing user input to `env` or similar.
         retorno_proc = subprocess.run(comando, shell=False)
         return retorno_proc.returncode
     except KeyboardInterrupt:

@@ -75,7 +75,14 @@ def entry_is_fresh(entry: Dict[str, Any], ttl: Optional[int]) -> bool:
     if ttl is None:
         return True
     try:
-        ts = datetime.fromisoformat(entry.get("processed_at"))
+        # ``entry`` comes from untyped JSON so mypy/Pylance see Any | None
+        ts_str: Optional[str] = entry.get("processed_at")  # narrow below
+        # guard against missing/incorrect types; Pylance warns about Any | None
+        if not isinstance(ts_str, str):
+            # treat non-string timestamps as stale
+            return False
+        # mypy now understands ts_str is a ``str``
+        ts = datetime.fromisoformat(ts_str)
         if ts.tzinfo is None:
             ts = ts.replace(tzinfo=timezone.utc)
     except Exception:  # pragma: no cover - treat as stale if invalid
