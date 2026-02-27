@@ -1,3 +1,13 @@
+"""
+Deprecatado — o módulo existe apenas para compatibilidade com código
+ancestral.  Todos os consumidores novos devem trocar por
+``factory.get_adapter(provider).fetch(...)``.
+
+As funções aqui são meros wrappers que emitam ``DeprecationWarning`` e
+redirigem para a fábrica.  O restante da implementação histórica foi
+removido para reduzir a superfície de manutenção.
+"""
+
 import warnings
 
 from src.adapters.factory import get_adapter
@@ -8,16 +18,6 @@ warnings.warn(
     DeprecationWarning,
     stacklevel=2,
 )
-
-"""
-Deprecatado — o módulo existe apenas para compatibilidade com código
-ancestral.  Todos os consumidores novos devem trocar por
-``factory.get_adapter(provider).fetch(...)``.
-
-As funções aqui são meros wrappers que emitam ``DeprecationWarning`` e
-redirigem para a fábrica.  O restante da implementação histórica foi
-removido para reduzir a superfície de manutenção.
-"""
 
 
 def cotacao_indice_dia(indice, data_inicio, data_fim, provider: str | None = None):

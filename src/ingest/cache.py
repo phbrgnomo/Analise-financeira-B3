@@ -60,7 +60,7 @@ def save_cache(path: Path, cache: Dict[str, Any]) -> None:
     and ``os.replace`` is used for atomicity.
     """
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp = path.with_suffix(f"{path.suffix}.tmp")
     with open(tmp, "w", encoding="utf-8") as fh:
         json.dump(cache, fh, ensure_ascii=False)
     os.replace(str(tmp), str(path))
