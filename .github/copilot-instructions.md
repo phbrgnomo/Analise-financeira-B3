@@ -30,7 +30,7 @@
 - Run CLI/app: `poetry run main` (entrypoint configured in `pyproject.toml`).
 
 ## MANDATORY: Before Committing the changes
-- Run `poetry run pre-commit  run --all-files` to apply formatting and lint fixes.
+- Run `poetry run pre-commit run --all-files` to apply formatting and lint fixes.
 - Ensure tests pass: `poetry run pytest`.
 
 ## Project Conventions

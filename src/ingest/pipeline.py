@@ -451,19 +451,35 @@ def ingest_from_snapshot(  # noqa: C901
                 cache_hit = True
             else:
                 last_ts_str = last_meta.get("generated_at")
-                try:
-                    last_ts = datetime.fromisoformat(last_ts_str.replace("Z", "+00:00"))
-                    age = (datetime.now(timezone.utc) - last_ts).total_seconds()
-                    if age < ttl:
-                        cache_hit = True
-                except Exception:
-                    pass
+                if not last_ts_str:
+                    logger.debug(
+                        "snapshot metadata for %s missing 'generated_at';"
+                        " treating as cache miss",
+                        ticker,
+                    )
+                else:
+                    try:
+                        last_ts = datetime.fromisoformat(
+                            last_ts_str.replace("Z", "+00:00")
+                        )
+                        age = (datetime.now(timezone.utc) - last_ts).total_seconds()
+                        if age < ttl:
+                            cache_hit = True
+                    except Exception:
+                        logger.warning(
+                            "invalid 'generated_at' timestamp in snapshot metadata"
+                            " for %s: %r; treating as cache miss",
+                            ticker,
+                            last_ts_str,
+                        )
     if cache_hit:
         logger.info("snapshot cache hit for %s (ttl=%s)", ticker, ttl)
         return {"cached": True, "rows_processed": 0}
 
     # write fresh snapshot and record metadata
-    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    # write fresh snapshot and record metadata
+    now = datetime.now(timezone.utc)
+    ts = now.strftime("%Y%m%dT%H%M%SZ")
     safe_ticker = ticker.replace(".", "_")
     filename = f"{safe_ticker}-{ts}.csv"
     out_path = snapshot_dir / filename
@@ -474,7 +490,7 @@ def ingest_from_snapshot(  # noqa: C901
     metadata = {
         "snapshot_id": filename,
         "ticker": ticker,
-        "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "generated_at": now.isoformat().replace("+00:00", "Z"),
         "rows_count": len(df),
         "sha256": sha,
     }
@@ -510,11 +526,14 @@ def ingest_from_snapshot(  # noqa: C901
         if not common.empty:
             df_sub = df2.loc[changed_idx, common]
             ex_sub = existing2.loc[changed_idx, common]
+            # align on index to keep mask in sync
             df_sub, ex_sub = df_sub.align(ex_sub, join="inner", axis=0)
-            mask_eq = ~(df_sub == ex_sub).all(axis=1)
+            mask_changed = (df_sub != ex_sub).any(axis=1)
         else:
-            mask_eq = pd.Series(False, index=changed_idx)
-        changed = df2.loc[changed_idx][mask_eq]
+            mask_changed = pd.Series(False, index=changed_idx)
+        changed = (
+            df2.loc[df_sub.index[mask_changed]] if not common.empty else pd.DataFrame()
+        )
         rows_to_ingest = pd.concat([df2.loc[new_idx], changed])
     rows_processed = len(rows_to_ingest)
     if rows_processed > 0:

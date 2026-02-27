@@ -33,11 +33,23 @@ def load_cache(path: Path) -> Dict[str, Any]:
     """
     if not path.exists():
         return {}
+
     try:
         with open(path, "r", encoding="utf-8") as fh:
             return json.load(fh)
-    except Exception:  # pragma: no cover - defensive
-        logger.warning("failed to load snapshot cache %s", path, exc_info=True)
+    except json.JSONDecodeError:
+        logger.warning(
+            "failed to decode JSON in snapshot cache %s; treating as empty cache",
+            path,
+            exc_info=True,
+        )
+        return {}
+    except OSError:
+        logger.warning(
+            "failed to read snapshot cache %s due to OS error; treating as empty cache",
+            path,
+            exc_info=True,
+        )
         return {}
 
 

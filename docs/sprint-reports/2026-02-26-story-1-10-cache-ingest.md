@@ -19,12 +19,12 @@ Além disso foi adicionada uma CLI `ingest-snapshot` com flags para `--force-`
 refresh, TTL configurável e cache-file personalizável; essa rotina é usada no
 fluxo principal em `src/main._fetch_and_prepare_asset` quando ingestindo preços.
 
-Decisões principais e racional
-------------------------------
+Decisões principais e justificativa
+-----------------------------------
 
 - **Cache simples em JSON**: um arquivo (`SNAPSHOT_CACHE_FILE`) armazena chaves
   por caminho absoluto e checksum/processed_at. TTL lido de `SNAPSHOT_TTL`.
-  Racional: evita dependências externas e é suficiente para uso local.
+  Justificativa: evita dependências externas e é suficiente para uso local.
 
 - **TTL e force-refresh**: TTL configurável e flag `FORCE_REFRESH` permitem
   controle fino e testes determinísticos. Forçar refresh útil em debugging e
@@ -77,8 +77,8 @@ Implementação (arquivos alterados)
 Testes e verificação
 --------------------
 
-- Suíte completa rodou localmente com `poetry run pytest -q` (todos documentos
-  e casos de ingest novos passaram sem falhas).
+- Suíte completa rodou localmente com `poetry run pytest -q` (toda a suíte de
+  testes, incluindo os novos casos de ingestão, passou sem falhas).
 - Novos testes cobrem casos principais e funcionam em modo "playback" de redes
   (independente de chamadas externas).
 - Pipelines de CI atuais também passaram; o novo arquivo de testes não altera a
