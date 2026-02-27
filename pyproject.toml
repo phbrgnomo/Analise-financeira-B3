@@ -37,4 +37,4 @@ hypothesis = "^6.151.9"
 line-length = 88
 lint.select = ["E", "F", "W", "C", "B", "I"]
 lint.ignore = ["E203"]
-exclude = ["docs/examples/notebooks/*"]
+exclude = ["docs/examples/notebooks/*", "*.md"]
