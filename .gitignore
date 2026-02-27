@@ -64,6 +64,7 @@ __pycache__/
 
 # raw files
 raw/
+dados/*.csv
 
 # Ignore generated snapshots created during CI/test runs
 snapshots_test/

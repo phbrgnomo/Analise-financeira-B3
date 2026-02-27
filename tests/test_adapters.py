@@ -405,28 +405,28 @@ class TestYFinanceAdapter:
         assert metadata["library_available"] == "no"
         assert metadata["library_version"] == "unknown"
 
-    class TestAdapterBaseHelpers:
-        """Testes para helpers centralizados em `Adapter` (normalize/validate)."""
+class TestAdapterBaseHelpers:
+    """Testes para helpers centralizados em `Adapter` (normalize/validate)."""
 
-        def test_adapter_normalize_date_valid_formats(self):
-            class TestAdapter(Adapter):
-                def fetch(self, ticker: str, **kwargs) -> pd.DataFrame:
-                    return pd.DataFrame()
+    def test_adapter_normalize_date_valid_formats(self):
+        class TestAdapter(Adapter):
+            def fetch(self, ticker: str, **kwargs) -> pd.DataFrame:
+                return pd.DataFrame()
 
-                def _fetch_once(
-                    self, ticker: str, start: str, end: str, **kwargs
-                ) -> pd.DataFrame:
-                    return pd.DataFrame()
+            def _fetch_once(
+                self, ticker: str, start: str, end: str, **kwargs
+            ) -> pd.DataFrame:
+                return pd.DataFrame()
 
-            adapter = TestAdapter()
+        adapter = TestAdapter()
 
-            normalized_iso = adapter._normalize_date("2023-02-15")
-            assert normalized_iso == "2023-02-15"
+        normalized_iso = adapter._normalize_date("2023-02-15")
+        assert normalized_iso == "2023-02-15"
 
-            normalized_us = adapter._normalize_date("02-15-2023")
-            assert normalized_us == "2023-02-15"
+        normalized_us = adapter._normalize_date("02-15-2023")
+        assert normalized_us == "2023-02-15"
 
-        def test_adapter_normalize_date_invalid_format_raises_validation_error(self):
+    def test_adapter_normalize_date_invalid_format_raises_validation_error(self):
             class TestAdapter(Adapter):
                 def fetch(self, ticker: str, **kwargs) -> pd.DataFrame:
                     return pd.DataFrame()
@@ -443,7 +443,7 @@ class TestYFinanceAdapter:
 
             assert "Formato de data inválido" in str(excinfo.value)
 
-        def test_adapter_validate_dataframe_empty_raises_validation_error(self):
+    def test_adapter_validate_dataframe_empty_raises_validation_error(self):
             class TestAdapter(Adapter):
                 def fetch(self, ticker: str, **kwargs) -> pd.DataFrame:
                     return pd.DataFrame()
@@ -459,7 +459,7 @@ class TestYFinanceAdapter:
             with pytest.raises(ValidationError, match="DataFrame vazio"):
                 adapter._validate_dataframe(df, "TICKER")
 
-        def test_validate_dataframe_missing_required_columns_mentions_them(self):
+    def test_validate_dataframe_missing_required_columns_mentions_them(self):
             class TestAdapter(Adapter):
                 # define provider-specific required columns for the test
                 REQUIRED_COLUMNS = [
@@ -494,20 +494,86 @@ class TestYFinanceAdapter:
             # ou todas as colunas requeridas aparecem na mensagem,
             # ou (quando não há REQUIRED_COLUMNS) a mensagem contém
             # palavras-chave indicativas de falta de colunas.
-            msg_lower = msg.lower()
+            # msg_lower was previously used to examine the message;
+            # the simplified assertion above is sufficient and avoids an
+            # unused-variable lint error.
             assert (
                 required_columns is not None
                 and all(col in msg for col in required_columns)
-            ) or (
-                required_columns is None
-                and (
-                    "coluna" in msg_lower
-                    or "colunas" in msg_lower
-                    or "missing" in msg_lower
-                )
             )
 
-        def test_validate_dataframe_non_datetime_index(self):
+    def test_validate_dataframe_accepts_lowercase_columns(self):
+            """Validation should be case‑insensitive for column names."""
+            class TestAdapter(Adapter):
+                REQUIRED_COLUMNS = [
+                    "Open",
+                    "High",
+                    "Low",
+                    "Close",
+                    "Volume",
+                ]
+
+                def fetch(self, ticker: str, **kwargs) -> pd.DataFrame:
+                    return pd.DataFrame()
+
+                def _fetch_once(
+                    self, ticker: str, start: str, end: str, **kwargs
+                ) -> pd.DataFrame:
+                    return pd.DataFrame()
+
+            adapter = TestAdapter()
+            index = pd.date_range("2023-01-01", periods=2, freq="D")
+            # use lowercase column headers to simulate provider variation
+            df = pd.DataFrame(
+                {
+                    "open": [1, 2],
+                    "high": [1, 2],
+                    "low": [1, 2],
+                    "close": [1, 2],
+                    "volume": [100, 200],
+                },
+                index=index,
+            )
+            # should not raise
+            adapter._validate_dataframe(df, "TICKER")
+
+    def test_validate_dataframe_flatten_multiindex_columns(self):
+            """Adapters should cope with MultiIndex column names (yfinance)."""
+            class TestAdapter(Adapter):
+                REQUIRED_COLUMNS = [
+                    "Open",
+                    "High",
+                    "Low",
+                    "Close",
+                    "Volume",
+                ]
+
+                def fetch(self, ticker: str, **kwargs) -> pd.DataFrame:
+                    return pd.DataFrame()
+
+                def _fetch_once(
+                    self, ticker: str, start: str, end: str, **kwargs
+                ) -> pd.DataFrame:
+                    # create MultiIndex that mimics yfinance returned frame
+                    import pandas as pd
+                    arrays = [
+                        ["Close", "High", "Low", "Open", "Volume"],
+                        [ticker] * 5,
+                    ]
+                    cols = pd.MultiIndex.from_arrays(arrays, names=["Price", "Ticker"])
+                    df = pd.DataFrame(
+                        [[1,2,3,4,5]], columns=cols,
+                        index=pd.date_range("2023-01-01", periods=1),
+                    )
+                    return df
+
+            adapter = TestAdapter()
+            # this should not raise even though columns are tuples
+            # call _fetch_once separately so the line length stays under limit
+            raw = adapter._fetch_once("TICK", "2020-01-01", "2020-01-02")
+            adapter._validate_dataframe(raw, "TICK")
+
+    def test_validate_dataframe_non_datetime_index(self):
             class TestAdapter(Adapter):
                 def fetch(self, ticker: str, **kwargs) -> pd.DataFrame:
                     return pd.DataFrame()
