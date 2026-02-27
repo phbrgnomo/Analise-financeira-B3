@@ -12,8 +12,7 @@ def make_sample_df(dates, values=None):
     """Helper to craft a simple DataFrame with a date column."""
     if values is None:
         values = list(range(len(dates)))
-    df = pd.DataFrame({"date": pd.to_datetime(dates), "close": values})
-    return df
+    return pd.DataFrame({"date": pd.to_datetime(dates), "close": values})
 
 
 def setup_env(tmp_path, ttl="0", snapshot_dir=None):
@@ -27,27 +26,41 @@ def setup_env(tmp_path, ttl="0", snapshot_dir=None):
     return monkeypatch, snapshot_dir
 
 
-def test_env_bool_parsing(monkeypatch):
-    """_env_bool should accept only whitelisted strings and raise on garbage."""
+
+@pytest.mark.parametrize("val", ["1", "true", "True", "yes", " YES "])
+def test_env_bool_parsing_true(monkeypatch, val):
+    """_env_bool returns True for recognized truthy strings."""
+    from src.ingest.pipeline import _env_bool
+
+    monkeypatch.setenv("FLAG", val)
+    assert _env_bool("FLAG"), val
+
+
+@pytest.mark.parametrize("val", ["0", "false", "No", "off", "", "  "])
+def test_env_bool_parsing_false(monkeypatch, val):
+    """_env_bool returns False for recognized falsy strings."""
+    from src.ingest.pipeline import _env_bool
+
+    monkeypatch.setenv("FLAG", val)
+    assert not _env_bool("FLAG"), val
+
+
+@pytest.mark.parametrize("val", ["flase", "maybe", "enable", "yep"])
+def test_env_bool_parsing_invalid(monkeypatch, val):
+    """_env_bool raises ValueError for unrecognized strings."""
+    from src.ingest.pipeline import _env_bool
+
+    monkeypatch.setenv("FLAG", val)
+    with pytest.raises(ValueError):
+        _env_bool("FLAG")
+
+
+def test_env_bool_parsing_default(monkeypatch):
+    """_env_bool returns False when the variable is unset."""
     from src.ingest.pipeline import _env_bool
 
     monkeypatch.delenv("FLAG", raising=False)
     assert not _env_bool("FLAG")
-
-    true_vals = ["1", "true", "True", "yes", " YES "]
-    for val in true_vals:
-        monkeypatch.setenv("FLAG", val)
-        assert _env_bool("FLAG"), val
-
-    false_vals = ["0", "false", "No", "off", "", "  "]
-    for val in false_vals:
-        monkeypatch.setenv("FLAG", val)
-        assert not _env_bool("FLAG"), val
-
-    for bad in ["flase", "maybe", "enable", "yep"]:
-        monkeypatch.setenv("FLAG", bad)
-        with pytest.raises(ValueError):
-            _env_bool("FLAG")
 
 
 def test_corrupted_snapshot_metadata_logs(tmp_path, monkeypatch, caplog):
@@ -155,8 +168,11 @@ def test_incremental_ingest_only_new_and_changed_rows(tmp_path, monkeypatch):
     mp.undo()
 
 
-def test_cache_db_error_is_logged_and_metrics(tmp_path, monkeypatch, caplog):
-    """Database errors reading snapshots should emit warning and metric."""
+def test_snapshot_metadata_cache_fallback(tmp_path, monkeypatch, caplog):
+    """If reading the metadata file fails initially we should log a warning
+    and increment the fallback metric.
+    """
+    # sourcery skip: no-conditionals-in-tests
     import src.db as _db
     from src import metrics
 

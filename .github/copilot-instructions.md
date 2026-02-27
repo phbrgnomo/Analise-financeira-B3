@@ -35,7 +35,8 @@
 
 ## Project Conventions
 - Data files: small example CSVs are kept in `dados/` and `snapshots/` for tests—avoid committing large raw datasets. Place additional sample files under `dados/samples` or `snapshots/` and add a corresponding checksum entry in `snapshots/checksums.json` when needed.
-- Do not add new imports or calls to `src.dados_b3`; use the adapter factory instead.- DB path default: `dados/data.db`. Tests typically inject a temporary `engine` or override `db_path` via fixtures; follow patterns in `tests/conftest.py`.
+- Do not add new imports or calls to `src.dados_b3`; use the adapter factory instead.
+- DB path default: `dados/data.db`. Tests typically inject a temporary `engine` or override `db_path` via fixtures; follow patterns in `tests/conftest.py`.
 - Idempotency: `src/db.py` computes a `raw_checksum` to avoid unnecessary upserts—respect this behavior when writing adapters or ETL scripts.
 - CLI helpers: many scripts in `scripts/` (e.g. `validate_snapshots.py`, `init_ingest_db.py`) exist for one-off tasks; read their headers when extending.
 
