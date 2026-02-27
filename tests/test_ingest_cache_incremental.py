@@ -1,4 +1,6 @@
 
+import sqlite3
+
 import pandas as pd
 import pytest
 
@@ -23,6 +25,66 @@ def setup_env(tmp_path, ttl="0", snapshot_dir=None):
     monkeypatch.setenv("SNAPSHOT_TTL", ttl)
     monkeypatch.delenv("FORCE_REFRESH", raising=False)
     return monkeypatch, snapshot_dir
+
+
+def test_env_bool_parsing(monkeypatch):
+    """_env_bool should accept only whitelisted strings and raise on garbage."""
+    from src.ingest.pipeline import _env_bool
+
+    monkeypatch.delenv("FLAG", raising=False)
+    assert not _env_bool("FLAG")
+
+    true_vals = ["1", "true", "True", "yes", " YES "]
+    for val in true_vals:
+        monkeypatch.setenv("FLAG", val)
+        assert _env_bool("FLAG"), val
+
+    false_vals = ["0", "false", "No", "off", "", "  "]
+    for val in false_vals:
+        monkeypatch.setenv("FLAG", val)
+        assert not _env_bool("FLAG"), val
+
+    for bad in ["flase", "maybe", "enable", "yep"]:
+        monkeypatch.setenv("FLAG", bad)
+        with pytest.raises(ValueError):
+            _env_bool("FLAG")
+
+
+def test_corrupted_snapshot_metadata_logs(tmp_path, monkeypatch, caplog):
+    """If the last snapshot payload is invalid JSON we should warn and
+    continue as a cache miss.
+    """
+    db_path = tmp_path / "dados" / "data.db"
+    db.init_db(str(db_path))
+
+    # open DB and insert a row with malformed payload
+    conn = sqlite3.connect(str(db_path))
+    cur = conn.cursor()
+    cur.execute(
+        (
+            "CREATE TABLE IF NOT EXISTS snapshots (id TEXT PRIMARY KEY,"
+            " ticker TEXT, created_at TEXT, payload TEXT)"
+        )
+    )
+    cur.execute(
+        (
+            "INSERT OR REPLACE INTO snapshots (id, ticker, created_at, payload)"
+            " VALUES (?, ?, ?, ?)"
+        ),
+        ("bad", "TEST", "2026-01-01", "not a json string"),
+    )
+    conn.commit()
+    conn.close()
+
+    mp, snap_dir = setup_env(tmp_path, ttl="100000")
+    caplog.set_level("WARNING")
+
+    df = make_sample_df(["2026-01-01"])
+    r = ingest_from_snapshot(df, "TEST", db_path=str(db_path))
+    assert not r["cached"]
+    assert "invalid snapshot metadata" in caplog.text.lower()
+
+    mp.undo()
 
 
 def test_cache_hit_for_unchanged_snapshot(tmp_path, monkeypatch):

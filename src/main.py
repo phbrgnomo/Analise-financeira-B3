@@ -16,12 +16,16 @@ app = typer.Typer()
 d_atual = date.today()
 
 
-def _fetch_and_prepare_asset(
+def _fetch_and_prepare_asset(  # noqa: C901
     a: str,
     d_in: str,
     d_fim: str,
     validation_tolerance: Optional[float],
-) -> None:
+    provider: str = "yfinance",
+) -> None:  # noqa: C901
+    # predefine variables so linters know they exist
+    canonical = None
+    save_meta = {}
     """Fetch, persist raw data, map to canonical schema and optionally validate.
 
     Parameters
@@ -38,7 +42,8 @@ def _fetch_and_prepare_asset(
 
         Side effects
         ------------
-        - Faz download dos dados do provedor (via `src.dados_b3.cotacao_ativo_dia`).
+        - Faz download dos dados do provedor usando o adaptador selecionado
+          pela fábrica (`src.adapters.factory.get_adapter`).
         - Persiste CSV bruto via `save_raw_csv` em `raw/<provider>/...`.
         - Mapeia os dados para o esquema canônico com `to_canonical`.
         - Se o módulo de validação estiver disponível, executa validação
@@ -69,19 +74,25 @@ def _fetch_and_prepare_asset(
     from datetime import datetime
     from datetime import timezone as _tz
 
-    import src.dados_b3 as dados
+    # use the factory to obtain an adapter for the requested provider
+    from src.adapters.factory import get_adapter
     from src.ingest.pipeline import save_raw_csv
 
     try:
-        df = dados.cotacao_ativo_dia(a, d_in, d_fim)
+        adapter = get_adapter(provider)
+        df = adapter.fetch(f"{a}.SA", start_date=d_in, end_date=d_fim)
     except Exception as e:
         print(f"Problemas baixando dados: {e}")
         return
 
     ts_raw = datetime.now(_tz.utc).strftime("%Y%m%dT%H%M%SZ")
-    save_meta = save_raw_csv(df, "yfinance", f"{a}.SA", ts_raw)
+    save_meta = save_raw_csv(
+        df, "yfinance", f"{a}.SA", ts_raw
+    )
     if save_meta.get("status") != "success":
-        print(f"Falha ao salvar raw para {a}: {save_meta.get('error_message')}")
+        print(
+            f"Falha ao salvar raw para {a}: {save_meta.get('error_message')}"
+        )
         return
 
     # Mapping: keep failures local and return early if mapper fails
@@ -158,16 +169,28 @@ def _fetch_and_prepare_asset(
         else:
             processed = resp.get("rows_processed", 0)
             print(
-                f"Persisted {processed} rows for {a} into DB (snapshot={resp.get('snapshot_path')})"
+                (
+                    "Persisted %d rows for %s into DB (snapshot=%s)"
+                    % (
+                        processed,
+                        a,
+                        resp.get("snapshot_path"),
+                    )
+                )
             )
     except Exception as e:
         # fallback for environments where the new helper may fail (e.g., missing
-        # DB).  Keep the original direct write as a last resort.
+        # DB).  Keep the original direct write as a last resort.  Capture the
+        # outer exception in ``e`` and any error from the fallback in ``e2`` so
+        # logs remain accurate.
         try:
             _db.write_prices(canonical, f"{a}.SA")
             print(f"Persisted canonical rows for {a} into DB (fallback)")
-        except Exception:
-            print(f"Warning: failed to persist canonical rows for {a}: {e}")
+        except Exception as e2:
+            print(
+                f"Warning: failed to persist canonical rows for {a}: {e2}"
+                f" (original error: {e})",
+            )
 
     # Calcula o retorno (usa coluna ajustada quando disponível, senão `close`)
     # Preferir o DataFrame `canonical` (já mapeado/validado) quando disponível.
@@ -312,21 +335,23 @@ def ingest_snapshot_cmd(
 
 
 @app.command()
-def main(
+def main(  # noqa: C901
     validation_tolerance: Optional[float] = typer.Option(
         None, "--validation-tolerance", help="Tolerância de inválidas (ex: 0.10)"
     ),
-):  # noqa: C901
+    provider: str = typer.Option(
+        "yfinance",
+        "--provider",
+        help="Nome do provider/adaptador a ser usado (ex: yfinance)",
+    ),
+):
     # importações locais para evitar exigir dependências apenas para `--help`
 
     import src.retorno as rt
-
-    # ativos_entrada = input(
-    #     "Lista de Ativos, separados por vírgula (exemplo: PETR4,BBDC3): "
-    # )
-    # ativos = ativos_entrada.split(',')
-    # data_in = input("Data de inicio (MM-DD-AAAA): ")
-    # data_fim = input("Data de fim (MM-DD-AAAA): ")
+    # O módulo `dados_b3` não é necessário aqui; a lógica de fetch
+    # está encapsulada em `_fetch_and_prepare_asset` que já usa a
+    # fábrica de adaptadores. Mantemos esse comentário para
+    # sinalizar a transição.
 
     # Define ativos a serem pesquisados
     ativos = ["PETR4", "ITUB3", "BBDC4"]
@@ -344,7 +369,9 @@ def main(
             print(f"Dados encontrados para {a}")
             continue
         print(f"Baixando e preparando dados de {a}")
-        _fetch_and_prepare_asset(a, d_in, d_fim, validation_tolerance)
+        _fetch_and_prepare_asset(
+            a, d_in, d_fim, validation_tolerance, provider=provider
+        )  # noqa: E501
 
     for a in ativos:
         _compute_and_print_stats(a)

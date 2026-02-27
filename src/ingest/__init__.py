@@ -11,4 +11,10 @@ from .pipeline import (
     save_raw_csv,
 )
 
-__all__ = ["save_raw_csv", "ingest_from_snapshot", "get_snapshot_dir", "get_snapshot_ttl", "force_refresh_flag"]
+__all__ = [
+    "save_raw_csv",
+    "ingest_from_snapshot",  # noqa: E501
+    "get_snapshot_dir",
+    "get_snapshot_ttl",
+    "force_refresh_flag",
+]

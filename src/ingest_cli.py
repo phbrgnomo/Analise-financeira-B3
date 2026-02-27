@@ -72,7 +72,9 @@ def _normalize_df(df: pd.DataFrame) -> pd.DataFrame:
         if isinstance(df.index, pd.DatetimeIndex):
             df = df.reset_index().rename(columns={df.index.name or "index": "date"})
         else:
-            raise ValueError("snapshot DataFrame must have a 'date' column or datetime index")
+            raise ValueError(
+                "snapshot DataFrame must have a 'date' column or datetime index"
+            )
     return df
 
 
@@ -104,7 +106,13 @@ def _compute_changes(
     if hasattr(end, "strftime"):
         end = end.strftime("%Y-%m-%d")
 
-    existing = repo.read_prices(ticker, start=start, end=end, conn=conn, db_path=db_path)
+    existing = repo.read_prices(
+        ticker,
+        start=start,
+        end=end,
+        conn=conn,
+        db_path=db_path,
+    )
     if existing.empty:
         return df
 
@@ -201,7 +209,12 @@ def ingest_snapshot(
 
     cache = _cache.load_cache(cache_file)
     entry = cache.get(key)
-    if entry and not force_refresh and entry.get("sha256") == checksum and _cache.entry_is_fresh(entry, ttl):
+    if (
+        entry
+        and not force_refresh
+        and entry.get("sha256") == checksum
+        and _cache.entry_is_fresh(entry, ttl)
+    ):
         logger.info("ingest_snapshot cached", extra={"snapshot": key})
         return {"cached": True, "processed_rows": 0, "skipped_rows": 0}
 
@@ -227,7 +240,10 @@ def ingest_snapshot(
 
     # update cache even if nothing was processed, so subsequent calls within the
     # TTL will skip.  Use the same checksum we validated above.
-    cache[key] = {"sha256": checksum, "processed_at": datetime.now(timezone.utc).isoformat()}
+    cache[key] = {
+        "sha256": checksum,
+        "processed_at": datetime.now(timezone.utc).isoformat(),
+    }
     _cache.save_cache(cache_file, cache)
 
     logger.info(

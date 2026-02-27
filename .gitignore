@@ -62,6 +62,9 @@ Thumbs.db
 .python-version
 __pycache__/
 
+# raw files
+raw/
+
 # Ignore generated snapshots created during CI/test runs
 snapshots_test/
 tmp_snapshots/

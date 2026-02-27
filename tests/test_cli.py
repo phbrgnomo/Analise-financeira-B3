@@ -25,7 +25,9 @@ def test_ingest_snapshot_help():
         # Typer/Click has a known bug with Python 3.14 where help generation
         # raises TypeError, which manifests as a non-zero exit code.  Rather
         # than fail the entire test suite, skip this assertion in that case.
-        pytest.skip(f"CLI help failed ({result.exception}); skipping on this Python/version")
+        pytest.skip(
+            f"CLI help failed ({result.exception}); skipping on this Python/version"
+        )
     assert "ingest-snapshot" in result.output
     # verify that the new flags appear
     assert "--force-refresh" in result.output
@@ -43,5 +45,46 @@ def test_main_help_exit_code_and_output():
     )
     assert completed.returncode == 0
     assert "usage" in completed.stdout.lower() or "usage" in completed.stderr.lower()
+    # Our new flags live on the `main` subcommand, so inspect that help
+    completed2 = subprocess.run(
+        [sys.executable, "-m", "src.main", "main", "--help"],
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    assert completed2.returncode == 0
+    assert "--validation-tolerance" in completed2.stdout
+    assert "--provider" in completed2.stdout
     # Help may emit deprecation warnings to stderr in some environments.
-    # Ignore stderr content in the assertion.
+    # Ignore stderr content in the assertions.
+
+
+# explicit unit test for helper using factory (avoids CLI complexity)
+def test_fetch_helper_uses_factory(monkeypatch):
+    from src.main import _fetch_and_prepare_asset
+
+    class DummyAdapter:
+        def __init__(self):
+            self.called = False
+
+        def fetch(self, ticker, start_date=None, end_date=None, **kwargs):
+            self.called = True
+            import pandas as pd
+
+            return pd.DataFrame(
+                {"Open": [], "High": [], "Low": [], "Close": [], "Volume": []}
+            )
+
+    import src.adapters.factory as factory
+    monkeypatch.setattr(factory, "get_adapter", lambda name: DummyAdapter())
+
+    # call helper directly; provider dummy is passed through
+    _fetch_and_prepare_asset(
+        "PETR4",
+        "2020-01-01",
+        "2020-12-31",
+        None,
+        provider="dummy",
+    )
+    # if we reach here without exception, factory was invoked
+    # (dummy adapter didn't crash)

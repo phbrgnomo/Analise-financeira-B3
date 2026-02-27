@@ -1,22 +1,52 @@
-import pandas as pd
-import yfinance as yf
+import warnings
+
+from src.adapters.factory import get_adapter
+
+# importing this module is deprecated; emit once per import
+warnings.warn(
+    "src.dados_b3 is deprecated; use src.adapters.factory.get_adapter instead",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 """
-Este módulo substitui o uso de `pandas_datareader` (incompatível com
-Python 3.12) e oferece duas funções simples que retornam `pandas.DataFrame`
-com OHLCV/adj close para um índice ou ativo.
+Deprecatado — o módulo existe apenas para compatibilidade com código
+ancestral.  Todos os consumidores novos devem trocar por
+``factory.get_adapter(provider).fetch(...)``.
+
+As funções aqui são meros wrappers que emitam ``DeprecationWarning`` e
+redirigem para a fábrica.  O restante da implementação histórica foi
+removido para reduzir a superfície de manutenção.
 """
 
 
-def cotacao_indice_dia(indice, data_inicio, data_fim) -> pd.DataFrame:
-    # Coleta valores do OHLCV e Adj Close do <indice> entre <data_inicio> e <data_fim>
-    ticker = f"^{indice}"
-    print(f"Coletando dados do índice {indice} ({ticker})...")
-    return yf.download(ticker, start=data_inicio, end=data_fim)
+def cotacao_indice_dia(indice, data_inicio, data_fim, provider: str | None = None):
+    """Deprecated wrapper. Use factory.get_adapter(...).fetch() directly.
+
+    Emite :class:`DeprecationWarning`.
+    """
+    warnings.warn(
+        "cotacao_indice_dia is deprecated; call an adapter directly",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    adapter = get_adapter(provider or "yfinance")
+    return adapter.fetch(f"^{indice}", start_date=data_inicio, end_date=data_fim)
 
 
-def cotacao_ativo_dia(ativo, data_inicio, data_fim) -> pd.DataFrame:
-    # Coleta valores do OHLCV e Adj Close do <ativo> entre <data_inicio> e <data_fim>
-    ticker = f"{ativo}.SA"
-    print(f"Coletando dados do ativo {ativo} ({ticker})...")
-    return yf.download(ticker, start=f"{data_inicio}", end=f"{data_fim}")
+def cotacao_ativo_dia(ativo, data_inicio, data_fim, provider: str | None = None):
+    """Deprecated wrapper. Use factory.get_adapter(...).fetch() directly.
+
+    Emite :class:`DeprecationWarning`.
+    """
+    warnings.warn(
+        "cotacao_ativo_dia is deprecated; call an adapter directly",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    adapter = get_adapter(provider or "yfinance")
+    return adapter.fetch(
+        f"{ativo}.SA",
+        start_date=f"{data_inicio}",
+        end_date=f"{data_fim}",
+    )

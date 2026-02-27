@@ -266,11 +266,32 @@ def _apply_posix_permissions(paths: list[Union[str, Path]]) -> None:
 def _env_bool(name: str) -> bool:
     """Interpret an environment variable as a boolean flag.
 
-    Returns ``True`` when the variable exists and is not one of the
-    falsy strings (empty, "0", "false", "none").
+    The implementation is deliberately strict: only a small set of values
+    are recognised as ``True`` or ``False``.  This prevents typos or
+    unexpected strings (``off``, ``flase``) from silently flipping the
+    flag.  Unknown values raise :class:`ValueError` so that misconfiguration
+    fails fast.
+
+    Recognised truthy values (case-insensitive): ``1``, ``true``, ``yes``.
+    Recognised falsy values: ``0``, ``false``, ``no``, ``off`` or the empty
+    string.  If the variable is not defined in the environment the result is
+    ``False``.
     """
-    val = os.environ.get(name, "")
-    return val.lower() not in ("", "0", "false", "none")
+    val = os.environ.get(name)
+    if val is None:
+        return False
+
+    norm = val.strip().lower()
+    true_set = {"1", "true", "yes"}
+    false_set = {"0", "false", "no", "off", ""}
+
+    if norm in true_set:
+        return True
+    if norm in false_set:
+        return False
+
+    # unknown input; caller probably mis‑typed the variable name/value
+    raise ValueError(f"unexpected boolean env var {name}={val!r}")
 
 
 def get_snapshot_dir() -> Path:
@@ -301,11 +322,16 @@ def get_snapshot_ttl() -> int:
 
 
 def force_refresh_flag() -> bool:
-    """Return ``True`` if ``FORCE_REFRESH`` environment variable is truthy."""
+    """Return ``True`` if ``FORCE_REFRESH`` environment variable is truthy.
+
+    Parsing is strict: only ``1``, ``true`` or ``yes`` (case-insensitive) are
+    accepted as true; ``0``, ``false``, ``no`` and ``off`` are false.  Any other
+    value will raise :class:`ValueError` so misconfigured environments fail fast.
+    """
     return _env_bool("FORCE_REFRESH")
 
 
-def ingest_from_snapshot(
+def ingest_from_snapshot(  # noqa: C901
     df: pd.DataFrame,
     ticker: str,
     *,
@@ -387,14 +413,31 @@ def ingest_from_snapshot(
         conn = _db._connect(db_path)
         cur = conn.cursor()
         cur.execute(
-            "SELECT payload FROM snapshots WHERE ticker = ? ORDER BY created_at DESC LIMIT 1",
+            "SELECT payload FROM snapshots WHERE ticker = ? "
+            "ORDER BY created_at DESC LIMIT 1",
             (ticker,),
         )
         row = cur.fetchone()
         if row:
-            last_meta = json.loads(row[0])
-    except Exception:
-        # failures here are non‑fatal; we simply treat as "no cache"
+            try:
+                last_meta = json.loads(row[0])
+            except json.JSONDecodeError as exc:
+                # corrupted payload should not abort the whole run but it is
+                # worth surfacing for later investigation.
+                logger.warning(
+                    "invalid snapshot metadata JSON for %s: %s",
+                    ticker,
+                    exc,
+                )
+                last_meta = None
+    except (OSError, sqlite3.DatabaseError) as exc:
+        # treat database or I/O failures as cache misses; keep ingestion
+        # resilient while avoiding noisy stack traces in normal operation.
+        logger.debug(
+            "failed to read snapshot metadata for %s: %s",
+            ticker,
+            exc,
+        )
         last_meta = None
     finally:
         if 'conn' in locals() and conn:
