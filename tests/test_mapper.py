@@ -9,6 +9,8 @@ Covers:
 """
 
 
+import hashlib
+
 import pandas as pd
 import pytest
 
@@ -87,7 +89,7 @@ class TestToCanonical:
 
         assert "missing required columns" in str(exc_info.value).lower()
 
-    def test_raw_checksum_correctness(self):
+    def test_raw_checksum_is_deterministic(self):
         """Given a known DataFrame, raw_checksum should be deterministic."""
         # Arrange
         dates = pd.date_range("2026-01-01", periods=2, freq="D")
@@ -111,9 +113,16 @@ class TestToCanonical:
         assert result1.attrs["raw_checksum"] == result2.attrs["raw_checksum"]
 
         # Verify checksum is actually SHA256 of the deterministic CSV representation
-        # csv_sorted defined earlier in another test; not needed here
-        # (we're only verifying that zero rows are accepted)
-        pass
+        csv_sorted = raw_df.sort_index()
+        csv_str = csv_sorted.to_csv(
+            index=True,
+            date_format="%Y-%m-%dT%H:%M:%S",
+            float_format="%.10g",
+            na_rep="",
+        )
+        csv_bytes = csv_str.encode("utf-8")
+        expected_checksum = hashlib.sha256(csv_bytes).hexdigest()
+        assert result1.attrs["raw_checksum"] == expected_checksum
 
     def test_mapper_allows_zero_high_low(self):
         """Rows where high==low==0 should pass validation (holiday markers)."""
