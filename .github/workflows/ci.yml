@@ -42,14 +42,8 @@ jobs:
       - name: CLI smoke test
         run: |
           echo "# register a dummy provider and run ingest via CLI"
-          printf "%s\n" \
-            "import pandas as pd" \
-            "from src.adapters.factory import register_adapter" \
-            "class DummyAdapter:" \
-            "    def fetch(self, ticker, **kw):" \
-            "        return pd.DataFrame({\"Open\": [1.0], \"High\": [1.0], \"Low\": [1.0], \"Close\": [1.0], \"Volume\": [100]})" \
-            "register_adapter(\"dummy\", DummyAdapter)" > /tmp/register_dummy.py
-          poetry run python /tmp/register_dummy.py
+          # use the canonical script in the repository to avoid runtime typos
+          poetry run python scripts/register_dummy.py
           poetry run pipeline ingest --source dummy TEST
       - name: Upload artifacts on failure
         if: failure()
