@@ -157,7 +157,7 @@ jobs:
 
       - name: CLI smoke test
         run: |
-          echo "# register a dummy provider and invoke CLI"
+          echo "# register a dummy provider and run ingest via CLI"
           poetry run python - <<'PY'
 import pandas as pd
 from src.adapters.factory import register_adapter
@@ -171,13 +171,6 @@ PY
             echo "CLI smoke failure: expected raw file under raw/dummy" >&2
             exit 1
           fi
-
-      - name: Upload smoke artifacts on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: smoke-logs
-          path: tests/ci/**
 
   integration:
     # Ensure snapshots produced by tests are saved to snapshots_test for artifact upload
