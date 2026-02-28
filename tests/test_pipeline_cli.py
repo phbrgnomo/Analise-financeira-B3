@@ -1,3 +1,5 @@
+from typing import Any
+
 import pandas as pd
 import pytest
 
@@ -11,10 +13,10 @@ from src.ingest import pipeline
 
 
 class DummyAdapter:
-    def __init__(self):
-        self.called = False
+    def __init__(self) -> None:
+        self.called: bool = False
 
-    def fetch(self, ticker, **kwargs):
+    def fetch(self, ticker: str, **kwargs: Any) -> pd.DataFrame:
         self.called = True
         # return a minimal non-empty DataFrame so the mapper does not reject it
         return pd.DataFrame(

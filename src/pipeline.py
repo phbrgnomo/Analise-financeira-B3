@@ -30,7 +30,7 @@ def ingest_cmd(
     source: str = typer.Option(
         "yfinance",
         "--source",
-        help="Provider adapter to use (choices: %s)" % ", ".join(available_providers()),
+        help=f"Provider adapter to use (choices: {', '.join(available_providers())})",
     ),
     ticker: str = typer.Argument(
         ..., help="Ticker to ingest, ex. PETR4.SA (positional)."

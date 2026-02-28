@@ -15,7 +15,7 @@ idênticos. O pipeline agora grava snapshots versionados em `dados/snapshots`,
 calcula e verifica checksums SHA256, mantém metadados no banco e só persiste
 linhas novas ou alteradas usando o helper `ingest_from_snapshot`.
 
-Além disso foi adicionada uma CLI `ingest-snapshot` com flags para `--force-`
+Além disso, foi adicionada uma CLI `ingest-snapshot` com flags para `--force-`
 refresh, TTL configurável e cache-file personalizável; essa rotina é usada no
 fluxo principal em `src/main._fetch_and_prepare_asset` quando ingestindo preços.
 

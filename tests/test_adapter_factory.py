@@ -43,7 +43,7 @@ def test_available_providers_reflects_registry(monkeypatch):
         def _fetch_once(self, ticker: str, start: str, end: str, **kwargs):
             pass
 
-    from src.adapters.factory import available_providers, register_adapter
+    from src.adapters.factory import available_providers
     register_adapter('one', A)
     register_adapter('two', B)
 

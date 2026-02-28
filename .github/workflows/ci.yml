@@ -43,14 +43,14 @@ jobs:
         run: |
           echo "# register a dummy provider and run ingest via CLI"
           poetry run python - <<'PY'
-import pandas as pd
-from src.adapters.factory import register_adapter
-class DummyAdapter:
-    def fetch(self, ticker, **kw):
-        return pd.DataFrame({"Open": [1.0], "High": [1.0], "Low": [1.0], "Close": [1.0], "Volume": [100]})
-register_adapter("dummy", DummyAdapter)
-PY
-          poetry run pipeline ingest --source dummy TEST
+                    import pandas as pd
+                    from src.adapters.factory import register_adapter
+                    class DummyAdapter:
+                        def fetch(self, ticker, **kw):
+                            return pd.DataFrame({"Open": [1.0], "High": [1.0], "Low": [1.0], "Close": [1.0], "Volume": [100]})
+                    register_adapter("dummy", DummyAdapter)
+                    PY
+                              poetry run pipeline ingest --source dummy TEST
       - name: Upload artifacts on failure
         if: failure()
         uses: actions/upload-artifact@v4
