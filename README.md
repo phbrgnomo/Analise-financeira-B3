@@ -87,8 +87,7 @@ As instruções completas e o playbook estão em `docs/playbooks/testing-network
 
 ## Uso e convenções
 - Dados são obtidos através da fábrica de adaptadores (`src.adapters.factory`).
-  O adaptador padrão é `yfinance`, mas outros podem ser registrados.
-  `src/dados_b3.py` existe para compatibilidade e não deve ser usado em
+- Dados são obtidos através da fábrica de adaptadores (`src.adapters.factory`).  O adaptador padrão é `yfinance`, mas outros podem ser registrados.  Para fins de testes e *smoke* CLI há também um provedor `dummy` embutido; ele gera um DataFrame pequeno sem acesso à rede e pode ser usado via `get_adapter("dummy")` ou pelo parâmetro `--provider dummy` na CLI.  `src/dados_b3.py` existe para compatibilidade e não deve ser usado em
   código novo.
 
   Exemplo de uso:

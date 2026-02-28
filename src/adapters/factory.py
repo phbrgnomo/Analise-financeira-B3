@@ -9,16 +9,31 @@ import logging
 from typing import Dict, Type
 
 from src.adapters.base import Adapter
+
+# import dummy adapter so it can be registered by default.  doing this here
+# keeps tests and the CI smoke test simple: the provider ``dummy`` is always
+# available without requiring an explicit registration step in the same
+# Python process.
+from src.adapters.dummy import DummyAdapter
 from src.adapters.yfinance_adapter import YFinanceAdapter
 
 # dictionary of provider name (lowercase) -> Adapter class
 _ADAPTER_REGISTRY: Dict[str, Type[Adapter]] = {
     "yfinance": YFinanceAdapter,
     "yahoo": YFinanceAdapter,  # alias for convenience
+    "dummy": DummyAdapter,  # synthetic provider used for smoke tests
 }
 
 
 # public API
+
+def available_providers() -> list[str]:
+    """Return a list of currently registered provider names.
+
+    The result is suitable for use in CLI help text or validation.  Aliases
+    are included; callers may wish to dedupe or sort as needed.
+    """
+    return sorted(_ADAPTER_REGISTRY.keys())
 
 def get_adapter(name: str) -> Adapter:
     """Return a fresh adapter instance for the given provider name.

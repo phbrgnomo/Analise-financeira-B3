@@ -62,21 +62,9 @@ def test_main_help_exit_code_and_output():
 
 # explicit unit test for helper using factory (avoids CLI complexity)
 def test_fetch_helper_uses_factory(monkeypatch):
-    from src.main import _fetch_and_prepare_asset
-
-    class DummyAdapter:
-        def __init__(self):
-            self.called = False
-
-        def fetch(self, ticker, start_date=None, end_date=None, **kwargs):
-            self.called = True
-            import pandas as pd
-
-            return pd.DataFrame(
-                {"Open": [], "High": [], "Low": [], "Close": [], "Volume": []}
-            )
-
     import src.adapters.factory as factory
+    from src.adapters.dummy import DummyAdapter
+    from src.main import _fetch_and_prepare_asset
     # create a single dummy instance so we can inspect it after the call
     dummy = DummyAdapter()
     monkeypatch.setattr(factory, "get_adapter", lambda name: dummy)

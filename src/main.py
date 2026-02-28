@@ -1,4 +1,14 @@
 import os
+
+# compatibility shims have been extracted to ``src.cli_compat``; import
+# here to ensure the patches are applied when the CLI is loaded.
+# (see story 1.3 follow‑up cleanup)
+try:
+    import src.cli_compat  # noqa: F401 - import for side effects
+except ImportError:
+    # not fatal; patching is best-effort
+    pass
+
 from datetime import date, timedelta
 from typing import Optional
 
@@ -12,6 +22,20 @@ from src.paths import DATA_DIR
 
 # Instância principal da aplicação de linha de comando usando Typer
 app = typer.Typer()
+
+# mount sub-commands from other modules (kept small in this file)
+try:
+    from src import pipeline as pipeline_module
+
+    app.add_typer(pipeline_module.app, name="pipeline")
+except ImportError as exc:
+    # pipeline module may not exist in some lightweight test environments; log
+    # at WARNING level so misconfigurations are visible in normal runs.
+    import logging
+
+    logging.getLogger(__name__).warning(
+        "could not import pipeline subcommands: %s", exc
+    )
 
 d_atual = date.today()
 
