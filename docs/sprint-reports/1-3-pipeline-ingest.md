@@ -55,6 +55,24 @@ canônico. O comando é idempotente em relação às opções `--dry-run` e
 * Planejar testes E2E mockados no CI que executem `pipeline ingest` e verifiquem
   geração de snapshot + checksum conforme requisito FR13.
 
+## Correções pós‑review
+
+Após a revisão de código foram realizados ajustes menores para deixar o
+módulo em conformidade com os padrões:
+
+* Corrigido o docstring de `ingest()` e modificado o fluxo de tratamento do
+  mapper para que exceções também sejam convertidas em resultados com
+  ``status=='error'`` (antes eram re‑lançadas).
+* Adicionado inicializador de `df_sub` para silenciar aviso do ruff.
+* Inseridos novos testes unitários:
+  * validação de lista dinâmica de provedores (`available_providers`).
+  * cenário de falha do mapper garantindo evento de log e codes de saída.
+* Adicionado passo de smoke CLI no workflow de CI que registra um adaptador
+  dummy e invoca o comando para verificar criação de arquivo raw.
+
+Essas melhorias garantem maior robustez e facilitam a evolução futura do
+comando CLI.
+
 ---
 
 > **Data:** 27 de fevereiro de 2026

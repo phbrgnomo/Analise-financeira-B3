@@ -18,17 +18,9 @@ try:
 except ImportError:
     pass
 
-from enum import Enum
-
 import typer
 
-
-class Provider(str, Enum):
-    yfinance = "yfinance"
-    # other providers can be added here as needed
-
-    def __str__(self) -> str:
-        return self.value
+from src.adapters.factory import available_providers
 
 app = typer.Typer()
 
@@ -38,7 +30,7 @@ def ingest_cmd(
     source: str = typer.Option(
         "yfinance",
         "--source",
-        help="Provider adapter to use (choices defined by Provider enum)",
+        help="Provider adapter to use (choices: %s)" % ", ".join(available_providers()),
     ),
     ticker: str = typer.Argument(
         ..., help="Ticker to ingest, ex. PETR4.SA (positional)."
@@ -60,13 +52,13 @@ def ingest_cmd(
     """
     from src.ingest.pipeline import ingest_command
 
-    try:
-        src_name = Provider(source).value
-    except ValueError as exc:
+    # provider validation is dynamic based on registered adapters
+    src_name = source.lower()
+    if src_name not in available_providers():
         raise typer.BadParameter(
             "unknown provider %r, choose from %s"
-            % (source, ", ".join(e.value for e in Provider)),
-        ) from exc
+            % (source, ", ".join(available_providers())),
+        )
     exit_code = ingest_command(
         ticker, src_name, dry_run=dry_run, force_refresh=force_refresh
     )

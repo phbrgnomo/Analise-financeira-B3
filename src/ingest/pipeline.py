@@ -65,10 +65,13 @@ def ingest(
     * Always generate and return a ``job_id`` so that callers can correlate
       log entries.
 
-    The function never raises; errors are captured in the returned dict and
-    reported via ``status``/``error_message``.  This makes it easy for the
-    Typer command wrapper to choose an appropriate exit code while keeping
-    business logic testable.
+    The function returns a dictionary containing a ``job_id`` and
+    ``status``.  Errors during fetch, mapping or persistence are caught and
+    translated into a result with ``status=='error'`` and an ``error_message``
+    so that callers (including the CLI wrapper) can choose an appropriate
+    exit code without needing to catch exceptions.  This behaviour makes the
+    logic easy to drive from tests or scripting environments while still
+    recording useful metadata.
     """
     job_id = str(uuid.uuid4())
     logger.info(
@@ -117,7 +120,7 @@ def ingest(
             "error_message": msg,
         }
         _record_ingest_metadata(metadata)
-        raise
+        return {"job_id": job_id, "status": "error", "error_message": msg}
 
     # if the caller only wanted a dry run, return now
     if dry_run:
@@ -575,13 +578,15 @@ def _rows_to_ingest(df: pd.DataFrame, existing: Optional[pd.DataFrame]) -> pd.Da
     common = (
         df2.columns.intersection(existing2.columns).difference(list(ignore_cols))
     )
+    # prepare placeholders so that lint tools know the variables exist
+    df_sub = pd.DataFrame()
+    mask_changed = pd.Series(False, index=changed_idx)
+
     if not common.empty:
         df_sub = df2.loc[changed_idx, common]
         ex_sub = existing2.loc[changed_idx, common]
         df_sub, ex_sub = df_sub.align(ex_sub, join="inner", axis=0)
         mask_changed = (df_sub != ex_sub).any(axis=1)
-    else:
-        mask_changed = pd.Series(False, index=changed_idx)
 
     changed = pd.DataFrame() if common.empty else df2.loc[df_sub.index[mask_changed]]
     return pd.concat([df2.loc[new_idx], changed])

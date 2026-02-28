@@ -126,6 +126,40 @@ def test_invalid_provider_returns_error(monkeypatch):
     assert rc != 0
 
 
+def test_mapper_failure_propagates(monkeypatch, capsys):
+    """When the mapper raises, the CLI returns non-zero and logs metadata."""
+    dummy = DummyAdapter()
+    monkeypatch.setattr(
+        "src.adapters.factory.get_adapter", lambda name: dummy
+    )
+
+    # make the mapper raise
+    import src.etl.mapper as mapper
+
+    def bad_map(df, **kw):
+        raise RuntimeError("map bug")
+
+    monkeypatch.setattr(mapper, "to_canonical", bad_map)
+
+    # capture metadata written by _record_ingest_metadata
+    recorded = {}
+
+    def fake_persist(meta, path=None):
+        recorded.update(meta)
+
+    monkeypatch.setattr(pipeline, "_record_ingest_metadata", fake_persist)
+
+    rc = pipeline.ingest_command("TST", "dummy")
+    assert rc == 1
+    assert recorded.get("status") == "error"
+    assert "map bug" in recorded.get("error_message", "")
+
+    captured = capsys.readouterr()
+    # CLI prints both error message and job_id on stderr for failures
+    assert captured.out == ""
+    assert "job_id=" in captured.err
+
+
 def test_ingest_cmd_validates_provider():
     """The Typer wrapper raises BadParameter when --source is invalid."""
     import typer

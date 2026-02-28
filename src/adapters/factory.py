@@ -20,6 +20,14 @@ _ADAPTER_REGISTRY: Dict[str, Type[Adapter]] = {
 
 # public API
 
+def available_providers() -> list[str]:
+    """Return a list of currently registered provider names.
+
+    The result is suitable for use in CLI help text or validation.  Aliases
+    are included; callers may wish to dedupe or sort as needed.
+    """
+    return sorted(_ADAPTER_REGISTRY.keys())
+
 def get_adapter(name: str) -> Adapter:
     """Return a fresh adapter instance for the given provider name.
 
