@@ -22,11 +22,11 @@ def test_returns_consumer_example(tmp_path, monkeypatch):
     conn = sqlite3.connect(str(db_path))
     # mimic real schema: return_value column plus some extras
     conn.execute(
-        "CREATE TABLE returns (ticker text, date text, return_value real, "
+        "CREATE TABLE returns (ticker text, date text, \"return\" real, "
         "return_type text, created_at text)"
     )
     conn.execute(
-        "INSERT INTO returns (ticker,date,return_value) "
+        "INSERT INTO returns (ticker,date,\"return\") "
         "VALUES ('PETR4.SA','2021-01-01',0.01)"
     )
     conn.commit()
