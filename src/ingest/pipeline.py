@@ -187,7 +187,7 @@ def ingest(
 
     return {
         "job_id": job_id,
-        "status": "success",
+        "status": top_status,
         "save_meta": save_meta,
         "persist": persist_result,
     }

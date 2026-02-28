@@ -45,6 +45,7 @@ except Exception:  # pragma: no cover - best effort
     pass
 
 try:
+    import inspect
     import logging
 
     import click
@@ -52,45 +53,27 @@ try:
     _log = logging.getLogger(__name__)
     _orig_pt_metavar = click.ParamType.get_metavar
 
-    def _patched_pt_metavar(self, *args, **kwargs):
-        """
-        Compatibility wrapper around click.ParamType.get_metavar.
+    # inspect original signature once and decide adaptation strategy
+    try:
+        sig = inspect.signature(_orig_pt_metavar)
+        params = list(sig.parameters.values())[1:]  # skip self
+    except (TypeError, ValueError):
+        params = []
 
-        Some Click versions changed the signature of this method.  We try the
-        original call and, on a signature-related ``TypeError``, retry with
-        reduced arguments.  Non-signature TypeErrors are propagated so errors
-        in custom ParamTypes surface normally.
-        """
-        try:
-            return _orig_pt_metavar(self, *args, **kwargs)
-        except TypeError as exc:
-            msg = str(exc)
-            signature_mismatch = any(
-                hint in msg
-                for hint in (
-                    "positional argument",
-                    "positional arguments",
-                    "required positional argument",
-                    "unexpected keyword argument",
-                    "takes from",
-                    "takes 1 positional argument",
-                    "takes 2 positional arguments",
-                )
-            )
-            if not signature_mismatch:
-                raise
-
-            _log.debug(
-                "cli_compat: falling back in ParamType.get_metavar for %s due to %r; "
-                "this usually indicates a Click version/signature mismatch",
-                type(self).__name__,
-                exc,
-            )
-
-            try:
-                return _orig_pt_metavar(self, None, None)
-            except TypeError:
-                return _orig_pt_metavar(self)
+    if len(params) == 1:
+        # original expects (self, param)
+        def _patched_pt_metavar(self, *args, **kwargs):
+            param = args[0] if args else kwargs.get("param")
+            return _orig_pt_metavar(self, param)
+    elif len(params) == 2:
+        # original expects (self, param, ctx)
+        def _patched_pt_metavar(self, *args, **kwargs):
+            param = args[0] if len(args) > 0 else kwargs.get("param")
+            ctx = args[1] if len(args) > 1 else kwargs.get("ctx")
+            return _orig_pt_metavar(self, param, ctx)
+    else:
+        # unknown signature; fallback to original unmodified
+        _patched_pt_metavar = _orig_pt_metavar
 
     click.ParamType.get_metavar = _patched_pt_metavar
 except Exception:  # pragma: no cover

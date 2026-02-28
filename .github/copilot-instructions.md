@@ -14,7 +14,7 @@
 - Single-package Python app: core modules live in `src/` (ex.: `src/db.py`, `src/main.py`, `src/validation.py`).
 - Persistence: lightweight SQLite via SQLAlchemy Core; `dados/` holds runtime DB and data snapshots (`snapshots/`, `dados/`).
 - ETL and adapters live under `src/adapters/`, `src/etl/`, and `scripts/` for small helpers.
-- **The adapter factory (`src/adapters/factory.py`) is the canonical entry point**; all data-provider logic should obtain instances via `get_adapter()` or `register_adapter()`. Legacy helper `src/dados_b3.py` is deprecated and only emits warnings.
+- **The adapter factory (`src/adapters/factory.py`) is the canonical entry point**; all data-provider logic should obtain instances via `get_adapter()` or `register_adapter()`. O helper legado `src/dados_b3.py` está **deprecated** e não deve ser usado em novo código; ele deve emitir warnings de depreciação quando importado/uso, e se isso ainda não estiver implementado é obrigatório criar uma tarefa para adicionar esses warnings em `src/dados_b3.py`.
 - Adapter guidelines and patterns are in `docs/modules/adapter-guidelines.md` (fetch helpers, retry logic, metadata, testing).
 
 ## Playbooks and Instructions
