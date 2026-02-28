@@ -44,7 +44,7 @@ jobs:
           echo "# register a dummy provider and run ingest via CLI"
           # use the canonical script in the repository to avoid runtime typos
           poetry run python scripts/register_dummy.py
-          poetry run main pipeline ingest --source dummy TEST
+          poetry run python -c "import sys; from src.ingest.pipeline import ingest_command; sys.exit(ingest_command('TEST', 'dummy'))"
       - name: Upload artifacts on failure
         if: failure()
         uses: actions/upload-artifact@v4
