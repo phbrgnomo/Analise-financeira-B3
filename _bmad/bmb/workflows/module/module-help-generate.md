@@ -91,7 +91,7 @@ May only have phase-3 entries that integrate into another module's workflow
 Sequence numbers fit logically before/after existing items
 ```
 
-**Standalone collections:**
+**Standalone modules:**
 ```
 All entries are anytime
 No sequence numbers

@@ -27,29 +27,29 @@ poetry install
 
 Uso básico
 
-Executar ingest e gerar snapshot (exemplo):
+Executar ingest e gerar snapshot (exemplo) usando o subcomando `pipeline ingest`:
 
 ```bash
-poetry run main --ticker PETR4.SA --force-refresh
+poetry run main pipeline ingest PETR4.SA --force-refresh
+# ou com provider explícito:
+poetry run main pipeline ingest --source yfinance PETR4.SA --force-refresh
 ```
 
 Saída JSON (`--format json`)
 
-Alguns comandos aceitam `--format json` para saída estruturada (útil para CI e scripts automáticos):
-
-```bash
-poetry run main --ticker PETR4.SA --start 2020-01-01 --format json
-```
+O comando `pipeline ingest` pode ser combinado com flags como `--dry-run` ou
+`--force-refresh`, mas não produz diretamente JSON.  Para formatos estruturados
+use os helpers de exportação ou os scripts CLI adicionais (ex.: `snapshots
+export`).
 
 A saída JSON inclui campos de metadados quando aplicável: `ticker`, `snapshot_path`, `rows`, `checksum`, `snapshot_date`, `schema_version`.
 
 Exemplos rápidos
 
-- Forçar refresh e escrever metadados:
+- Forçar refresh e gerar snapshot via pipeline ingest (sem JSON):
 
 ```bash
-poetry run main --ticker PETR4.SA --force-refresh --format json > out.json
-jq . out.json
+poetry run main pipeline ingest PETR4.SA --force-refresh
 ```
 
 - Validar metadados gerados (usar o script de validação incluído):
