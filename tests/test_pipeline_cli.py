@@ -1,7 +1,7 @@
-from typing import Any
 
-import pandas as pd
 import pytest
+
+from src.adapters.dummy import DummyAdapter
 
 # The CLI helper is built using Typer, which has proven brittle in the
 # current test environment (see excessive recursion and parse errors above).
@@ -10,24 +10,6 @@ import pytest
 # intent of "CLI integration" smoke tests while avoiding framework
 # incompatibilities.
 from src.ingest import pipeline
-
-
-class DummyAdapter:
-    def __init__(self) -> None:
-        self.called: bool = False
-
-    def fetch(self, ticker: str, **kwargs: Any) -> pd.DataFrame:
-        self.called = True
-        # return a minimal non-empty DataFrame so the mapper does not reject it
-        return pd.DataFrame(
-            {
-                "Open": [1.0],
-                "High": [1.0],
-                "Low": [1.0],
-                "Close": [1.0],
-                "Volume": [100],
-            }
-        )
 
 
 def test_pipeline_ingest_dry_run(monkeypatch, capsys):

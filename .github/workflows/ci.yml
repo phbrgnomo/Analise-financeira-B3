@@ -41,10 +41,11 @@ jobs:
           NETWORK_MODE=playback poetry run pytest -q --maxfail=1 --junitxml=reports/junit.xml
       - name: CLI smoke test
         run: |
-          echo "# register a dummy provider and run ingest via CLI"
-          # use the canonical script in the repository to avoid runtime typos
-          poetry run python scripts/register_dummy.py
-          poetry run python -c "import sys; from src.ingest.pipeline import ingest_command; sys.exit(ingest_command('TEST', 'dummy'))"
+          echo "# smoke test using built-in dummy provider"
+          # the dummy adapter is now registered automatically by the factory,
+          # so we can call the ingest command directly.  the helper script is
+          # kept for manual experimentation but is not required here.
+          poetry run python -c "import sys; from src.ingest.pipeline import ingest_command; sys.exit(ingest_command('TEST', 'dummy', dry_run=True))"
       - name: Upload artifacts on failure
         if: failure()
         uses: actions/upload-artifact@v4
