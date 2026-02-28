@@ -28,9 +28,14 @@ try:
     from src import pipeline as pipeline_module
 
     app.add_typer(pipeline_module.app, name="pipeline")
-except ImportError:
-    # pipeline module may not exist in some lightweight test environments
-    pass
+except ImportError as exc:
+    # pipeline module may not exist in some lightweight test environments; log
+    # at WARNING level so misconfigurations are visible in normal runs.
+    import logging
+
+    logging.getLogger(__name__).warning(
+        "could not import pipeline subcommands: %s", exc
+    )
 
 d_atual = date.today()
 

@@ -53,12 +53,16 @@ def ingest_cmd(
     from src.ingest.pipeline import ingest_command
 
     # provider validation is dynamic based on registered adapters
-    src_name = source.lower()
-    if src_name not in available_providers():
+    provs = available_providers()
+    # build lowercase map -> canonical name for stable normalization
+    prov_map = {p.lower(): p for p in provs}
+    src_key = source.lower()
+    if src_key not in prov_map:
         raise typer.BadParameter(
             "unknown provider %r, choose from %s"
-            % (source, ", ".join(available_providers())),
+            % (source, ", ".join(provs)),
         )
+    src_name = prov_map[src_key]
     exit_code = ingest_command(
         ticker, src_name, dry_run=dry_run, force_refresh=force_refresh
     )

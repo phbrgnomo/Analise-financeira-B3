@@ -66,7 +66,7 @@ módulo em conformidade com os padrões:
 * Adicionado inicializador de `df_sub` para silenciar aviso do ruff.
 * Inseridos novos testes unitários:
   * validação de lista dinâmica de provedores (`available_providers`).
-  * cenário de falha do mapper garantindo evento de log e codes de saída.
+  * cenário de falha do mapper garantindo evento de log e códigos de saída.
 * Adicionado passo de smoke CLI no workflow de CI que registra um adaptador
   dummy e invoca o comando para verificar criação de arquivo raw.
 

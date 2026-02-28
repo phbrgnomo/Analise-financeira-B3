@@ -57,3 +57,38 @@ def test_rows_to_ingest_ignores_meta_columns():
     diff = _rows_to_ingest(new, existing)
     # values identical apart from ignored column, so nothing to ingest
     assert diff.empty
+
+
+def test_rows_to_ingest_mixed_naive_and_aware():
+    # one frame naive, the other timezone-aware; normalization should
+    # still compare correctly and drop tz info.
+    existing = make_df(["2021-01-01"], [1], tz=None)
+    new = make_df(["2021-01-01", "2021-01-02"], [1, 2], tz="UTC")
+    subset = _rows_to_ingest(new, existing)
+    # only the additional date is new; the first row matches after
+    # normalization of naive/aware indices.
+    assert len(subset) == 1
+    assert subset.index[0].date() == pd.Timestamp("2021-01-02").date()
+    assert subset.index.tz is None
+
+    # reverse: existing aware, new naive
+    existing2 = make_df(["2021-01-01"], [1], tz="UTC")
+    new2 = make_df(["2021-01-01", "2021-01-02"], [1, 2], tz=None)
+    subset2 = _rows_to_ingest(new2, existing2)
+    # again only the extra date should be returned
+    assert len(subset2) == 1
+    assert subset2.index.tz is None
+
+
+def test_rows_to_ingest_empty_existing():
+    # existing is None -> all rows returned
+    new = make_df(["2021-01-01", "2021-01-02"], [5, 6], tz="UTC")
+    subset = _rows_to_ingest(new, None)
+    assert len(subset) == 2
+    assert subset.index.tz is None
+
+    # empty DataFrame should behave same as None
+    empty = pd.DataFrame()
+    subset2 = _rows_to_ingest(new, empty)
+    assert len(subset2) == 2
+    assert subset2.index.tz is None

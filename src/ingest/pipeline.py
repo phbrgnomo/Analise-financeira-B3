@@ -130,6 +130,8 @@ def ingest(
         )
         return {
             "job_id": job_id,
+            "ticker": ticker,
+            "source": source,
             "status": "success",
             "dry_run": True,
             "rows": len(canonical),
@@ -162,12 +164,17 @@ def ingest(
         logger.exception("persistence step failed: %s", exc)
         persist_result = {"status": "error", "error_message": str(exc)}
 
+    # derive overall status from persistence outcome; if the helper reports
+    # "error" we propagate that.  Future extensions could use
+    # "partial_success" or similar.
+    top_status = "success" if persist_result.get("status") == "success" else "error"
+
     # final metadata entry for the orchestrator run
     metadata = {
         "job_id": job_id,
         "ticker": ticker,
         "source": source,
-        "status": "success",
+        "status": top_status,
         "rows": len(canonical),
         "persist": persist_result,
     }
@@ -552,10 +559,13 @@ def _rows_to_ingest(df: pd.DataFrame, existing: Optional[pd.DataFrame]) -> pd.Da
 
     # coerce timezone differences to UTC, then drop tz info for comparison
     if isinstance(df2.index, pd.DatetimeIndex):
-        if df2.index.tz is not None:
-            df2.index = df2.index.tz_convert("UTC").tz_localize(None)
+        # normalize to UTC
+        if df2.index.tz is None:
+            df2.index = df2.index.tz_localize("UTC")
         else:
-            df2.index = df2.index.tz_localize("UTC").tz_localize(None)
+            df2.index = df2.index.tz_convert("UTC")
+        # drop tz information for naive comparison
+        df2.index = df2.index.tz_convert(None)
 
     if existing is None or existing.empty:
         return df2
@@ -566,10 +576,11 @@ def _rows_to_ingest(df: pd.DataFrame, existing: Optional[pd.DataFrame]) -> pd.Da
 
     # apply same timezone normalization as df2
     if isinstance(existing2.index, pd.DatetimeIndex):
-        if existing2.index.tz is not None:
-            existing2.index = existing2.index.tz_convert("UTC").tz_localize(None)
+        if existing2.index.tz is None:
+            existing2.index = existing2.index.tz_localize("UTC")
         else:
-            existing2.index = existing2.index.tz_localize("UTC").tz_localize(None)
+            existing2.index = existing2.index.tz_convert("UTC")
+        existing2.index = existing2.index.tz_convert(None)
 
     new_idx = df2.index.difference(existing2.index)
     changed_idx = df2.index.intersection(existing2.index)

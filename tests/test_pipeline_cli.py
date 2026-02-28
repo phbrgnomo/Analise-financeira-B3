@@ -160,8 +160,11 @@ def test_mapper_failure_propagates(monkeypatch, capsys):
     assert "job_id=" in captured.err
 
 
-def test_ingest_cmd_validates_provider():
-    """The Typer wrapper raises BadParameter when --source is invalid."""
+def test_ingest_cmd_validates_provider(monkeypatch):
+    """The Typer wrapper raises BadParameter when --source is invalid.
+
+    Also exercise the case-insensitivity afforded by provider normalization.
+    """
     import typer
 
     from src.pipeline import ingest_cmd
@@ -169,3 +172,16 @@ def test_ingest_cmd_validates_provider():
     with pytest.raises(typer.BadParameter):
         # ingest_cmd signature: source first, then ticker
         ingest_cmd("no_such_provider", "TST")
+
+    # patch adapter factory so that parameter validation is the only guard
+    import src.adapters.factory as factory
+
+    dummy = DummyAdapter()
+    monkeypatch.setattr(factory, "get_adapter", lambda name: dummy)
+
+    # command should accept uppercase provider and proceed with ingest
+    import click
+
+    with pytest.raises(click.exceptions.Exit):
+        ingest_cmd("YFINANCE", "TST")
+    # catching Exit is sufficient; absence of BadParameter shows validation passed

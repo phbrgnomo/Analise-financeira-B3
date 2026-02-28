@@ -155,6 +155,23 @@ jobs:
           # Run smoke script inside poetry venv so installed deps are visible
           poetry run bash tests/ci/smoke.sh
 
+      - name: CLI smoke test
+        run: |
+          echo "# register a dummy provider and invoke CLI"
+          poetry run python - <<'PY'
+import pandas as pd
+from src.adapters.factory import register_adapter
+class DummyAdapter:
+    def fetch(self, ticker, **kw):
+        return pd.DataFrame({"Open": [1.0], "High": [1.0], "Low": [1.0], "Close": [1.0], "Volume": [100]})
+register_adapter("dummy", DummyAdapter)
+PY
+          poetry run pipeline ingest --source dummy TEST
+          if [ ! -d raw/dummy ] || [ -z "$(ls raw/dummy)" ]; then
+            echo "CLI smoke failure: expected raw file under raw/dummy" >&2
+            exit 1
+          fi
+
       - name: Upload smoke artifacts on failure
         if: failure()
         uses: actions/upload-artifact@v4
