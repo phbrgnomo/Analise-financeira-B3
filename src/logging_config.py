@@ -1,3 +1,11 @@
+"""Configuração centralizada de logging estruturado para o projeto.
+
+Fornece :class:`JSONFormatter` (saída JSON por linha para ferramentas de
+observabilidade) e a função :func:`configure_logging` que configura o handler
+raiz com o formatter adequado.  Importe e chame ``configure_logging()`` no
+início da aplicação ou da CLI.
+"""
+
 import json
 import logging
 import sys

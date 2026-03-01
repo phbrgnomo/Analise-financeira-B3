@@ -1,3 +1,12 @@
+"""Cálculo e persistência de retornos financeiros de ativos da B3.
+
+Expõe :func:`compute_returns` como principal ponto de entrada, que lê preços
+do banco SQLite, calcula log-retornos e salva o resultado em CSV.  Funções
+auxiliares de conversão de retorno/risco (:func:`r_linear`, :func:`r_log`,
+:func:`retorno_periodo`, :func:`conv_retorno`, :func:`conv_risco`,
+:func:`coef_var`, :func:`correlacao`) também estão disponíveis.
+"""
+
 import contextlib
 import logging
 import math

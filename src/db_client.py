@@ -1,3 +1,11 @@
+"""Abstração de cliente de banco de dados para o pipeline de ingestão.
+
+Define :class:`DatabaseClient` (ABC) e :class:`DefaultDatabaseClient` (SQLite)
+para isolar a camada de persistência e facilitar testes com implementações
+alternativas.  Expõe operações de leitura/escrita de linhas de preços e
+registro de metadados de ingestão.
+"""
+
 from __future__ import annotations
 
 import abc

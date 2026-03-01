@@ -1,12 +1,13 @@
 """Carregador opcional de esquema do pandera para os CSVs canônicos.
 
-Este módulo define a função `get_pandera_schema()` que retorna um
-`pandera` DataFrameSchema quando `pandera` está instalado, caso contrário
-retorna None.
+Este módulo é um wrapper fino que delega para
+:func:`src.etl.mapper.load_canonical_schema_from_json`, a fonte canônica
+de construção do DataFrameSchema do pandera desde a consolidação feita no
+epic-1.
 
-O esquema canônico é persistido em `docs/schema.json` (documentação
-autoritativa). Mantemos os imports de forma "lazy" para que o tempo de
-execução não falhe quando o pacote `pandera` não estiver instalado.
+.. deprecated::
+    Para novo código, importe :data:`src.etl.mapper.CanonicalSchema`
+    diretamente. Esta função é mantida apenas para compatibilidade retroativa.
 """
 
 from __future__ import annotations
@@ -19,21 +20,28 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 
-def get_pandera_schema(base_path: Optional[Path] = None):  # noqa: C901
-    """Retorna um DataFrameSchema do pandera se `pandera` estiver disponível.
+def get_pandera_schema(base_path: Optional[Path] = None):
+    """Retorna um DataFrameSchema do pandera se ``pandera`` estiver disponível.
 
-    `base_path` permite que o chamador controle onde `docs/schema.json`
-    será resolvido. Quando omitido, o caminho é resolvido em relação ao
-    diretório pai deste módulo, de forma que o uso em biblioteca e CLI
-    se comporte de maneira consistente independentemente do diretório de
-    trabalho corrente.
+    Delega para :func:`src.etl.mapper.load_canonical_schema_from_json`, que é
+    a fonte canônica de construção do schema no projeto.
+
+    Parameters
+    ----------
+    base_path:
+        Diretório raiz onde ``docs/schema.json`` será procurado.  Quando
+        omitido usa o diretório pai do pacote (raiz do repositório).
+
+    Returns
+    -------
+    DataFrameSchema | None
+        Schema do pandera ou ``None`` se pandera não estiver disponível ou o
+        arquivo de schema não for encontrado.
     """
     try:
-        import pandera as pa
-        from pandera import Column, DataFrameSchema
+        from src.etl.mapper import load_canonical_schema_from_json
     except ImportError:
-        # Dependência opcional não instalada: o chamador pode tratar isso como
-        # "sem esquema" e prosseguir sem validação via pandera
+        # pandera (ou mapper) não disponível: retorna None graciosamente
         return None
 
     if base_path is None:
@@ -44,63 +52,11 @@ def get_pandera_schema(base_path: Optional[Path] = None):  # noqa: C901
         return None
 
     try:
-        with schema_path.open("r", encoding="utf-8") as f:
-            spec = json.load(f)
-    except json.JSONDecodeError:
-        logger.exception("Invalid JSON in pandera schema file: %s", schema_path)
-        raise
-
-    cols = spec.get("columns", [])
-    mapping = {}
-    for c in cols:
-        # Validate column spec shape and required 'name' key
-        if not isinstance(c, dict):
-            logger.error("Invalid column spec (not an object): %r", c)
-            raise ValueError(f"Invalid column spec: {c!r}")
-
-        name = c.get("name")
-        if not isinstance(name, str) or name == "":
-            logger.error("Missing or invalid 'name' in column spec: %r", c)
-            raise ValueError(f"Invalid column specification, missing 'name': {c!r}")
-
-        t = c.get("type")
-        nullable = c.get("nullable", True)
-        if t in ("float", "number"):
-            mapping[name] = Column(pa.Float, nullable=nullable)
-        elif t in ("int", "integer"):
-            mapping[name] = Column(pa.Int, nullable=nullable)
-        elif t in ("string", "str"):
-            mapping[name] = Column(pa.String, nullable=nullable)
-        elif t in ("date", "datetime"):
-            mapping[name] = Column(pa.DateTime, nullable=nullable)
-        else:
-            mapping[name] = Column(pa.Object, nullable=nullable)
-
-    try:
-        return DataFrameSchema(mapping)
-    except Exception as err:
-        # Some schema construction errors are expected when the JSON is
-        # malformed for pandera; treat those as "no schema" (return None)
-        # while logging unexpected errors and re-raising them.
-        SchemaError = None
-        if "pa" in locals():
-            SchemaError = getattr(getattr(pa, "errors", None), "SchemaError", None)
-
-        is_expected_err = isinstance(err, (ValueError, TypeError))
-        if SchemaError and isinstance(err, SchemaError):
-            is_expected_err = True
-
-        if is_expected_err:
-            logger.warning(
-                "Failed to construct pandera DataFrameSchema from %s: %s",
-                schema_path,
-                err,
-            )
-            return None
-
+        data = json.loads(schema_path.read_text(encoding="utf-8"))
+        return load_canonical_schema_from_json(data)
+    except Exception:
         logger.exception(
-            "Unexpected error while constructing pandera DataFrameSchema from %s: %s",
+            "Falha ao carregar schema canônico do pandera: %s",
             schema_path,
-            err,
         )
-        raise
+        return None

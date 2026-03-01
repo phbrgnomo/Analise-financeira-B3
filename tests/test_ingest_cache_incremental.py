@@ -30,38 +30,38 @@ def setup_env(tmp_path, ttl="0", snapshot_dir=None):
 
 @pytest.mark.parametrize("val", ["1", "true", "True", "yes", " YES "])
 def test_env_bool_parsing_true(monkeypatch, val):
-    """_env_bool returns True for recognized truthy strings."""
-    from src.ingest.pipeline import _env_bool
+    """env_bool returns True for recognized truthy strings."""
+    from src.ingest.pipeline import env_bool
 
     monkeypatch.setenv("FLAG", val)
-    assert _env_bool("FLAG"), val
+    assert env_bool("FLAG"), val
 
 
 @pytest.mark.parametrize("val", ["0", "false", "No", "off", "", "  "])
 def test_env_bool_parsing_false(monkeypatch, val):
-    """_env_bool returns False for recognized falsy strings."""
-    from src.ingest.pipeline import _env_bool
+    """env_bool returns False for recognized falsy strings."""
+    from src.ingest.pipeline import env_bool
 
     monkeypatch.setenv("FLAG", val)
-    assert not _env_bool("FLAG"), val
+    assert not env_bool("FLAG"), val
 
 
 @pytest.mark.parametrize("val", ["flase", "maybe", "enable", "yep"])
 def test_env_bool_parsing_invalid(monkeypatch, val):
-    """_env_bool raises ValueError for unrecognized strings."""
-    from src.ingest.pipeline import _env_bool
+    """env_bool raises ValueError for unrecognized strings."""
+    from src.ingest.pipeline import env_bool
 
     monkeypatch.setenv("FLAG", val)
     with pytest.raises(ValueError):
-        _env_bool("FLAG")
+        env_bool("FLAG")
 
 
 def test_env_bool_parsing_default(monkeypatch):
-    """_env_bool returns False when the variable is unset."""
-    from src.ingest.pipeline import _env_bool
+    """env_bool returns False when the variable is unset."""
+    from src.ingest.pipeline import env_bool
 
     monkeypatch.delenv("FLAG", raising=False)
-    assert not _env_bool("FLAG")
+    assert not env_bool("FLAG")
 
 
 def test_corrupted_snapshot_metadata_logs(tmp_path, monkeypatch, caplog):
@@ -175,7 +175,7 @@ def test_ingest_cache_ttl_expiration(tmp_path, monkeypatch):
 
 def test_shared_diff_helper_and_cli_agree():
     """The extracted helper should produce the same result as the CLI diff."""
-    from src.ingest.pipeline import _rows_to_ingest
+    from src.ingest.pipeline import rows_to_ingest
     from src.ingest_cli import _compute_changes, _normalize_df
 
     # frame with two dates; existing has second row changed
@@ -186,7 +186,7 @@ def test_shared_diff_helper_and_cli_agree():
     existing2["date"] = pd.to_datetime(existing2["date"])
     existing2 = existing2.set_index("date")
 
-    rows = _rows_to_ingest(df, existing2)
+    rows = rows_to_ingest(df, existing2)
     assert len(rows) == 1
     assert rows.index[0] == pd.Timestamp("2026-01-02")
 
@@ -257,9 +257,9 @@ def test_snapshot_metadata_cache_fallback(tmp_path, monkeypatch, caplog):
     _db.init_db(str(db_path))
 
     call_count = {"n": 0}
-    orig_connect = _db._connect
+    orig_connect = _db.connect
 
-    def fake_connect(path):
+    def fake_connect(path=None):
         # fail on first connection (metadata read) but succeed thereafter
         if call_count["n"] == 0:
             call_count["n"] += 1
@@ -267,7 +267,7 @@ def test_snapshot_metadata_cache_fallback(tmp_path, monkeypatch, caplog):
         # otherwise delegate to original implementation
         return orig_connect(path)
 
-    monkeypatch.setattr(_db, "_connect", fake_connect)
+    monkeypatch.setattr(_db, "connect", fake_connect)
 
     caplog.set_level("WARNING")
     called = False

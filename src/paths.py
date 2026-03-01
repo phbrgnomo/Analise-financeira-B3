@@ -1,3 +1,11 @@
+"""Resolução centralizada de caminhos importantes do projeto.
+
+Expõe :func:`project_root` (raiz do repositório) e :data:`DATA_DIR`
+(diretório de dados em runtime, padrão ``dados/``).  Usar estas referências
+em vez de caminhos hardcoded garante comportamento correto tanto em
+desenvolvimento local quanto em CI.
+"""
+
 from pathlib import Path
 
 

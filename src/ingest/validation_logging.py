@@ -7,9 +7,7 @@ incluindo reason codes, mensagens de erro, e referências aos arquivos raw.
 
 from __future__ import annotations
 
-import json
 import logging
-import os
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -18,33 +16,12 @@ from typing import Any, Dict, List, Optional, Union
 import pandas as pd
 
 from src.utils.checksums import serialize_df_bytes, sha256_bytes
+from src.validation import log_invalid_rows as _core_log_invalid_rows
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_INVALID_LOGS = Path("metadata/ingest_logs.jsonl")
 DEFAULT_INVALID_DIR = Path("raw")
-# Toggle fsync after writing validation logs. Set to False to improve
-# throughput at the cost of durability on crash.
-VALIDATION_LOG_FSYNC = True
-
-
-def _ensure_metadata_file(metadata_path: Union[str, Path]) -> None:
-    """Ensure metadata directory exists and create empty JSONL file if missing."""
-    metadata_path = Path(metadata_path)
-    metadata_path.parent.mkdir(parents=True, exist_ok=True)
-    # Attempt atomic create: O_CREAT|O_EXCL will fail if the file already exists.
-    # This avoids races involving temporary files and os.replace across processes.
-    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
-    try:
-        fd = os.open(str(metadata_path), flags, 0o644)
-        os.close(fd)
-    except FileExistsError:
-        # Another process created the file concurrently — that's fine.
-        pass
-    except OSError:
-        # Best-effort: ignore errors (e.g., permission issues) to avoid
-        # breaking the pipeline; callers will handle write failures later.
-        pass
 
 
 def log_invalid_rows(
@@ -86,33 +63,18 @@ def log_invalid_rows(
         )
         log_entries.extend(entries)
 
-    # Persist to metadata file
+    # Persistência delegada para implementação central em `src.validation`
+    # para evitar divergência de formato de JSONL entre módulos.
     try:
-        _ensure_metadata_file(metadata_path)
-        metadata_path = Path(metadata_path)
-
-        # Append entries as JSON Lines
-        # Batch writes to reduce syscall overhead; fsync can be toggled for performance.
-        lines = [json.dumps(entry, ensure_ascii=False) + "\n" for entry in log_entries]
-        if lines:  # Avoid touching the filesystem if there is nothing to log
-            with open(metadata_path, "a", encoding="utf-8") as fh:
-                fh.writelines(lines)
-                fh.flush()
-                if VALIDATION_LOG_FSYNC:
-                    try:
-                        os.fsync(fh.fileno())
-                    except Exception:
-                        # Best-effort durability; ignore fsync issues on platforms
-                        # where it may not be supported or permitted.
-                        pass
-
-        logger.info(
-            "Logged %d invalid row errors for %s to %s",
-            len(log_entries),
-            ticker,
-            metadata_path,
+        _core_log_invalid_rows(
+            metadata_path=str(metadata_path),
+            provider=source,
+            ticker=ticker,
+            raw_file=raw_file or "",
+            invalid_filepath="",
+            error_records=log_entries,
+            job_id=job_id,
         )
-
     except Exception:
         logger.exception("Failed to log invalid rows to %s", metadata_path)
         # Don't raise - logging failure shouldn't stop the pipeline
@@ -121,8 +83,8 @@ def log_invalid_rows(
 
 
 def _build_log_entries_for_row(
-    idx,
-    row,
+    idx: Any,
+    row: pd.Series,
     has_errors: bool,
     ticker: str,
     source: str,
@@ -130,7 +92,15 @@ def _build_log_entries_for_row(
     job_id: str,
     created_at: str,
 ) -> List[Dict[str, Any]]:
-    """Return list of log entry dicts for a single DataFrame row."""
+    """Return list of log entry dicts for a single DataFrame row.
+
+    Parameters
+    ----------
+    idx: Any
+        DataFrame index value for the row (usually int or hashable).
+    row: pd.Series
+        The Series representing the row’s data.
+    """
     if has_errors:
         errors = row["_validation_errors"]
         if not isinstance(errors, list):
@@ -158,7 +128,7 @@ def _build_log_entries_for_row(
         entry = {
             "job_id": job_id,
             "ticker": ticker,
-            "source": source,
+            "provider": source,
             "raw_file": raw_file,
             "row_index": row_index,
             "column": error.get("column"),
@@ -219,7 +189,11 @@ def save_invalid_rows(
     try:
         return _write_invalid_rows_with_checksum(df_to_save, file_path, ticker)
     except Exception as e:
-        logger.exception(f"Failed to save invalid rows to {file_path}: {e}")
+        logger.exception(
+            "Failed to save invalid rows to %s: %s",
+            file_path,
+            e,
+        )
         return {
             "filepath": str(file_path),
             "checksum": None,
@@ -266,7 +240,12 @@ def _write_invalid_rows_with_checksum(df_to_save, file_path, ticker):
     checksum_path.write_text(checksum)
 
     rows = len(df_to_save)
-    logger.info(f"Saved {rows} invalid rows for {ticker} to {file_path}")
+    logger.info(
+        "Saved %s invalid rows for %s to %s",
+        rows,
+        ticker,
+        file_path,
+    )
 
     return {
         "filepath": str(file_path),

@@ -1,3 +1,11 @@
+"""Ponto de entrada da CLI Typer para o pipeline de análise financeira B3.
+
+Define o objeto ``app`` do Typer, monta o sub-comando ``pipeline`` e expõe
+comandos para buscar, processar e calcular retornos de ativos listados na B3.
+
+Use ``poetry run main --help`` para ver todos os comandos disponíveis.
+"""
+
 import os
 
 # compatibility shims have been extracted to ``src.cli_compat``; import
@@ -46,10 +54,7 @@ def _fetch_and_prepare_asset(  # noqa: C901
     d_fim: str,
     validation_tolerance: Optional[float],
     provider: str = "yfinance",
-) -> None:  # noqa: C901
-    # predefine variables so linters know they exist
-    canonical = None
-    save_meta = {}
+) -> None:
     """Fetch, persist raw data, map to canonical schema and optionally validate.
 
     Parameters
@@ -94,6 +99,10 @@ def _fetch_and_prepare_asset(  # noqa: C901
       módulo de validação é importado dinamicamente e ignorado se não
       estiver disponível, permitindo execução em ambientes leves.
     """
+    # predefine variables so downstream except-blocks can reference them
+    # before the assignment paths are reached.
+    canonical = None
+    save_meta: dict = {}
 
     from datetime import datetime
     from datetime import timezone as _tz

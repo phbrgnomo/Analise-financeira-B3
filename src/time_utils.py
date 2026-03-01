@@ -1,3 +1,10 @@
+"""Utilitários de data/hora UTC para o projeto.
+
+Funções auxiliares leves para obter o instante atual em UTC
+(:func:`now_utc_iso`) e converter parâmetros flexíveis de data para o formato
+ISO 8601 (:func:`to_iso_date`).  Nenhuma dependência externa além da stdlib.
+"""
+
 from datetime import date, datetime, timezone
 from typing import Optional, Union
 
@@ -21,13 +28,13 @@ def to_iso_date(d: Optional[Union[str, date, datetime]]) -> Optional[str]:
     if d is None:
         return None
     if isinstance(d, str):
-        # Validate incoming string is ISO date YYYY-MM-DD
+        # Valida que a string esteja no formato ISO YYYY-MM-DD
         try:
             parsed = datetime.strptime(d, "%Y-%m-%d")
-        except Exception as exc:
-            msg = "date string must be in YYYY-MM-DD format: " + repr(d)
+        except ValueError as exc:
+            msg = "string de data deve estar no formato YYYY-MM-DD: " + repr(d)
             raise ValueError(msg) from exc
         return parsed.strftime("%Y-%m-%d")
     if hasattr(d, "strftime"):
         return d.strftime("%Y-%m-%d")
-    raise TypeError("Unsupported date type for to_iso_date")
+    raise TypeError("Tipo de data não suportado para to_iso_date")

@@ -146,6 +146,60 @@ def test_mapper_failure_propagates(monkeypatch, capsys):
     assert "job_id=" in captured.err
 
 
+def test_ingest_treats_missing_persist_status_as_success(monkeypatch):
+    """Persistência sem campo ``status`` continua sendo interpretada como sucesso.
+
+    Regressão da Story 1.3/1.10: ``ingest_from_snapshot`` pode retornar apenas
+    ``cached``/``rows_processed``. O orchestrator deve considerar esse formato
+    como sucesso quando não houver sinal explícito de erro.
+    """
+    dummy = DummyAdapter()
+    monkeypatch.setattr("src.adapters.factory.get_adapter", lambda name: dummy)
+    monkeypatch.setattr("src.etl.mapper.to_canonical", lambda df, **kw: df)
+    monkeypatch.setattr(
+        pipeline,
+        "save_raw_csv",
+        lambda *a, **k: {"status": "success", "filepath": "x.csv"},
+    )
+    monkeypatch.setattr(
+        pipeline,
+        "ingest_from_snapshot",
+        lambda *a, **k: {"cached": False, "rows_processed": 3},
+    )
+
+    result = pipeline.ingest("TST", "dummy", dry_run=False)
+    assert result.get("status") == "success"
+    assert result.get("persist", {}).get("rows_processed") == 3
+
+    # legacy case: cache hit with no rows_processed field at all should also be
+    # treated as success (cached=True indicates nothing to write but not an error)
+    monkeypatch.setattr(
+        pipeline,
+        "ingest_from_snapshot",
+        lambda *a, **k: {"cached": True},
+    )
+
+    result2 = pipeline.ingest("TST", "dummy", dry_run=False)
+    assert result2.get("status") == "success"
+    assert result2.get("persist", {}).get("cached") is True
+
+
+def test_ingest_marks_error_when_persist_result_has_no_success_signals(monkeypatch):
+    """Persistência sem ``status`` e sem sinais de sucesso deve virar erro."""
+    dummy = DummyAdapter()
+    monkeypatch.setattr("src.adapters.factory.get_adapter", lambda name: dummy)
+    monkeypatch.setattr("src.etl.mapper.to_canonical", lambda df, **kw: df)
+    monkeypatch.setattr(
+        pipeline,
+        "save_raw_csv",
+        lambda *a, **k: {"status": "success", "filepath": "x.csv"},
+    )
+    monkeypatch.setattr(pipeline, "ingest_from_snapshot", lambda *a, **k: {})
+
+    result = pipeline.ingest("TST", "dummy", dry_run=False)
+    assert result.get("status") == "error"
+
+
 def test_ingest_cmd_validates_provider(monkeypatch):
     """The Typer wrapper raises BadParameter when --source is invalid.
 

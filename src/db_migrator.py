@@ -1,3 +1,12 @@
+"""Utilitário de migração de schema SQLite para o banco de dados do projeto.
+
+Gerencia uma tabela de controle ``schema_migrations`` e aplica scripts SQL
+encontrados em ``migrations/`` de forma idempotente — cada arquivo é aplicado
+apenas uma vez. Use :func:`apply_migrations` para executar as migrações
+pendentes numa conexão existente. A tabela ``schema_migrations`` registra o
+identificador e o momento de aplicação de cada script para evitar reaplicação.
+"""
+
 import os
 import sqlite3
 from typing import Optional, Set

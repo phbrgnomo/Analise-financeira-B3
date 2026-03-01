@@ -1,3 +1,11 @@
+"""
+Camada de persistência SQLite para o pipeline de ingestão.
+
+Expõe helpers para criação de schema (``_ensure_schema``), escrita idempotente
+de preços (``write_prices``), leitura de preços históricos (``read_prices``),
+registro de snapshots e metadados de ingestão.  O caminho padrão do banco é
+``dados/data.db`` e pode ser sobrescrito via parâmetros ou variável de ambiente.
+"""
 
 import contextlib
 import hashlib

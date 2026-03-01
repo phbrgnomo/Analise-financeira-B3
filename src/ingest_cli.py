@@ -28,7 +28,7 @@ import pandas as pd
 
 from src.db_client import DatabaseClient, DefaultDatabaseClient
 from src.ingest import cache as _cache
-from src.ingest.pipeline import _rows_to_ingest
+from src.ingest.pipeline import rows_to_ingest
 from src.utils.checksums import sha256_file
 
 logger = logging.getLogger(__name__)
@@ -112,7 +112,7 @@ def _compute_changes(
         db_path=db_path,
     )
 
-    rows = _rows_to_ingest(df, existing)
+    rows = rows_to_ingest(df, existing)
     return rows.reset_index(drop=False)
 
 
