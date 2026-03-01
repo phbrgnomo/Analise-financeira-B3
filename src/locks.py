@@ -68,20 +68,43 @@ def _resolve_lock_dir(env_val: str | None) -> Path:
 def _acquire_with_portalocker(
     fh, flags, wait: bool, timeout_seconds: float, start: float, ticker: str
 ) -> None:
-    """Adquire bloqueio usando portalocker ou lança LockTimeout em caso de falha."""
-    try:
-        portalocker.lock(
-            fh, flags, timeout=timeout_seconds if wait else 0
-        )
-    except portalocker.exceptions.LockException as exc:
-        waited = time.monotonic() - start
-        if not wait:
+    """Adquire bloqueio usando portalocker ou lança LockTimeout em caso de falha.
+
+    ``portalocker.lock`` não aceita um argumento ``timeout`` nas versões mais
+    recentes, então replicamos a lógica de espera manualmente aqui.  O
+    comportamento tenta adquirir o bloqueio em loop até o tempo expirar.
+    """
+    # the caller only invokes this when ``portalocker`` is available, but
+    # type checkers can't prove that, so assert it for static analysis.
+    assert portalocker is not None
+
+    # Always attempt non-blocking acquisitions so we can implement our own
+    # timeout rather than relying on portalocker's blocking behaviour which
+    # would hang indefinitely and freeze the tests.
+    flags |= portalocker.LockFlags.NON_BLOCKING
+
+    if not wait:
+        try:
+            portalocker.lock(fh, flags)
+            return
+        except portalocker.exceptions.LockException as exc:
             raise LockTimeout(
                 f"bloqueio para {ticker} ocupado por outro processo (não bloqueante)"
             ) from exc
-        raise LockTimeout(
-            f"falha ao obter bloqueio para {ticker} após {waited:.3f}s"
-        ) from exc
+
+    # blocking with timeout: poll in a loop similar to the fcntl path
+    end = start + timeout_seconds
+    while True:
+        try:
+            portalocker.lock(fh, flags)
+            return
+        except portalocker.exceptions.LockException as exc:
+            if time.monotonic() >= end:
+                waited = time.monotonic() - start
+                raise LockTimeout(
+                    f"falha ao obter bloqueio para {ticker} após {waited:.3f}s"
+                ) from exc
+            time.sleep(0.05)
 
 
 def _acquire_with_fcntl(
