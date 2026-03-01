@@ -8,7 +8,13 @@ from src.ingest import pipeline
 # gets its own temporary lock directory via environment variable
 @pytest.fixture(autouse=True)
 def isolate_lock_dir(tmp_path, monkeypatch):
+    # per-test lock directory ensures CLI tests do not pollute the repo
     monkeypatch.setenv("LOCK_DIR", str(tmp_path / "locks"))
+
+    # also clear any lock configuration from the environment so other
+    # suites (e.g. test_ingest_lock) cannot influence these tests
+    monkeypatch.delenv("INGEST_LOCK_MODE", raising=False)
+    monkeypatch.delenv("INGEST_LOCK_TIMEOUT_SECONDS", raising=False)
 
 # The CLI helper is built using Typer, which has proven brittle in the
 # current test environment (see excessive recursion and parse errors above).
@@ -118,6 +124,48 @@ def test_invalid_provider_returns_error(monkeypatch):
     """Supplying an unknown source should result in exit code !=0."""
     rc = pipeline.ingest_command("TST", "no_such_provider")
     assert rc != 0
+
+
+def test_invalid_lock_configuration(monkeypatch):
+    """Malformed environment variables should raise a clear ValueError."""
+    monkeypatch.setenv("INGEST_LOCK_TIMEOUT_SECONDS", "not-a-number")
+    with pytest.raises(ValueError):
+        pipeline.ingest("TST", "dummy")
+
+    monkeypatch.setenv("INGEST_LOCK_TIMEOUT_SECONDS", "-5")
+    with pytest.raises(ValueError):
+        pipeline.ingest("TST", "dummy")
+
+    monkeypatch.delenv("INGEST_LOCK_TIMEOUT_SECONDS", raising=False)
+    monkeypatch.setenv("INGEST_LOCK_MODE", "snooze")
+    with pytest.raises(ValueError):
+        pipeline.ingest("TST", "dummy")
+
+
+def test_float_timeout_is_accepted(monkeypatch):
+    """INGEST_LOCK_TIMEOUT_SECONDS may be a float and is passed as such."""
+    monkeypatch.setenv("INGEST_LOCK_TIMEOUT_SECONDS", "0.5")
+    # intercept locks.acquire_lock to observe the timeout type
+    import src.locks as locks_module
+
+    seen = {}
+
+    class DummyCtx:
+        def __enter__(self):
+            return {}
+
+        def __exit__(self, *args):
+            pass
+
+    def fake_acquire(ticker, timeout_seconds, wait):
+        seen["timeout"] = timeout_seconds
+        return DummyCtx()
+
+    monkeypatch.setattr(locks_module, "acquire_lock", fake_acquire)
+    # run a dry_run ingest which will call our fake acquire
+    pipeline.ingest("TST", "dummy", dry_run=True)
+    assert isinstance(seen.get("timeout"), float)
+
 
 
 def test_mapper_failure_propagates(monkeypatch, capsys):

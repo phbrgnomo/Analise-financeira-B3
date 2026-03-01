@@ -25,7 +25,7 @@ def to_iso_date(d: Optional[Union[str, date, datetime]]) -> Optional[str]:
         try:
             parsed = datetime.strptime(d, "%Y-%m-%d")
         except Exception as exc:
-            msg = "date string must be in YYYY-MM-DD format: " + repr(d)
+            msg = f"date string must be in YYYY-MM-DD format: {repr(d)}"
             raise ValueError(msg) from exc
         return parsed.strftime("%Y-%m-%d")
     if hasattr(d, "strftime"):

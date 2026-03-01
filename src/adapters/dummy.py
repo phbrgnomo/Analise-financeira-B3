@@ -48,15 +48,17 @@ class DummyAdapter(Adapter):
         the adapter flexible for tests using additional parameters.
         """
         self.called = True
-        # support artificial delay when testing concurrency; consumers set
-        # DUMMY_SLEEP (seconds) in the environment to hold the adapter
-        # active long enough that a concurrent process will hit the lock.
-        sleep_secs = os.environ.get("DUMMY_SLEEP")
-        if sleep_secs:
+        if sleep_secs := os.environ.get("DUMMY_SLEEP"):
+            # somente a conversão para float deve falhar; deixe sleep() lançar
+            # suas próprias exceções (e.g. KeyboardInterrupt) para que propaguem
             try:
-                time.sleep(float(sleep_secs))
-            except Exception:
-                pass
+                secs = float(sleep_secs)
+            except ValueError:
+                # ignore malformed value and continue without delay
+                secs = 0.0
+            else:
+                if secs:
+                    time.sleep(secs)
         dates = pd.date_range(end=datetime.now(timezone.utc).date(), periods=3,
                               freq="D")
         # choose values that satisfy the canonical schema requirement

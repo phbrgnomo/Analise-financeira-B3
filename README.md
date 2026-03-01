@@ -59,7 +59,7 @@ VALIDATION_INVALID_PERCENT_THRESHOLD=0.05
 
   Exemplo em `.env`:
 
-  ```
+  ```bash
   INGEST_LOCK_MODE=exit
   INGEST_LOCK_TIMEOUT_SECONDS=30
   ```
