@@ -1,7 +1,14 @@
-
 import pytest
 
 from src.adapters.dummy import DummyAdapter
+from src.ingest import pipeline
+
+
+# ensure CLI tests do not pollute workspace with lock files; each test
+# gets its own temporary lock directory via environment variable
+@pytest.fixture(autouse=True)
+def isolate_lock_dir(tmp_path, monkeypatch):
+    monkeypatch.setenv("LOCK_DIR", str(tmp_path / "locks"))
 
 # The CLI helper is built using Typer, which has proven brittle in the
 # current test environment (see excessive recursion and parse errors above).
@@ -9,7 +16,6 @@ from src.adapters.dummy import DummyAdapter
 # the underlying ``ingest_command`` helper directly.  This still fulfills the
 # intent of "CLI integration" smoke tests while avoiding framework
 # incompatibilities.
-from src.ingest import pipeline
 
 
 def test_pipeline_ingest_dry_run(monkeypatch, capsys):
@@ -60,6 +66,8 @@ def test_pipeline_ingest_error_logging(monkeypatch, capsys):
     assert rc == 1
     assert recorded.get("status") == "error"
     assert "network unreachable" in recorded.get("error_message", "")
+    # timestamps should have been added by ingest()
+    assert "started_at" in recorded and "finished_at" in recorded
 
     # job_id should be printed to stderr not stdout
     captured = capsys.readouterr()
@@ -139,6 +147,7 @@ def test_mapper_failure_propagates(monkeypatch, capsys):
     assert rc == 1
     assert recorded.get("status") == "error"
     assert "map bug" in recorded.get("error_message", "")
+    assert "started_at" in recorded and "finished_at" in recorded
 
     captured = capsys.readouterr()
     # CLI prints both error message and job_id on stderr for failures

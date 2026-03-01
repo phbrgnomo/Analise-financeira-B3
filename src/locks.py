@@ -48,6 +48,66 @@ class LockTimeout(Exception):
     """
 
 
+def _resolve_lock_dir(env_val: str | None) -> Path:
+    """Return a resolved Path for the lock directory.
+
+    Expands ~ and resolves to an absolute path.
+    """
+    val = env_val if env_val is not None else str(DEFAULT_LOCK_DIR)
+    return Path(val).expanduser().resolve()
+
+
+def _acquire_with_portalocker(
+    fh, flags, wait: bool, timeout_seconds: float, start: float, ticker: str
+) -> None:
+    """Acquire lock using portalocker or raise LockTimeout on failure."""
+    try:
+        portalocker.lock(
+            fh, flags, timeout=timeout_seconds if wait else 0
+        )
+    except portalocker.exceptions.LockException as exc:
+        waited = time.monotonic() - start
+        if not wait:
+            raise LockTimeout(
+                f"lock for {ticker} held by another process (non-blocking)"
+            ) from exc
+        raise LockTimeout(
+            f"failed to acquire lock for {ticker} after {waited:.3f}s"
+        ) from exc
+
+
+def _acquire_with_fcntl(
+    fh, wait: bool, timeout_seconds: float, start: float, ticker: str
+) -> None:
+    """Acquire lock using POSIX fcntl with optional timeout polling."""
+    import fcntl
+
+    if not wait:
+        try:
+            fcntl.flock(fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return
+        except BlockingIOError as exc:
+            raise LockTimeout(
+                f"lock for {ticker} held by another process (non-blocking)"
+            ) from exc
+
+    end = start + timeout_seconds
+    while True:
+        try:
+            fcntl.flock(fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return
+        except BlockingIOError as exc:
+            if (
+                timeout_seconds is not None
+                and time.monotonic() >= end
+            ):
+                waited = time.monotonic() - start
+                raise LockTimeout(
+                    f"failed to acquire lock for {ticker} after {waited:.3f}s"
+                ) from exc
+            time.sleep(0.05)
+
+
 @contextmanager
 def acquire_lock(
     ticker: str, timeout_seconds: float = 120.0, wait: bool = True
@@ -81,7 +141,7 @@ def acquire_lock(
     """
 
     # respect explicit env var, allow ~ expansion, and resolve to absolute path
-    lock_dir = Path(os.environ.get("LOCK_DIR", str(DEFAULT_LOCK_DIR))).expanduser().resolve()
+    lock_dir = _resolve_lock_dir(os.environ.get("LOCK_DIR"))
     lock_dir.mkdir(parents=True, exist_ok=True)
     lock_path = lock_dir / f"{ticker}.lock"
 
@@ -101,61 +161,20 @@ def acquire_lock(
             flags = portalocker.LockFlags.EXCLUSIVE
             if not wait:
                 flags |= portalocker.LockFlags.NON_BLOCKING
-            try:
-                # portalocker supports a timeout argument when blocking behavior is
-                # desired; when ``wait`` is False we pass 0 to force immediate
-                # failure instead of waiting.
-                portalocker.lock(fh, flags, timeout=timeout_seconds if wait else 0)
-                locked = True
-            except portalocker.exceptions.LockException as exc:
-                waited = time.monotonic() - start
-                if not wait:
-                    raise LockTimeout(
-                        f"lock for {ticker} is held by another process (non-blocking mode)"
-                    ) from exc
-                raise LockTimeout(
-                    f"failed to acquire file lock for {ticker} after {waited:.3f}s"
-                ) from exc
+            _acquire_with_portalocker(
+                fh, flags, wait, timeout_seconds, start, ticker
+            )
+            locked = True
         else:
-            # fallback to POSIX flock; this will only work on Unix-like
-            # platforms.  ``fcntl`` doesn't support a timeout, so we implement
-            # a simple polling loop when ``wait`` is True and ``timeout_seconds``
-            # is specified.  This keeps the public API consistent regardless of
-            # whether ``portalocker`` is installed.
-            import fcntl
-
-            if not wait:
-                try:
-                    fcntl.flock(fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-                    locked = True
-                except BlockingIOError as exc:
-                    raise LockTimeout(
-                        f"lock for {ticker} is held by another process (non-blocking mode)"
-                    ) from exc
-            else:
-                end = start + timeout_seconds
-                while True:
-                    try:
-                        fcntl.flock(fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-                        locked = True
-                        break
-                    except BlockingIOError:
-                        if timeout_seconds is not None and time.monotonic() >= end:
-                            waited = time.monotonic() - start
-                            raise LockTimeout(
-                                f"failed to acquire file lock for {ticker} after {waited:.3f}s"
-                            )
-                        # sleep briefly to avoid busy-looping
-                        time.sleep(0.05)
+            _acquire_with_fcntl(fh, wait, timeout_seconds, start, ticker)
+            locked = True
     except Exception:
-        # acquisition failed; clean up the file handle and re‑raise
+        # acquisition failed; clean up the file handle and re-raise
         fh.close()
         raise
 
-    # if we reach here the lock has been acquired successfully; ``fh`` will
-    # remain open until the ``finally`` block below closes it.
-    waited = time.monotonic() - start
     try:
+        waited = time.monotonic() - start
         yield {"lock_action": "acquired", "lock_waited_seconds": waited}
     finally:
         if locked:
