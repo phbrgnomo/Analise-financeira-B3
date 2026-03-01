@@ -57,8 +57,8 @@ so that retries are respectful and observable.
 - Propondo organização mínima:
   - src/adapters/__init__.py
   - src/adapters/base.py  # define Adapter interface e exceções (AdapterRateLimitError)
-  - src/adapters/yfinance.py
-  - src/adapters/alphavantage.py
+  - src/adapters/yfinance_adapter.py
+  - src/adapters/alphavantage_adapter.py
   - src/ingest/runner.py  # orquestrador que usa adapters e aplica retry 정책
 
 ### References

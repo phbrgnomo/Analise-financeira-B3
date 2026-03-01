@@ -122,27 +122,57 @@ def _ensure_schema(conn: sqlite3.Connection, schema_path: Optional[str] = None) 
 
 
 def _normalize_db_ticker(ticker: str) -> str:
-    candidate = ticker.strip().upper().removesuffix(".SA")
+    """Canonicaliza ticker para uso interno no banco.
+
+    Atualmente a lógica espelha :func:`~src.tickers.normalize_b3_ticker` e
+    garante que ``.SA`` seja removido, devolvendo sempre a forma base B3.
+    """
     try:
-        return normalize_b3_ticker(candidate)
-    except ValueError:
-        return candidate
+        # reuse centralizada para evitar divergências
+        return normalize_b3_ticker(ticker)
+    except Exception:
+        # em caso de entrada inválida, caímos em fallback semelhante ao
+        # comportamento histórico, mas o valor resultante não é mais
+        # validado pelo regex do normalize_b3_ticker.
+        return ticker.strip().upper().removesuffix(".SA")
 
 
 def _migrate_prices_date_column(conn: sqlite3.Connection) -> None:
-    """Garante afinidade DATE para `prices.date` de forma idempotente."""
+    """Garante afinidade DATE para `prices.date` de forma idempotente.
+
+    O processo de migração é relativamente custoso pois recria e copia
+    completamente a tabela.  Para evitar que isto seja executado em cada
+    nova conexão (especialmente em bancos maiores), marcamos um
+    indicador de migração usando ``PRAGMA user_version``.  A migração
+    será tentada no máximo uma vez por banco; após ela ser concluída
+    com sucesso (ou detectarmos que já está em formato DATE) bumpamos o
+    valor de ``user_version`` para 1 para curar chamadas futuras.
+    """
     cur = conn.cursor()
+    # já migrado? / já no formato esperado?
+    cur.execute("PRAGMA user_version")
+    version = cur.fetchone()[0] or 0
+    if version >= 1:
+        return
+
     cur.execute("PRAGMA table_info('prices')")
     info = cur.fetchall()
     if not info:
+        # nada a migrar, mas sinalizamos que checamos
+        cur.execute("PRAGMA user_version = 1")
+        conn.commit()
         return
 
     existing_types = {row[1]: (row[2] or "").upper() for row in info}
     if existing_types.get("date") == "DATE":
+        # já está no tipo correto, marca para não reexecutar
+        cur.execute("PRAGMA user_version = 1")
+        conn.commit()
         return
 
     required_cols = {"ticker", "date", "source", "raw_checksum", "fetched_at"}
     if not required_cols.issubset(set(existing_types.keys())):
+        # esquema inesperado, aborta sem atualizar a versão para ser seguro
         return
 
     schema = _load_canonical_schema()
@@ -172,39 +202,78 @@ def _migrate_prices_date_column(conn: sqlite3.Connection) -> None:
     )
     cur.execute("DROP TABLE prices")
     cur.execute("ALTER TABLE prices_tmp_date_migration RENAME TO prices")
+    # marca migração como realizada
+    cur.execute("PRAGMA user_version = 1")
     conn.commit()
 
 
 def _migrate_returns_date_column(conn: sqlite3.Connection) -> None:
-    """Garante afinidade DATE para `returns.date` de forma idempotente."""
+    """Garante afinidade DATE para `returns.date` de forma idempotente.
+
+    Similarmente a :func:`_migrate_prices_date_column`, usamos
+    ``PRAGMA user_version`` para evitar rodar a migração em cada nova
+    conexão e um passo extra para eliminar eventuais tabelas temporárias
+    deixadas por falhas anteriores.
+
+    A versão **2** no ``user_version`` indica que tanto preços quanto
+    retornos já foram migrados.  Caso o banco esteja em uma versão
+    anterior, tentaremos atualizar apenas se a coluna ainda não tiver
+    afinidade DATE; qualquer tabela ``returns_tmp_date_migration`` existente
+    será descartada antes de começar.
+    """
     cur = conn.cursor()
+
+    # versão mínima necessária para pular a migração (1 era apenas preços)
+    cur.execute("PRAGMA user_version")
+    version = cur.fetchone()[0] or 0
+    if version >= 2:
+        return
+
+    # limpar migração intermediária potencialmente deixada por execução
+    # anterior falha, para que o CREATE TABLE não dê erro.
+    cur.execute("DROP TABLE IF EXISTS returns_tmp_date_migration")
+
     cur.execute("PRAGMA table_info('returns')")
     info = cur.fetchall()
     if not info:
+        # tabela inexistente; nada a fazer, mas não ajustamos a versão para
+        # permitir a tentativa posterior caso a tabela seja criada depois.
         return
 
     existing_types = {row[1]: (row[2] or "").upper() for row in info}
     if existing_types.get("date") == "DATE":
+        # já correto, marca versão para evitar rechecagens futuras
+        cur.execute("PRAGMA user_version = 2")
+        conn.commit()
         return
 
-    cur.execute(
-        "CREATE TABLE returns_tmp_date_migration ("
-        "ticker TEXT, "
-        "date DATE, "
-        "return_value REAL, "
-        "return_type TEXT, "
-        "created_at TEXT, "
-        "UNIQUE(ticker, date, return_type)"
-        ")"
-    )
-    cur.execute(
-        "INSERT OR REPLACE INTO returns_tmp_date_migration "
-        "(ticker, date, return_value, return_type, created_at) "
-        "SELECT ticker, date, return_value, return_type, created_at FROM returns"
-    )
-    cur.execute("DROP TABLE returns")
-    cur.execute("ALTER TABLE returns_tmp_date_migration RENAME TO returns")
-    conn.commit()
+    # começamos uma transação explícita para que, em caso de erro, não
+    # deixemos a tabela temporária flutuando.
+    cur.execute("BEGIN")
+    try:
+        cur.execute(
+            "CREATE TABLE returns_tmp_date_migration ("
+            "ticker TEXT, "
+            "date DATE, "
+            "return_value REAL, "
+            "return_type TEXT, "
+            "created_at TEXT, "
+            "UNIQUE(ticker, date, return_type)"
+            ")"
+        )
+        cur.execute(
+            "INSERT OR REPLACE INTO returns_tmp_date_migration "
+            "(ticker, date, return_value, return_type, created_at) "
+            "SELECT ticker, date, return_value, return_type, created_at FROM returns"
+        )
+        cur.execute("DROP TABLE returns")
+        cur.execute("ALTER TABLE returns_tmp_date_migration RENAME TO returns")
+        # versão 2 sinaliza que migração de retornos também foi aplicada
+        cur.execute("PRAGMA user_version = 2")
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
 
 
 def _build_row_tuple(vals: dict, schema_cols: list) -> tuple:
@@ -505,10 +574,10 @@ def write_prices(
 ):
     # normalize ticker to base B3 form (strip .SA) for storage consistency
     try:
-        from src.tickers import normalize_b3_ticker
-
+        # use the module-level import at top rather than importing again
         ticker = normalize_b3_ticker(ticker)
     except Exception:
+        # fallback remains the old-style normalization for invalid input
         ticker = ticker.strip().upper().removesuffix(".SA")
     close_conn = False
     if conn is None:
@@ -729,16 +798,16 @@ def write_returns(
     db_path: Optional[str] = None,
     return_type: str = "daily",
 ):
-    # ensure ticker values inside df are canonical (strip .SA)
-    if "ticker" in df.columns:
-        df = df.copy()
-        df["ticker"] = df["ticker"].astype(str).str.replace(".SA", "", regex=False)
     """Persist returns DataFrame into `returns` table using upsert semantics.
 
     Expects DataFrame columns: `ticker`, `date` (datetime or string), `return_value`,
     optionally `return_type` and `created_at`. The function is idempotent and
     will create the `returns` table if missing.
     """
+    # ensure ticker values inside df are canonical (strip .SA)
+    if "ticker" in df.columns:
+        df = df.copy()
+        df["ticker"] = df["ticker"].astype(str).str.replace(".SA", "", regex=False)
     close_conn = False
     if conn is None:
         conn = _connect(db_path)

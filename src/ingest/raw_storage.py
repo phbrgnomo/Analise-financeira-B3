@@ -42,12 +42,7 @@ DEFAULT_METADATA = Path("metadata/ingest_logs.jsonl")
 # ---------------------------------------------------------------------------
 
 
-# helper `_db_initialized` removed: list file existed but was unused.
-# (previous story comments noted optional DB checks; these belong in
-# `scripts/init_ingest_db.py` or the orchestration layer, not raw storage.)
-# the implementation was deleted entirely during a refactor, but the
-# comment accidentally left behind a few stray lines.  They have been
-# removed here for clarity.
+# Removed unused `_db_initialized` helper; DB init handled elsewhere.
 
 
 def _ensure_metadata_file(metadata_path: Union[str, Path]) -> None:

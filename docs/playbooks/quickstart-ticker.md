@@ -42,7 +42,10 @@ sha256sum snapshots/PETR4_snapshot.csv
 Verificar raw provider e metadados
 
 ```bash
+# a pasta raw usa o ticker no formato do provedor (yfinance inclui ".SA")
 ls -l raw/yfinance/PETR4.SA-*.csv
+# o comando CLI/ingest abaixo aceita o ticker base sem sufixo
+# (PETR4) — a tradução é feita internamente pela fábrica de adapters
 # ver última entrada JSONL
 tail -n 1 metadata/ingest_logs.jsonl | jq '.'
 ```

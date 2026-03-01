@@ -69,9 +69,16 @@ def create_prices_db_from_rows(rows):
         t = r[0]
         try:
             t = normalize_b3_ticker(t)
-        except Exception:
-            # leave as-is if normalization fails
+        except (ValueError, TypeError):
+            # known normalization errors: keep original ticker
             pass
+        except Exception:
+            # unexpected fault, log full traceback but continue with fallback
+            import logging
+
+            logging.getLogger(__name__).exception(
+                "unexpected error normalizing ticker %r", t
+            )
         normalized_rows.append((t,) + tuple(r[1:]))
 
     sql = (

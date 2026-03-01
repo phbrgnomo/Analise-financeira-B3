@@ -22,6 +22,7 @@ import contextlib
 import json
 import logging
 import os
+import re
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
@@ -345,10 +346,23 @@ def ingest_from_snapshot(  # noqa: C901
         # cleanup older snapshot files for this ticker to avoid buildup
         # support environment variable for how many recent files to keep
         keep = int(os.environ.get("SNAPSHOTS_KEEP_LATEST", "1"))
-        pattern = f"{ticker.replace('.', '_')}*"  # names start with sanitized ticker
+        sanitized = ticker.replace(".", "_")
+        pattern = f"{sanitized}*"  # names start with sanitized ticker
         all_files = sorted(snapshot_dir.glob(pattern))
-        # filter only csv files before calculating retention
-        csv_files = [f for f in all_files if f.suffix == ".csv"]
+
+        # construct regex that matches names beginning with the sanitized
+        # ticker
+        # followed by end-of-string or a non-alphanumeric delimiter. this
+        # guards against removing files for tickers like ABC when cleaning up
+        # ABCDEF.
+        regex = re.compile(rf"^{re.escape(sanitized)}(?:$|[^A-Za-z0-9])")
+
+        # filter only csv files that truly belong to this ticker
+        csv_files = [
+            f
+            for f in all_files
+            if f.suffix == ".csv" and regex.match(f.name)
+        ]
         # keep newest `keep` files (alphabetical order corresponds to time)
         to_remove = csv_files[:-keep] if keep > 0 else csv_files
         for old in to_remove:

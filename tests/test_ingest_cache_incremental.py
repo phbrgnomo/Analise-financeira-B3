@@ -1,6 +1,7 @@
 
 import sqlite3
 import time
+from datetime import datetime, timedelta, timezone
 
 import pandas as pd
 import pytest
@@ -286,7 +287,43 @@ def test_snapshot_metadata_cache_fallback(tmp_path, monkeypatch, caplog):
     assert called
 
 
-def test_snapshot_retention_policy(monkeypatch, tmp_path):
+@pytest.fixture
+def mock_time_progression(monkeypatch):
+    """Fixture that advances the clock by one second on each ``now()`` call.
+
+    Monkeypatches both ``src.ingest.snapshot_ingest.datetime`` and
+    ``src.etl.snapshot.datetime`` so that successive invocations of
+    ``datetime.now`` produce monotonic, increasing timestamps. This allows
+    tests to generate unique snapshot filenames without real ``sleep`` calls.
+    """
+    base = datetime.now(timezone.utc)
+
+    def _now(tz=None):
+        nonlocal base
+        base += timedelta(seconds=1)
+        return base
+
+    class DummyDatetime:
+        @classmethod
+        def now(cls, tz=None):
+            return _now(tz)
+
+        @classmethod
+        def strptime(cls, *args, **kwargs):
+            # fallback to real datetime.strptime if needed by snapshot parsing
+            return datetime.strptime(*args, **kwargs)
+
+    import importlib
+
+    # patch the actual module objects rather than using string target
+    mod1 = importlib.import_module("src.ingest.snapshot_ingest")
+    mod2 = importlib.import_module("src.etl.snapshot")
+    monkeypatch.setattr(mod1, "datetime", DummyDatetime)
+    monkeypatch.setattr(mod2, "datetime", DummyDatetime)
+
+
+
+def test_snapshot_retention_policy(monkeypatch, tmp_path, mock_time_progression):
     """Only the most recent N snapshots are retained per ticker.
 
     The environment variable ``SNAPSHOTS_KEEP_LATEST`` controls how many
@@ -310,8 +347,6 @@ def test_snapshot_retention_policy(monkeypatch, tmp_path):
 
     # second ingestion adds another snapshot; keep=2 should allow both
     df2 = make_sample_df(["2026-01-02"])
-    # ensure timestamp rounds to a different second so filenames don't collide
-    time.sleep(1)
     r2 = ingest_from_snapshot(df2, "RET", db_path=str(db_path))
     assert not r2["cached"]
     snaps = sorted((tmp_path / "snaps").glob("RET-*.csv"))
@@ -319,10 +354,18 @@ def test_snapshot_retention_policy(monkeypatch, tmp_path):
 
     # third ingestion triggers retention; only recent two snapshots remain
     df3 = make_sample_df(["2026-01-03"])
-    time.sleep(1)
     _ = ingest_from_snapshot(df3, "RET", db_path=str(db_path))
     snaps = sorted((tmp_path / "snaps").glob("RET-*.csv"))
     assert len(snaps) == 2
+
+    # os arquivos .checksum associados também devem ser mantidos e corresponder
+    remaining_checksums = sorted((tmp_path / "snaps").glob("RET-*.csv.checksum"))
+    assert len(remaining_checksums) == 2
+    remaining_csv_stems = {p.name for p in snaps}
+    remaining_checksum_stems = {
+        p.name.replace(".checksum", "") for p in remaining_checksums
+    }
+    assert remaining_checksum_stems == remaining_csv_stems
 
     mp.undo()
 

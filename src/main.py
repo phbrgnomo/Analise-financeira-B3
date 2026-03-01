@@ -144,6 +144,7 @@ def run_cmd(
 
     ok = 0
     failed = 0
+    warnings = 0
     for tk in tickers:
         result = ingest(
             ticker=tk,
@@ -161,12 +162,16 @@ def run_cmd(
 
         rows = _compute_returns_for_ticker(tk, None, None, False)
         if rows == 0:
-            print(f"{tk}: ingest concluído, mas sem retornos calculados")
-            failed += 1
+            # zero rows is not necessarily an error; could mean no new data
+            warnings += 1
+            print(f"{tk}: ingest concluído, mas sem retornos calculados (aviso)")
             continue
         ok += 1
 
-    print(f"Resumo run: sucesso={ok}, falhas={failed}")
+    summary = f"Resumo run: sucesso={ok}, falhas={failed}"
+    if warnings:
+        summary += f", avisos={warnings}"
+    print(summary)
 
 
 @app.command("compute-returns")
@@ -301,12 +306,19 @@ def export_csv_cmd(
     normalized = _normalize_cli_ticker(effective_ticker)
     resolved = _db.resolve_existing_ticker(normalized)
     if resolved is None:
+        # try the provider-specific variant (e.g. add .SA)
         _, provider_variant = ticker_variants(normalized)
-        resolved = provider_variant
-        print(
-            "Ticker não encontrado com nome base no banco; "
-            f"tentando variante {provider_variant}"
-        )
+        alt = _db.resolve_existing_ticker(provider_variant)
+        if alt is not None:
+            resolved = alt
+            print(
+                "Ticker não encontrado com nome base no banco; "
+                f"usando variante {provider_variant}"
+            )
+        else:
+            raise typer.BadParameter(
+                f"Ticker {normalized} não encontrado no banco (base ou variante)"
+            )
 
     df = _db.read_prices(resolved, start=start, end=end)
     if df.empty:

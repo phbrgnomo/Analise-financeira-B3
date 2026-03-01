@@ -1,4 +1,10 @@
 def test_sample_db_multi_integration(sample_db_multi):
+    """Verifica integração básica usando o fixture `sample_db_multi`.
+
+    O banco simulado contém múltiplos tickers (incluindo vazio) e algumas
+    linhas de preços; o teste confirma a contagem esperada, normalização de
+    tickers e capacidade de consultar um valor conhecido.
+    """
     db = sample_db_multi
     cur = db.cursor()
 

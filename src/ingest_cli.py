@@ -210,9 +210,11 @@ def ingest_snapshot(
                 f"snapshot contains multiple tickers: {unique.tolist()}"
             )
     # at this point we guarantee a string value for ticker, but the type
-    # checker still sees Optional[str].  narrow with an assertion so callers
-    # (and Pylance) know it is safe to pass to ``lock_ticker``.
-    assert isinstance(ticker, str), "ticker must be a string"
+    # checker still sees Optional[str].  narrow with an explicit runtime
+    # check so that the behaviour does not change when Python is run with
+    # optimizations (``-O`` strips ``assert`` statements).
+    if not isinstance(ticker, str):
+        raise TypeError("ticker must be a string")
 
     if db_client is None:
         db_client = DefaultDatabaseClient()

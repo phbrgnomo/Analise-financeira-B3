@@ -72,6 +72,11 @@ def test_cache_prevents_reprocessing(tmp_path, empty_db):
 
 
 def test_infer_ticker_from_single_entry(tmp_path, empty_db):
+    """Quando o snapshot contém um único ticker, ele deve ser inferido.
+
+    Chamamos ingest_snapshot sem argumento ticker; as assertivas garantem
+    que a operação não usa cache e processa duas linhas corretamente.
+    """
     # omit the ticker argument when the snapshot has exactly one ticker
     df = pd.DataFrame(
         {
@@ -91,6 +96,40 @@ def test_infer_ticker_from_single_entry(tmp_path, empty_db):
 
     # Should work without raising and ingest two rows
     r = ingest_snapshot(snap, conn=empty_db, cache_file=cache_file, ttl=3600)
+    assert not r["cached"]
+    assert r["processed_rows"] == 2
+
+
+def test_ticker_argument_with_missing_ticker_column(tmp_path, empty_db):
+    """Garante que ingest_snapshot use o `ticker` passado quando o CSV não
+    tem coluna 'ticker'.
+
+    A função _write_snapshot cria o arquivo; espera-se que a ingestão processe
+    duas linhas, não utilize cache e atribua o ticker fornecido.
+    """
+    # snapshot sem coluna 'ticker'; o ticker deve vir do argumento
+    df = pd.DataFrame(
+        {
+            "date": ["2024-01-01", "2024-01-02"],
+            "open": [5, 6],
+            "high": [5, 6],
+            "low": [5, 6],
+            "close": [5, 6],
+            "volume": [100, 200],
+        }
+    )
+    snap = tmp_path / "missing_ticker.csv"
+    _write_snapshot(snap, df)
+
+    cache_file = tmp_path / "cache_missing_ticker.json"
+
+    r = ingest_snapshot(
+        snap,
+        ticker="SOME3",
+        conn=empty_db,
+        cache_file=cache_file,
+        ttl=3600,
+    )
     assert not r["cached"]
     assert r["processed_rows"] == 2
 

@@ -46,6 +46,29 @@ def to_provider_ticker(ticker: str) -> str:
 
 
 def ticker_variants(ticker: str) -> tuple[str, str]:
-    """Retorna variantes para busca no banco (sem e com `.SA`)."""
+    """Gera duas formas de um ticker B3 para consulta no banco.
+
+    Normaliza a entrada usando :func:`normalize_b3_ticker` e produz uma tupla
+    contendo:
+
+    * o ticker base (ex.: ``"ABCD"``)
+    * a variante adicionando o sufixo ``.SA`` (ex.: ``"ABCD.SA"``)
+
+    Exemplos::
+
+        >>> ticker_variants("ABCD")
+        ("ABCD", "ABCD.SA")
+        >>> ticker_variants("abcd")
+        ("ABCD", "ABCD.SA")
+
+    Parameters
+    ----------
+    ticker: str
+        Valor de entrada que será normalizado.
+
+    Returns
+    -------
+    tuple[str, str]
+        Paré de variantes (base, com sufixo)."""
     base = normalize_b3_ticker(ticker)
     return base, f"{base}.SA"

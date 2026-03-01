@@ -54,6 +54,8 @@ def test_load_cache_invalid_json_logs_warning_and_returns_empty(tmp_path, caplog
 
 
 def test_entry_is_fresh_for_recent_entry():
+    """Verifica que uma entrada com timestamp recente é considerada
+    fresca com TTL inteiro."""
     now = datetime.now(timezone.utc)
     entry = {"processed_at": now.isoformat()}
 
@@ -62,6 +64,8 @@ def test_entry_is_fresh_for_recent_entry():
 
 
 def test_entry_is_fresh_with_fractional_ttl():
+    """Confirma que TTL fracionário (60.5) é aceito e ainda marca a
+    entrada como fresca."""
     now = datetime.now(timezone.utc)
     entry = {"processed_at": now.isoformat()}
 

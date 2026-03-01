@@ -13,7 +13,7 @@ from typing import Optional, Set
 
 
 def _ensure_migrations_table(conn: sqlite3.Connection) -> None:
-    """Ensure the schema_migrations table exists in the given SQLite connection."""
+    """Garante que a tabela schema_migrations exista na conexão SQLite fornecida."""
     cur = conn.cursor()
     cur.execute(
         """
@@ -27,7 +27,8 @@ def _ensure_migrations_table(conn: sqlite3.Connection) -> None:
 
 
 def _applied_migrations(conn: sqlite3.Connection) -> Set[str]:
-    """Query the schema_migrations table and return a set of applied migration ids."""
+    """Consulta a tabela schema_migrations e retorna um conjunto de
+    IDs de migrações aplicadas."""
     cur = conn.cursor()
     cur.execute("SELECT id FROM schema_migrations")
     return {r[0] for r in cur.fetchall()}
@@ -36,9 +37,10 @@ def _applied_migrations(conn: sqlite3.Connection) -> Set[str]:
 def apply_migrations(
     conn: sqlite3.Connection, migrations_dir: Optional[str] = None
 ) -> None:
-    """Apply SQL migrations found in `migrations_dir` in alphanumeric order.
+    """Aplica migrações SQL encontradas em `migrations_dir` em ordem alfanumérica.
 
-    Records applied migration ids in `schema_migrations` table to avoid re-applying.
+    Registra os IDs das migrações aplicadas na tabela `schema_migrations` para
+    evitar reaplicação.
     """
     if migrations_dir is None:
         migrations_dir = os.path.join(os.path.dirname(__file__), "..", "migrations")
@@ -59,8 +61,10 @@ def apply_migrations(
         with open(path, "r", encoding="utf-8") as f:
             sql = f.read()
         try:
-            # Execute each statement separately so the migration and the
-            # schema_migrations insert occur within the same transaction.
+            # Run each migration file in its own transaction: execute all
+            # statements from the file, record the filename in
+            # schema_migrations, then commit.  This keeps failures scoped to a
+            # single migration rather than bundling everything.
             statements = [s.strip() for s in sql.split(";") if s.strip()]
             for stmt in statements:
                 cur.execute(stmt)
@@ -71,6 +75,7 @@ def apply_migrations(
             )
             cur.execute(insert_sql, (fname,))
             conn.commit()
-        except Exception:
+        except Exception as e:
+            # rollback before propagating; provide context for easier debugging
             conn.rollback()
-            raise
+            raise RuntimeError(f"migration failed ({fname})") from e

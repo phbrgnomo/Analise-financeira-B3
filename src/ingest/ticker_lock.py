@@ -39,8 +39,6 @@ def _get_lock(ticker: str) -> threading.Lock:
 def lock_ticker(ticker: str):
     """Serializa seção crítica para o ticker informado."""
     lock = _get_lock(ticker)
-    lock.acquire()
-    try:
+    # use lock as a context manager for auto acquire/release, safer on error
+    with lock:
         yield
-    finally:
-        lock.release()

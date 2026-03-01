@@ -77,11 +77,25 @@ def test_run_uses_ingest_pipeline(monkeypatch):
         return {"status": "success"}
 
     monkeypatch.setattr("src.ingest.pipeline.ingest", fake_ingest)
-    monkeypatch.setattr("src.main._compute_returns_for_ticker", lambda *a, **k: 1)
+
+    calls_to_compute = []
+
+    def fake_compute(ticker: str, *args, **kwargs):
+        calls_to_compute.append(ticker)
+        return 1
+
+    monkeypatch.setattr("src.main._compute_returns_for_ticker", fake_compute)
 
     runner = CliRunner()
     result = runner.invoke(app, ["run"])
     assert result.exit_code == 0
-    assert calls
+    assert calls, "esperávamos que ingest fosse chamado"
     assert calls[0]["ticker"] == "PETR4"
     assert calls[0]["source"] == "yfinance"
+
+    # e também precisamos que ao menos um ticker seja enviado ao cálculo de
+    # retornos
+    assert calls_to_compute, "_compute_returns_for_ticker não foi invocado"
+    for t in calls_to_compute:
+        # deve usar forma canônica semelhante à ingest
+        assert t in ("PETR4", "PETR4.SA"), "ticker inesperado para cálculo de retornos"

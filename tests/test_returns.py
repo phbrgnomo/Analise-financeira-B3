@@ -4,9 +4,7 @@ from datetime import datetime
 import numpy as np
 import pandas as pd
 
-
-def _canonical_ticker(ticker: str) -> str:
-    return ticker.upper().removesuffix(".SA")
+from src.tickers import normalize_b3_ticker
 
 
 def _count_returns(
@@ -26,7 +24,7 @@ def _count_returns(
     Returns:
         int: number of matching return rows.
     """
-    ticker = _canonical_ticker(ticker)
+    ticker = normalize_b3_ticker(ticker)
     cur = conn.cursor()
     cur.execute(
         "SELECT COUNT(*) FROM returns WHERE ticker = ? AND return_type = ?",
@@ -55,7 +53,7 @@ def _fetch_returns_df(
         pandas.DataFrame: DataFrame indexed by date with a `return` column;
         may be empty if no rows are found.
     """
-    ticker = _canonical_ticker(ticker)
+    ticker = normalize_b3_ticker(ticker)
     cur = conn.cursor()
     cur.execute(
         "SELECT date, return_value AS return FROM returns WHERE ticker = ?"
@@ -83,7 +81,7 @@ def test_compute_returns_happy_path(sample_db):
     cur = sample_db.cursor()
     cur.execute(
         "SELECT COUNT(*) FROM prices WHERE ticker = ?",
-        (_canonical_ticker(ticker),),
+        (normalize_b3_ticker(ticker),),
     )
     n_prices = cur.fetchone()[0]
 
@@ -95,7 +93,7 @@ def test_compute_returns_happy_path(sample_db):
     df_prices = pd.read_sql_query(
         "SELECT date, close FROM prices WHERE ticker = ? ORDER BY date",
         sample_db,
-        params=(_canonical_ticker(ticker),),
+        params=(normalize_b3_ticker(ticker),),
         parse_dates=["date"],
     ).set_index("date")
 
