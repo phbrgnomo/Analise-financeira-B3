@@ -16,6 +16,8 @@ helper still exists for backwards compatibility and manual verification.
 
 from __future__ import annotations
 
+import os
+import time
 from datetime import datetime, timezone
 
 import pandas as pd
@@ -46,6 +48,17 @@ class DummyAdapter(Adapter):
         the adapter flexible for tests using additional parameters.
         """
         self.called = True
+        if sleep_secs := os.environ.get("DUMMY_SLEEP"):
+            # somente a conversão para float deve falhar; deixe sleep() lançar
+            # suas próprias exceções (e.g. KeyboardInterrupt) para que propaguem
+            try:
+                secs = float(sleep_secs)
+            except ValueError:
+                # ignore malformed value and continue without delay
+                secs = 0.0
+            else:
+                if secs:
+                    time.sleep(secs)
         dates = pd.date_range(end=datetime.now(timezone.utc).date(), periods=3,
                               freq="D")
         # choose values that satisfy the canonical schema requirement

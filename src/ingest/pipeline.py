@@ -12,6 +12,7 @@ import logging
 import os
 import sqlite3
 import tempfile
+import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -21,6 +22,11 @@ import pandas as pd
 import typer  # used by ingest_command error handling
 
 from src.utils.checksums import serialize_df_bytes, sha256_bytes, sha256_file
+
+
+def _now_iso() -> str:
+    """Return current UTC time as an RFC3339 string with Z suffix."""
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +51,7 @@ def _record_ingest_metadata(metadata: Dict[str, Any]) -> None:
         logger.exception("failed to record ingest metadata: %s", exc)
 
 
-def ingest(
+def ingest(  # noqa: C901 - function is intentionally orchestrator-style
     ticker: str,
     source: str = "yfinance",
     *,
@@ -74,6 +80,7 @@ def ingest(
     recording useful metadata.
     """
     job_id = str(uuid.uuid4())
+    started_at = _now_iso()
     logger.info(
         "pipeline.ingest start",
         extra={
@@ -82,115 +89,228 @@ def ingest(
             "source": source,
             "dry_run": dry_run,
             "force_refresh": force_refresh,
+            "started_at": started_at,
         },
     )
 
-    # fetch
+    # ------------------------------------------------------------------
+    # Story 1.9: bloqueio por ticker para evitar ingestões concorrentes
+    # ------------------------------------------------------------------
+    # a configuração é controlada por variáveis de ambiente para que os
+    # testes possam ajustar o comportamento sem precisar importar helpers
+    # internos.
+    # uma validação básica é aplicada para que valores malformados falhem
+    # rapidamente com erros claros em vez de causar comportamento inesperado.
+    lock_timeout_raw = os.environ.get("INGEST_LOCK_TIMEOUT_SECONDS", "120")
     try:
-        from src.adapters.factory import get_adapter
-
-        adapter = get_adapter(source)
-        df = adapter.fetch(ticker)
-    except Exception as exc:  # fetch failure
-        msg = f"adapter.fetch failed: {exc}"
-        logger.exception(msg)
-        metadata = {
-            "job_id": job_id,
-            "ticker": ticker,
-            "source": source,
-            "status": "error",
-            "error_message": msg,
-        }
-        _record_ingest_metadata(metadata)
-        return {"job_id": job_id, "status": "error", "error_message": msg}
-
-    # map to canonical
-    try:
-        from src.etl.mapper import to_canonical
-
-        canonical = to_canonical(df, provider_name=source, ticker=ticker)
-    except Exception as exc:  # mapper failure
-        msg = f"mapper failed: {exc}"
-        logger.exception(msg)
-        metadata = {
-            "job_id": job_id,
-            "ticker": ticker,
-            "source": source,
-            "status": "error",
-            "error_message": msg,
-        }
-        _record_ingest_metadata(metadata)
-        return {"job_id": job_id, "status": "error", "error_message": msg}
-
-    # if the caller only wanted a dry run, return now
-    if dry_run:
-        logger.info(
-            "dry run completed",
-            extra={"job_id": job_id, "rows": len(canonical)},
+        lock_timeout = float(lock_timeout_raw)
+    except (TypeError, ValueError):
+        raise ValueError(
+            f"Invalid INGEST_LOCK_TIMEOUT_SECONDS value {lock_timeout_raw!r}: "
+            "must be a numeric number of seconds"
+        ) from None
+    if lock_timeout < 0:
+        raise ValueError(
+            f"Invalid INGEST_LOCK_TIMEOUT_SECONDS value {lock_timeout_raw!r}: "
+            "must be non-negative"
         )
-        return {
-            "job_id": job_id,
-            "ticker": ticker,
-            "source": source,
-            "status": "success",
-            "dry_run": True,
-            "rows": len(canonical),
-        }
 
-    # persist raw CSV (Story 1.4)
-    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    lock_mode_raw = os.environ.get("INGEST_LOCK_MODE", "wait")
+    lock_mode = lock_mode_raw.lower()
+    allowed_lock_modes = {"wait", "exit"}
+    if lock_mode not in allowed_lock_modes:
+        raise ValueError(
+            f"Invalid INGEST_LOCK_MODE value {lock_mode_raw!r}: "
+            f"must be one of {sorted(allowed_lock_modes)}"
+        )
+
+    wait_for_lock = lock_mode != "exit"
+
+    # import inside this section so the module can be imported without a
+    # hard dependency on the locking machinery (tests and other helpers may
+    # not require it).  Using the native context manager form keeps the
+    # acquisition/release lifecycle simple and avoids manual __enter__/__exit__
+    # which can easily be forgotten during refactors.
+    from src import locks
+
+    # record when we begin attempting to acquire the lock so that we can
+    # compute the real elapsed wait if a timeout occurs.  ``time.monotonic()``
+    # is used because it is immune to system clock adjustments.
+    lock_acquire_start = time.monotonic()
+
     try:
-        save_meta = save_raw_csv(df, source, ticker, ts)
-    except Exception as exc:
-        msg = f"failed to save raw CSV: {exc}"
-        logger.exception(msg)
+        with locks.acquire_lock(
+            ticker, timeout_seconds=lock_timeout, wait=wait_for_lock
+        ) as lock_meta:
+            # merge any lock metadata into our logging context so downstream
+            # steps can include it if they wish (useful for debugging at scale).
+            # By creating a new LoggerAdapter we avoid rebinding the global
+            # ``logger`` name which would conflict with earlier references.
+            log = logging.LoggerAdapter(logger, extra={**lock_meta})
+
+            # fetch
+            try:
+                from src.adapters.factory import get_adapter
+
+                adapter = get_adapter(source)
+                df = adapter.fetch(ticker)
+            except Exception as exc:  # fetch failure
+                msg = f"adapter.fetch failed: {exc}"
+                log.exception(msg)
+                metadata = {
+                    "job_id": job_id,
+                    "ticker": ticker,
+                    "source": source,
+                    "status": "error",
+                    "error_message": msg,
+                    "started_at": started_at,
+                    "finished_at": _now_iso(),
+                }
+                metadata.update(lock_meta)
+                _record_ingest_metadata(metadata)
+                return {"job_id": job_id, "status": "error", "error_message": msg}
+
+            # map to canonical
+            try:
+                from src.etl.mapper import to_canonical
+
+                canonical = to_canonical(df, provider_name=source, ticker=ticker)
+            except Exception as exc:  # mapper failure
+                msg = f"mapper failed: {exc}"
+                log.exception(msg)
+                metadata = {
+                    "job_id": job_id,
+                    "ticker": ticker,
+                    "source": source,
+                    "status": "error",
+                    "error_message": msg,
+                    "started_at": started_at,
+                    "finished_at": _now_iso(),
+                }
+                metadata.update(lock_meta)
+                _record_ingest_metadata(metadata)
+                return {"job_id": job_id, "status": "error", "error_message": msg}
+
+            # if the caller only wanted a dry run, return now
+            if dry_run:
+                log.info(
+                    "dry run completed",
+                    extra={"job_id": job_id, "rows": len(canonical)},
+                )
+                result = {
+                    "job_id": job_id,
+                    "ticker": ticker,
+                    "source": source,
+                    "status": "success",
+                    "dry_run": True,
+                    "rows": len(canonical),
+                }
+                result.update(lock_meta)
+                # record metadata even for dry runs to make lock activity visible
+                metadata = result.copy()
+                metadata["started_at"] = started_at
+                metadata["finished_at"] = _now_iso()
+                _record_ingest_metadata(metadata)
+                return result
+
+            # persist raw CSV (Story 1.4)
+            # use the shared helper for generating timestamps to avoid drift
+            # between related metadata fields
+            ts = _now_iso()
+            try:
+                save_meta = save_raw_csv(df, source, ticker, ts)
+            except Exception as exc:
+                msg = f"failed to save raw CSV: {exc}"
+                log.exception(msg)
+                metadata = {
+                    "job_id": job_id,
+                    "ticker": ticker,
+                    "source": source,
+                    "status": "error",
+                    "error_message": msg,
+                    "started_at": started_at,
+                    "finished_at": _now_iso(),
+                }
+                metadata.update(lock_meta)
+                _record_ingest_metadata(metadata)
+                return {"job_id": job_id, "status": "error", "error_message": msg}
+
+            # attempt DB persistence with snapshot helper; the helper already logs its
+            # own metadata.  ``ingest_from_snapshot`` is defined later in this module
+            # so we can call it directly instead of importing ourselves at runtime.
+            persist_result: Dict[str, Any] = {}
+            try:
+                persist_result = ingest_from_snapshot(
+                canonical,
+                ticker,
+                force=force_refresh,
+            )
+            except Exception as exc:  # pragma: no cover - just in case
+                log.exception("persistence step failed: %s", exc)
+                persist_result = {"status": "error", "error_message": str(exc)}
+
+            # derive overall status from persistence outcome; if the helper reports
+            # "error" we propagate that.  Future extensions could use
+            # "partial_success" or similar.
+            top_status = (
+            "success"
+            if persist_result.get("status") == "success"
+            else "error"
+        )
+
+            # final metadata entry for the orchestrator run
+            metadata = {
+                "job_id": job_id,
+                "ticker": ticker,
+                "source": source,
+                "status": top_status,
+                "rows": len(canonical),
+                "persist": persist_result,
+                "started_at": started_at,
+                "finished_at": _now_iso(),
+            }
+            metadata.update(lock_meta)
+            _record_ingest_metadata(metadata)
+            log.info(
+                "pipeline.ingest completed",
+                extra={"job_id": job_id, "rows": len(canonical)},
+            )
+
+            return {
+                "job_id": job_id,
+                "status": top_status,
+                "save_meta": save_meta,
+                "persist": persist_result,
+            }
+    except locks.LockTimeout as exc:
+        # record a metadata entry indicating the lock failure and bail out
+        action = "timeout" if wait_for_lock else "exit"
+        if not wait_for_lock:
+            # non-blocking/exit mode should never incur a wait
+            waited = 0.0
+        else:
+            # compute actual waited time if we recorded a start timestamp;
+            # fall back to configured timeout if somehow ``lock_acquire_start``
+            # isn't available (should never happen).
+            try:
+                waited = time.monotonic() - lock_acquire_start
+            except NameError:
+                waited = lock_timeout
+        msg = f"could not obtain lock for ticker {ticker}: {exc}"
+        logger.warning(msg)
         metadata = {
             "job_id": job_id,
             "ticker": ticker,
             "source": source,
             "status": "error",
             "error_message": msg,
+            "lock_action": action,
+            "lock_waited_seconds": waited,
+            "started_at": started_at,
+            "finished_at": _now_iso(),
         }
         _record_ingest_metadata(metadata)
         return {"job_id": job_id, "status": "error", "error_message": msg}
-
-    # attempt DB persistence with snapshot helper; the helper already logs its
-    # own metadata.  ``ingest_from_snapshot`` is defined later in this module
-    # so we can call it directly instead of importing ourselves at runtime.
-    persist_result: Dict[str, Any] = {}
-    try:
-        persist_result = ingest_from_snapshot(canonical, ticker, force=force_refresh)
-    except Exception as exc:  # pragma: no cover - just in case
-        logger.exception("persistence step failed: %s", exc)
-        persist_result = {"status": "error", "error_message": str(exc)}
-
-    # derive overall status from persistence outcome; if the helper reports
-    # "error" we propagate that.  Future extensions could use
-    # "partial_success" or similar.
-    top_status = "success" if persist_result.get("status") == "success" else "error"
-
-    # final metadata entry for the orchestrator run
-    metadata = {
-        "job_id": job_id,
-        "ticker": ticker,
-        "source": source,
-        "status": top_status,
-        "rows": len(canonical),
-        "persist": persist_result,
-    }
-    _record_ingest_metadata(metadata)
-
-    logger.info(
-        "pipeline.ingest completed",
-        extra={"job_id": job_id, "rows": len(canonical)},
-    )
-
-    return {
-        "job_id": job_id,
-        "status": top_status,
-        "save_meta": save_meta,
-        "persist": persist_result,
-    }
 
 
 def ingest_command(
