@@ -47,6 +47,27 @@ VALIDATION_INVALID_PERCENT_THRESHOLD=0.05
   contexto (ex.: aceitar até 5% de linhas inválidas antes de tratar como
   falha).
 
+- **INGEST_LOCK_TIMEOUT_SECONDS**: tempo máximo em segundos que uma chamada
+  de ingest aguardará para obter um bloqueio por ticker. Padrão `120`.
+
+- **INGEST_LOCK_MODE**: define como reagir quando outro processo já detém o
+  bloqueio para o mesmo ticker. `wait` (padrão) faz o comando aguardar até
+  que o recurso seja liberado; `exit` faz com que a chamada falhe imediatamente
+  com mensagem de erro clara.
+
+- **LOCK_DIR**: diretório onde os arquivos de bloqueio por ticker são
+  armazenados. O valor padrão é `locks/` (no diretório de trabalho atual) e
+  é criado automaticamente. Ajustar esta variável permite colocar locks em
+  um caminho específico quando múltiplos executores compartilham o mesmo
+  ambiente de trabalho.
+
+  Exemplo em `.env`:
+
+  ```bash
+  INGEST_LOCK_MODE=exit
+  INGEST_LOCK_TIMEOUT_SECONDS=30
+  ```
+
 ## Quickstart
 
 1. Instale dependências (com `poetry`):

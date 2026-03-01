@@ -81,6 +81,9 @@ snapshots/
 # Local ingest logs (runtime, append-only)
 metadata/
 
+# Lock files created by ingest pipeline
+locks/
+
 
 .sentry-native/
 

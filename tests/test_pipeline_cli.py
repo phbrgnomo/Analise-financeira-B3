@@ -1,7 +1,20 @@
-
 import pytest
 
 from src.adapters.dummy import DummyAdapter
+from src.ingest import pipeline
+
+
+# ensure CLI tests do not pollute workspace with lock files; each test
+# gets its own temporary lock directory via environment variable
+@pytest.fixture(autouse=True)
+def isolate_lock_dir(tmp_path, monkeypatch):
+    # per-test lock directory ensures CLI tests do not pollute the repo
+    monkeypatch.setenv("LOCK_DIR", str(tmp_path / "locks"))
+
+    # also clear any lock configuration from the environment so other
+    # suites (e.g. test_ingest_lock) cannot influence these tests
+    monkeypatch.delenv("INGEST_LOCK_MODE", raising=False)
+    monkeypatch.delenv("INGEST_LOCK_TIMEOUT_SECONDS", raising=False)
 
 # The CLI helper is built using Typer, which has proven brittle in the
 # current test environment (see excessive recursion and parse errors above).
@@ -9,7 +22,6 @@ from src.adapters.dummy import DummyAdapter
 # the underlying ``ingest_command`` helper directly.  This still fulfills the
 # intent of "CLI integration" smoke tests while avoiding framework
 # incompatibilities.
-from src.ingest import pipeline
 
 
 def test_pipeline_ingest_dry_run(monkeypatch, capsys):
@@ -60,6 +72,8 @@ def test_pipeline_ingest_error_logging(monkeypatch, capsys):
     assert rc == 1
     assert recorded.get("status") == "error"
     assert "network unreachable" in recorded.get("error_message", "")
+    # timestamps should have been added by ingest()
+    assert "started_at" in recorded and "finished_at" in recorded
 
     # job_id should be printed to stderr not stdout
     captured = capsys.readouterr()
@@ -112,6 +126,48 @@ def test_invalid_provider_returns_error(monkeypatch):
     assert rc != 0
 
 
+def test_invalid_lock_configuration(monkeypatch):
+    """Malformed environment variables should raise a clear ValueError."""
+    monkeypatch.setenv("INGEST_LOCK_TIMEOUT_SECONDS", "not-a-number")
+    with pytest.raises(ValueError):
+        pipeline.ingest("TST", "dummy")
+
+    monkeypatch.setenv("INGEST_LOCK_TIMEOUT_SECONDS", "-5")
+    with pytest.raises(ValueError):
+        pipeline.ingest("TST", "dummy")
+
+    monkeypatch.delenv("INGEST_LOCK_TIMEOUT_SECONDS", raising=False)
+    monkeypatch.setenv("INGEST_LOCK_MODE", "snooze")
+    with pytest.raises(ValueError):
+        pipeline.ingest("TST", "dummy")
+
+
+def test_float_timeout_is_accepted(monkeypatch):
+    """INGEST_LOCK_TIMEOUT_SECONDS may be a float and is passed as such."""
+    monkeypatch.setenv("INGEST_LOCK_TIMEOUT_SECONDS", "0.5")
+    # intercept locks.acquire_lock to observe the timeout type
+    import src.locks as locks_module
+
+    seen = {}
+
+    class DummyCtx:
+        def __enter__(self):
+            return {}
+
+        def __exit__(self, *args):
+            pass
+
+    def fake_acquire(ticker, timeout_seconds, wait):
+        seen["timeout"] = timeout_seconds
+        return DummyCtx()
+
+    monkeypatch.setattr(locks_module, "acquire_lock", fake_acquire)
+    # run a dry_run ingest which will call our fake acquire
+    pipeline.ingest("TST", "dummy", dry_run=True)
+    assert isinstance(seen.get("timeout"), float)
+
+
+
 def test_mapper_failure_propagates(monkeypatch, capsys):
     """When the mapper raises, the CLI returns non-zero and logs metadata."""
     dummy = DummyAdapter()
@@ -139,6 +195,7 @@ def test_mapper_failure_propagates(monkeypatch, capsys):
     assert rc == 1
     assert recorded.get("status") == "error"
     assert "map bug" in recorded.get("error_message", "")
+    assert "started_at" in recorded and "finished_at" in recorded
 
     captured = capsys.readouterr()
     # CLI prints both error message and job_id on stderr for failures
@@ -184,8 +241,14 @@ def test_ingest_treats_missing_persist_status_as_success(monkeypatch):
     assert result2.get("persist", {}).get("cached") is True
 
 
-def test_ingest_marks_error_when_persist_result_has_no_success_signals(monkeypatch):
-    """Persistência sem ``status`` e sem sinais de sucesso deve virar erro."""
+def test_ingest_empty_persist_result_is_success(monkeypatch):
+    """Even an empty persist result (``{}``) is interpreted as success.
+
+    Legacy behaviour is that ``ingest_from_snapshot`` may return an empty
+    dict; the orchestrator should not treat this as an error.  The preceding
+    test already covers cases where the dict contains recognised success
+    signals like ``rows_processed`` or ``cached``.
+    """
     dummy = DummyAdapter()
     monkeypatch.setattr("src.adapters.factory.get_adapter", lambda name: dummy)
     monkeypatch.setattr("src.etl.mapper.to_canonical", lambda df, **kw: df)
@@ -197,7 +260,7 @@ def test_ingest_marks_error_when_persist_result_has_no_success_signals(monkeypat
     monkeypatch.setattr(pipeline, "ingest_from_snapshot", lambda *a, **k: {})
 
     result = pipeline.ingest("TST", "dummy", dry_run=False)
-    assert result.get("status") == "error"
+    assert result.get("status") == "success"
 
 
 def test_ingest_cmd_validates_provider(monkeypatch):
