@@ -212,6 +212,11 @@ def ingest_snapshot(
         else:
             raise ValueError("ticker argument required when snapshot lacks column")
 
+    # at this point we guarantee a string value for ticker, but the type
+    # checker still sees Optional[str].  narrow with an assertion so callers
+    # (and Pylance) know it is safe to pass to ``lock_ticker``.
+    assert isinstance(ticker, str), "ticker must be a string"
+
     if db_client is None:
         db_client = DefaultDatabaseClient()
 

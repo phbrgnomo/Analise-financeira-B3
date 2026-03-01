@@ -71,6 +71,30 @@ def test_cache_prevents_reprocessing(tmp_path, empty_db):
     assert r2["processed_rows"] == 0
 
 
+def test_infer_ticker_from_single_entry(tmp_path, empty_db):
+    # omit the ticker argument when the snapshot has exactly one ticker
+    df = pd.DataFrame(
+        {
+            "ticker": ["ONE", "ONE"],
+            "date": ["2024-01-01", "2024-01-02"],
+            "open": [5, 6],
+            "high": [5, 6],
+            "low": [5, 6],
+            "close": [5, 6],
+            "volume": [100, 200],
+        }
+    )
+    snap = tmp_path / "infer.csv"
+    _write_snapshot(snap, df)
+
+    cache_file = tmp_path / "cache_infer.json"
+
+    # Should work without raising and ingest two rows
+    r = ingest_snapshot(snap, conn=empty_db, cache_file=cache_file, ttl=3600)
+    assert not r["cached"]
+    assert r["processed_rows"] == 2
+
+
 def test_snapshot_mixed_tickers_raises(tmp_path, empty_db):
     # create a snapshot containing two different tickers
     df = pd.DataFrame(
