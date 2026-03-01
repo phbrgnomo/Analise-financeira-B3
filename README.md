@@ -28,6 +28,10 @@ necessário.
   válido. Padrão `86400` (um dia). Use com o comando `ingest-snapshot`.
 - **SNAPSHOT_CACHE_FILE**: caminho para o arquivo JSON onde o cache é
   armazenado. Valor padrão `dados/snapshot_cache.json`.
+- **SNAPSHOTS_KEEP_LATEST**: quantidade de snapshots recentes por ticker a
+  manter no diretório de snapshots. Padrão `1`.
+- **DEFAULT_TICKERS**: tickers padrão usados no `main run` quando `--ticker`
+  não é informado. Exemplo: `PETR4,ITUB3,BBDC4`.
 
 - **VALIDATION_INVALID_PERCENT_THRESHOLD**: limite percentual usado pelo
   processo de validação para considerar uma operação como inválida. Valor
@@ -51,12 +55,12 @@ VALIDATION_INVALID_PERCENT_THRESHOLD=0.05
 poetry install
 ```
 
-2. Execute a aplicação (entrypoint):
+2. Execute o fluxo principal da aplicação (entrypoint):
 
 ```bash
-poetry run main
-# ou alternativamente
-python -m src.main
+poetry run main run
+# ticker específico (padrão B3)
+poetry run main run --ticker PETR4
 ```
 
 3. Exemplos e testes rápidos:
@@ -96,13 +100,55 @@ As instruções completas e o playbook estão em `docs/playbooks/testing-network
   df = adapter.fetch("PETR4.SA", start_date="2022-01-01", end_date="2022-12-31")
   print(df.head())
   ```
-- Ao coletar ativos da B3 via Yahoo, adicione o sufixo `.SA` (ex.: `PETR4.SA`).
-- Dados persistidos ficam na pasta `dados/` em CSV com coluna `Return` para retornos diários.
+- Na CLI, informe tickers no padrão B3 sem sufixo de provider (ex.: `PETR4`, `MGLU3`, `BOVA11`).
+- A adaptação para formato de provider (ex.: `.SA`) é feita internamente pelo adapter.
+- Dados persistidos ficam em `dados/data.db` no banco SQLite.
+- No banco (`prices` e `returns`), os tickers são persistidos no padrão B3 (ex.: `PETR4`).
+- A coluna `date` nas tabelas canônicas usa afinidade `DATE`.
 - Cálculos anuais usam 252 dias úteis por convenção do projeto.
 - O pipeline agora suporta ingestão de snapshots via CLI usando `ingest-snapshot`.
   Esta rotina aplica cache com TTL e faz ingestão incremental no banco, evitando
   reprocessamento quando o arquivo não mudou. Veja abaixo para detalhes de
   flags.
+  Use este comando apenas quando você já tiver um CSV local para importar.
+
+### Comandos principais da CLI
+
+- Executar ETL padrão (ingestão + retornos):
+
+```bash
+poetry run main run
+```
+
+- Executar ETL para um ticker:
+
+```bash
+poetry run main run --ticker PETR4
+```
+
+- Calcular retornos para ticker específico:
+
+```bash
+poetry run main compute-returns --ticker PETR4
+```
+
+- Calcular retornos para todos os tickers existentes no banco:
+
+```bash
+poetry run main compute-returns
+```
+
+- Ingerir CSV local no banco (incremental + cache/checksum):
+
+```bash
+poetry run main ingest-snapshot snapshots/PETR4_snapshot.csv --ticker PETR4
+```
+
+- Exportar dados do SQLite para CSV:
+
+```bash
+poetry run main export-csv --ticker PETR4
+```
 
 ## Estrutura do repositório (resumo)
 - `src/` — código principal

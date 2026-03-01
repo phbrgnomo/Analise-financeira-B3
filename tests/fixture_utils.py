@@ -50,7 +50,7 @@ def create_prices_db_from_rows(rows):
         """
         CREATE TABLE prices (
             ticker TEXT,
-            date TEXT,
+            date DATE,
             open REAL,
             high REAL,
             low REAL,
@@ -61,11 +61,24 @@ def create_prices_db_from_rows(rows):
         """
     )
 
+    # normalize tickers to base format (strip .SA) to match project convention
+    from src.tickers import normalize_b3_ticker
+
+    normalized_rows = []
+    for r in rows:
+        t = r[0]
+        try:
+            t = normalize_b3_ticker(t)
+        except Exception:
+            # leave as-is if normalization fails
+            pass
+        normalized_rows.append((t,) + tuple(r[1:]))
+
     sql = (
         "INSERT INTO prices (ticker,date,open,high,low,close,volume,source)"
         " VALUES (?,?,?,?,?,?,?,?)"
     )
-    cur.executemany(sql, rows)
+    cur.executemany(sql, normalized_rows)
     db.commit()
     return db
 

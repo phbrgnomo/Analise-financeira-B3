@@ -284,3 +284,62 @@ def test_snapshot_metadata_cache_fallback(tmp_path, monkeypatch, caplog):
     assert r["cached"] is False
     assert "cache fallback" in caplog.text.lower()
     assert called
+
+
+def test_snapshot_retention_policy(monkeypatch, tmp_path):
+    """Only the most recent N snapshots are retained per ticker.
+
+    The environment variable ``SNAPSHOTS_KEEP_LATEST`` controls how many
+    CSV files should be kept; older files (and their checksum siblings)
+    should be removed by :func:`ingest_from_snapshot`.
+    """
+    mp = pytest.MonkeyPatch()
+    mp.setenv("SNAPSHOT_DIR", str(tmp_path / "snaps"))
+    mp.setenv("SNAPSHOT_TTL", "100000")
+    mp.setenv("SNAPSHOTS_KEEP_LATEST", "2")
+
+    db_path = tmp_path / "dados" / "data.db"
+    db.init_db(str(db_path))
+
+    # first ingestion creates one file
+    df1 = make_sample_df(["2026-01-01"])
+    r1 = ingest_from_snapshot(df1, "RET", db_path=str(db_path))
+    assert not r1["cached"]
+    snaps = list((tmp_path / "snaps").glob("RET-*.csv"))
+    assert len(snaps) == 1
+
+    # second ingestion adds another snapshot; keep=2 should allow both
+    df2 = make_sample_df(["2026-01-02"])
+    # ensure timestamp rounds to a different second so filenames don't collide
+    time.sleep(1)
+    r2 = ingest_from_snapshot(df2, "RET", db_path=str(db_path))
+    assert not r2["cached"]
+    snaps = sorted((tmp_path / "snaps").glob("RET-*.csv"))
+    assert len(snaps) == 2
+
+    # third ingestion triggers retention; only recent two snapshots remain
+    df3 = make_sample_df(["2026-01-03"])
+    time.sleep(1)
+    _ = ingest_from_snapshot(df3, "RET", db_path=str(db_path))
+    snaps = sorted((tmp_path / "snaps").glob("RET-*.csv"))
+    assert len(snaps) == 2
+
+    mp.undo()
+
+
+def test_snapshot_keep_latest_helper(monkeypatch):
+    """The low-level helper parses the env var and enforces a minimum of 1.
+    """
+    from src.etl.snapshot import _snapshot_keep_latest
+
+    monkeypatch.delenv("SNAPSHOTS_KEEP_LATEST", raising=False)
+    assert _snapshot_keep_latest() == 1
+
+    monkeypatch.setenv("SNAPSHOTS_KEEP_LATEST", "0")
+    assert _snapshot_keep_latest() == 1
+    monkeypatch.setenv("SNAPSHOTS_KEEP_LATEST", "-5")
+    assert _snapshot_keep_latest() == 1
+    monkeypatch.setenv("SNAPSHOTS_KEEP_LATEST", "3")
+    assert _snapshot_keep_latest() == 3
+    monkeypatch.setenv("SNAPSHOTS_KEEP_LATEST", "abc")
+    assert _snapshot_keep_latest() == 1

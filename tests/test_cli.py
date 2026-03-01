@@ -46,38 +46,42 @@ def test_main_help_exit_code_and_output():
     )
     assert completed.returncode == 0
     assert "usage" in completed.stdout.lower() or "usage" in completed.stderr.lower()
-    # Our new flags live on the `main` subcommand, so inspect that help
+    # O fluxo principal agora é o subcomando `run`
     completed2 = subprocess.run(
-        [sys.executable, "-m", "src.main", "main", "--help"],
+        [sys.executable, "-m", "src.main", "run", "--help"],
         capture_output=True,
         text=True,
         timeout=10,
     )
     assert completed2.returncode == 0
-    assert "--validation-tolerance" in completed2.stdout
+    assert "--ticker" in completed2.stdout
     assert "--provider" in completed2.stdout
     # Help may emit deprecation warnings to stderr in some environments.
     # Ignore stderr content in the assertions.
 
 
-# explicit unit test for helper using factory (avoids CLI complexity)
-def test_fetch_helper_uses_factory(monkeypatch):
-    import src.adapters.factory as factory
-    from src.adapters.dummy import DummyAdapter
-    from src.main import _fetch_and_prepare_asset
-    # create a single dummy instance so we can inspect it after the call
-    dummy = DummyAdapter()
-    monkeypatch.setattr(factory, "get_adapter", lambda name: dummy)
+def test_run_uses_ingest_pipeline(monkeypatch):
+    from src.main import app
 
-    # call helper directly; provider dummy is passed through
-    _fetch_and_prepare_asset(
-        "PETR4",
-        "2020-01-01",
-        "2020-12-31",
-        None,
-        provider="dummy",
-    )
-    # verify that the dummy adapter was actually used
-    assert dummy.called, (
-        "factory.get_adapter was not used or DummyAdapter.fetch not invoked"
-    )
+    calls = []
+
+    def fake_ingest(ticker, source="yfinance", dry_run=False, force_refresh=False):
+        calls.append(
+            {
+                "ticker": ticker,
+                "source": source,
+                "dry_run": dry_run,
+                "force_refresh": force_refresh,
+            }
+        )
+        return {"status": "success"}
+
+    monkeypatch.setattr("src.ingest.pipeline.ingest", fake_ingest)
+    monkeypatch.setattr("src.main._compute_returns_for_ticker", lambda *a, **k: 1)
+
+    runner = CliRunner()
+    result = runner.invoke(app, ["run"])
+    assert result.exit_code == 0
+    assert calls
+    assert calls[0]["ticker"] == "PETR4"
+    assert calls[0]["source"] == "yfinance"

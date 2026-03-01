@@ -19,6 +19,7 @@ from typing import Optional, Tuple, Union
 import numpy as np
 import pandas as pd
 
+import src.db as _db
 from src import metrics  # noqa: E402
 from src.db_client import DatabaseClient, DefaultDatabaseClient
 from src.paths import DATA_DIR
@@ -55,7 +56,18 @@ def compute_returns(
     qstart = _normalize_param(start)
     qend = _normalize_param(end)
 
-    df_prices = repo.read_prices(ticker, start=qstart, end=qend, conn=conn)
+    resolved_ticker = ticker
+    if isinstance(repo, DefaultDatabaseClient):
+        resolved = _db.resolve_existing_ticker(ticker, conn=conn)
+        if resolved is not None:
+            resolved_ticker = resolved
+
+    df_prices = repo.read_prices(
+        resolved_ticker,
+        start=qstart,
+        end=qend,
+        conn=conn,
+    )
     if df_prices.empty:
         return pd.DataFrame() if dry_run else None
 
@@ -66,12 +78,12 @@ def compute_returns(
     if returns.empty:
         return pd.DataFrame() if dry_run else None
 
-    out_df = _build_out_df(returns, ticker)
+    out_df = _build_out_df(returns, resolved_ticker)
 
     if dry_run:
         return out_df
     # Persist results and record telemetry
-    _persist_returns(out_df, ticker, repo=repo, conn=conn)
+    _persist_returns(out_df, resolved_ticker, repo=repo, conn=conn)
     return out_df
 
 
@@ -136,6 +148,13 @@ def _persist_returns(
     start_ts = time.time()
     if repo is None:
         repo = DefaultDatabaseClient()
+    # canonicalize ticker column if present
+    if "ticker" in out_df.columns:
+        out_df = out_df.copy()
+        # drop the optional ".SA" suffix before writing to DB
+        out_df["ticker"] = (
+            out_df["ticker"].astype(str).str.replace(".SA", "", regex=False)
+        )
     repo.write_returns(out_df, conn=conn, return_type="daily")
     duration_ms = int((time.time() - start_ts) * 1000)
     rows_written = len(out_df)

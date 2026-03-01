@@ -18,6 +18,7 @@ Environment variables
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import os
@@ -340,6 +341,26 @@ def ingest_from_snapshot(  # noqa: C901
         from src.etl.snapshot import write_snapshot
 
         sha = write_snapshot(df, out_path)
+
+        # cleanup older snapshot files for this ticker to avoid buildup
+        # support environment variable for how many recent files to keep
+        keep = int(os.environ.get("SNAPSHOTS_KEEP_LATEST", "1"))
+        pattern = f"{ticker.replace('.', '_')}*"  # names start with sanitized ticker
+        all_files = sorted(snapshot_dir.glob(pattern))
+        # filter only csv files before calculating retention
+        csv_files = [f for f in all_files if f.suffix == ".csv"]
+        # keep newest `keep` files (alphabetical order corresponds to time)
+        to_remove = csv_files[:-keep] if keep > 0 else csv_files
+        for old in to_remove:
+            try:
+                old.unlink()
+            except Exception:
+                logger.warning("failed to remove old snapshot %s", old)
+            # also remove corresponding checksum
+            chk = old.with_suffix(old.suffix + ".checksum")
+            with contextlib.suppress(Exception):
+                chk.unlink()
+
         snapshot_meta: Dict[str, Any] = {
             "snapshot_id": filename,
             "ticker": ticker,

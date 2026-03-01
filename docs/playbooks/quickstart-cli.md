@@ -1,6 +1,6 @@
 # Quickstart CLI
 
-Este documento descreve os passos mínimos para instalar o projeto e usar a CLI, incluindo a saída em JSON (`--format json`) e exemplos práticos.
+Este documento descreve os passos mínimos para instalar o projeto e usar a CLI atual.
 
 Pré-requisitos
 - Python 3.12 (virtualenv/poetry recomendado)
@@ -27,35 +27,51 @@ poetry install
 
 Uso básico
 
-Executar ingest e gerar snapshot (exemplo) usando o subcomando `pipeline ingest`:
+Executar fluxo principal ETL (ingestão + cálculo de retornos):
 
 ```bash
-poetry run main pipeline ingest PETR4.SA --force-refresh
-# ou com provider explícito:
-poetry run main pipeline ingest --source yfinance PETR4.SA --force-refresh
+poetry run main run
 ```
 
-Saída JSON (`--format json`)
+Executar para ticker específico (padrão B3):
 
-O comando `pipeline ingest` pode ser combinado com flags como `--dry-run` ou
-`--force-refresh`, mas não produz diretamente JSON.  Para formatos estruturados
-use os helpers de exportação ou os scripts CLI adicionais (ex.: `snapshots
-export`).
+```bash
+poetry run main run --ticker PETR4
+```
 
-A saída JSON inclui campos de metadados quando aplicável: `ticker`, `snapshot_path`, `rows`, `checksum`, `snapshot_date`, `schema_version`.
+Executar ingestão pontual via subcomando `pipeline ingest`:
+
+```bash
+poetry run main pipeline ingest PETR4 --force-refresh
+# ou com provider explícito
+poetry run main pipeline ingest --source yfinance PETR4 --force-refresh
+```
+
+Calcular retornos:
+
+```bash
+# ticker específico
+poetry run main compute-returns --ticker PETR4
+
+# todos os tickers existentes no banco
+poetry run main compute-returns
+```
 
 Exemplos rápidos
 
-- Forçar refresh e gerar snapshot via pipeline ingest (sem JSON):
+- Importar CSV local para o banco com ingestão incremental (caso você já
+  tenha um arquivo de dados e queira carregá-lo):
+
+ ```bash
+ poetry run main ingest-snapshot snapshots/PETR4_snapshot.csv --ticker PETR4
+ ```
+
+O comando também calcula checksum e evita reprocessar arquivos idênticos.
+
+- Exportar dados para CSV:
 
 ```bash
-poetry run main pipeline ingest PETR4.SA --force-refresh
-```
-
-- Validar metadados gerados (usar o script de validação incluído):
-
-```bash
-python3 scripts/validate_metadata.py out.json
+poetry run main export-csv --ticker PETR4
 ```
 
 Verificação de snapshots
@@ -74,9 +90,9 @@ Notas
 
 Checklist mínimo após seguir o quickstart
 
-- [ ] Snapshot criado em `snapshots/`
-- [ ] Checksum SHA256 disponível e registrado
-- [ ] Metadados gerados e validados com `scripts/validate_metadata.py`
+- [ ] ETL executado com `main run`
+- [ ] Dados persistidos em `dados/data.db`
+- [ ] Export CSV gerado com `main export-csv`
 
 Referências
 - Contrato de metadados: `docs/schema.md`

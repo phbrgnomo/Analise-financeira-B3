@@ -12,17 +12,26 @@ non-CLI callers (e.g. notebooks, API layers).
 
 from __future__ import annotations
 
+from contextlib import suppress
+
 # apply CLI compatibility patch (monkeypatching) on import
-try:
+with suppress(ImportError):
     import src.cli_compat  # noqa: F401
-except ImportError:
-    pass
 
 import typer
 
 from src.adapters.factory import available_providers
+from src.tickers import normalize_b3_ticker
 
 app = typer.Typer()
+
+
+def _as_bool(value: object) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    return bool(value)
 
 
 @app.command("ingest")
@@ -33,7 +42,7 @@ def ingest_cmd(
         help=f"Provider adapter to use (choices: {', '.join(available_providers())})",
     ),
     ticker: str = typer.Argument(
-        ..., help="Ticker to ingest, ex. PETR4.SA (positional)."
+        ..., help="Ticker B3 para ingestão, ex.: PETR4, MGLU3, BOVA11"
     ),
     dry_run: bool = typer.Option(
         False, "--dry-run", help="Fetch and map but do not write any data"
@@ -63,7 +72,15 @@ def ingest_cmd(
             % (source, ", ".join(provs)),
         )
     src_name = prov_map[src_key]
+    try:
+        normalized_ticker = normalize_b3_ticker(ticker)
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+
     exit_code = ingest_command(
-        ticker, src_name, dry_run=dry_run, force_refresh=force_refresh
+        normalized_ticker,
+        src_name,
+        dry_run=_as_bool(dry_run),
+        force_refresh=_as_bool(force_refresh),
     )
     raise typer.Exit(code=exit_code)

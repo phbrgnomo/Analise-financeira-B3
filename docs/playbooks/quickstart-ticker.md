@@ -12,7 +12,7 @@ Exemplo rápido
 1. Executar ingest e persist (forçando refresh):
 
 ```bash
-poetry run main pipeline ingest PETR4.SA --force-refresh
+poetry run main pipeline ingest PETR4 --force-refresh
 ```
 
 2. Arquivos/paths esperados (exemplos):
@@ -62,10 +62,10 @@ O pipeline também tenta persistir automaticamente as linhas canônicas no banco
 
 Comandos de troubleshooting
 
-- Forçar ingest completo e limpar cache (pipe `--force-refresh`/`--clear-cache` ainda suportado neste ponto):
+- Forçar ingest completo ignorando cache do pipeline:
 
 ```bash
-poetry run main pipeline ingest PETR4.SA --force-refresh --clear-cache
+poetry run main pipeline ingest PETR4 --force-refresh
 ```
 
 Notas de exemplo e outputs

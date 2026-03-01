@@ -211,7 +211,7 @@ def test_ingest_cmd_validates_provider(monkeypatch):
 
     with pytest.raises(typer.BadParameter):
         # ingest_cmd signature: source first, then ticker
-        ingest_cmd("no_such_provider", "TST")
+        ingest_cmd("no_such_provider", "PETR4")
 
     # patch adapter factory so that parameter validation is the only guard
     import src.adapters.factory as factory
@@ -223,5 +223,5 @@ def test_ingest_cmd_validates_provider(monkeypatch):
     import click
 
     with pytest.raises(click.exceptions.Exit):
-        ingest_cmd("YFINANCE", "TST")
+        ingest_cmd("YFINANCE", "PETR4")
     # catching Exit is sufficient; absence of BadParameter shows validation passed

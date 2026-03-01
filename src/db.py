@@ -20,6 +20,7 @@ from typing import Any, Optional
 import pandas as pd
 
 from src.paths import DATA_DIR
+from src.tickers import normalize_b3_ticker, ticker_variants
 from src.time_utils import now_utc_iso
 
 DEFAULT_DB_PATH = str(DATA_DIR / "data.db")
@@ -70,7 +71,8 @@ def _load_canonical_schema(schema_path: Optional[str] = None) -> dict:
 def _sql_type(col_type: str) -> str:
     mapping = {
         "string": "TEXT",
-        "date": "TEXT",
+        # use DATE type for columns of logical date
+        "date": "DATE",
         "datetime": "TEXT",
         "float": "REAL",
         "int": "INTEGER",
@@ -101,6 +103,7 @@ def _ensure_schema(conn: sqlite3.Connection, schema_path: Optional[str] = None) 
 
     cur = conn.cursor()
     cur.execute(create_prices)
+    _migrate_prices_date_column(conn)
     cur.execute(
         """
         CREATE TABLE IF NOT EXISTS metadata (
@@ -115,6 +118,92 @@ def _ensure_schema(conn: sqlite3.Connection, schema_path: Optional[str] = None) 
         "INSERT OR REPLACE INTO metadata(key, value) VALUES (?, ?)",
         ("schema_version", sv),
     )
+    conn.commit()
+
+
+def _normalize_db_ticker(ticker: str) -> str:
+    candidate = ticker.strip().upper().removesuffix(".SA")
+    try:
+        return normalize_b3_ticker(candidate)
+    except ValueError:
+        return candidate
+
+
+def _migrate_prices_date_column(conn: sqlite3.Connection) -> None:
+    """Garante afinidade DATE para `prices.date` de forma idempotente."""
+    cur = conn.cursor()
+    cur.execute("PRAGMA table_info('prices')")
+    info = cur.fetchall()
+    if not info:
+        return
+
+    existing_types = {row[1]: (row[2] or "").upper() for row in info}
+    if existing_types.get("date") == "DATE":
+        return
+
+    required_cols = {"ticker", "date", "source", "raw_checksum", "fetched_at"}
+    if not required_cols.issubset(set(existing_types.keys())):
+        return
+
+    schema = _load_canonical_schema()
+    schema_cols = [c["name"] for c in schema.get("columns", [])]
+    col_defs = []
+    for col in schema.get("columns", []):
+        name = col["name"]
+        typ = _sql_type(col.get("type", "string"))
+        nullable = "" if col.get("nullable", True) else "NOT NULL"
+        col_defs.append(f"{name} {typ} {nullable}".strip())
+
+    create_sql = (
+        "CREATE TABLE prices_tmp_date_migration ("
+        + ", ".join(col_defs)
+        + ", PRIMARY KEY (ticker, date))"
+    )
+
+    common_cols = [c for c in schema_cols if c in existing_types]
+    if not common_cols:
+        return
+    cols_csv = ", ".join(common_cols)
+
+    cur.execute(create_sql)
+    cur.execute(
+        f"INSERT OR REPLACE INTO prices_tmp_date_migration ({cols_csv}) "
+        f"SELECT {cols_csv} FROM prices"
+    )
+    cur.execute("DROP TABLE prices")
+    cur.execute("ALTER TABLE prices_tmp_date_migration RENAME TO prices")
+    conn.commit()
+
+
+def _migrate_returns_date_column(conn: sqlite3.Connection) -> None:
+    """Garante afinidade DATE para `returns.date` de forma idempotente."""
+    cur = conn.cursor()
+    cur.execute("PRAGMA table_info('returns')")
+    info = cur.fetchall()
+    if not info:
+        return
+
+    existing_types = {row[1]: (row[2] or "").upper() for row in info}
+    if existing_types.get("date") == "DATE":
+        return
+
+    cur.execute(
+        "CREATE TABLE returns_tmp_date_migration ("
+        "ticker TEXT, "
+        "date DATE, "
+        "return_value REAL, "
+        "return_type TEXT, "
+        "created_at TEXT, "
+        "UNIQUE(ticker, date, return_type)"
+        ")"
+    )
+    cur.execute(
+        "INSERT OR REPLACE INTO returns_tmp_date_migration "
+        "(ticker, date, return_value, return_type, created_at) "
+        "SELECT ticker, date, return_value, return_type, created_at FROM returns"
+    )
+    cur.execute("DROP TABLE returns")
+    cur.execute("ALTER TABLE returns_tmp_date_migration RENAME TO returns")
     conn.commit()
 
 
@@ -246,7 +335,12 @@ def _row_tuple_from_series(
     idx, row, ticker, source, fetched_at, cols_map, schema_cols
 ) -> tuple:
     date_s = pd.to_datetime(idx).strftime("%Y-%m-%d")
-    vals = {"ticker": ticker, "date": date_s, "source": source}
+    normalized_ticker = _normalize_db_ticker(ticker)
+    vals = {
+        "ticker": normalized_ticker,
+        "date": date_s,
+        "source": source,
+    }
 
     src_col = cols_map.get("source")
     if src_col is not None and not pd.isna(row[src_col]):
@@ -260,7 +354,7 @@ def _row_tuple_from_series(
             vals[name] = None
 
     payload = (
-        f"{ticker}|{date_s}|{vals.get('open')}|{vals.get('high')}|"
+        f"{normalized_ticker}|{date_s}|{vals.get('open')}|{vals.get('high')}|"
         f"{vals.get('low')}|{vals.get('close')}|{vals.get('volume')}|{source}"
     )
 
@@ -409,6 +503,13 @@ def write_prices(
     source: str = "provider",
     fetched_at: Optional[str] = None,
 ):
+    # normalize ticker to base B3 form (strip .SA) for storage consistency
+    try:
+        from src.tickers import normalize_b3_ticker
+
+        ticker = normalize_b3_ticker(ticker)
+    except Exception:
+        ticker = ticker.strip().upper().removesuffix(".SA")
     close_conn = False
     if conn is None:
         conn = _connect(db_path)
@@ -509,7 +610,13 @@ def _read_prices_core(
     end: Optional[str],
 ) -> pd.DataFrame:
     cur = conn.cursor()
-    params = [ticker]
+    try:
+        base, provider = ticker_variants(ticker)
+        candidates = (base, provider)
+    except ValueError:
+        candidates = (ticker,)
+
+    params: list[str] = list(candidates)
     schema = _load_canonical_schema()
     schema_cols = [c["name"] for c in schema.get("columns", [])]
     # ensure date is selected first
@@ -519,7 +626,13 @@ def _read_prices_core(
     # SQL injection or malformed queries when schema contains unexpected
     # names. Column names used as DataFrame columns remain unquoted.
     quoted_select = [_quote_identifier(c) for c in select_cols]
-    sql = f"SELECT {', '.join(quoted_select)} FROM prices WHERE ticker = ?"
+    if len(candidates) == 2:
+        sql = (
+            f"SELECT {', '.join(quoted_select)} FROM prices "
+            "WHERE ticker IN (?, ?)"
+        )
+    else:
+        sql = f"SELECT {', '.join(quoted_select)} FROM prices WHERE ticker = ?"
     if start and end:
         sql += " AND date BETWEEN ? AND ?"
         params.extend([start, end])
@@ -542,12 +655,84 @@ def _read_prices_core(
     return df
 
 
+def list_price_tickers(
+    conn: Optional[sqlite3.Connection] = None,
+    db_path: Optional[str] = None,
+) -> list[str]:
+    """Lista tickers existentes na tabela ``prices`` em ordem alfabética."""
+    close_conn = False
+    if conn is None:
+        conn = _connect(db_path)
+        close_conn = True
+
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT DISTINCT ticker FROM prices ORDER BY ticker"
+        )
+        return [row[0] for row in cur.fetchall() if row and row[0]]
+    finally:
+        if close_conn:
+            conn.close()
+
+
+def resolve_existing_ticker(
+    ticker: str,
+    conn: Optional[sqlite3.Connection] = None,
+    db_path: Optional[str] = None,
+) -> Optional[str]:
+    """Resolve ticker existente em ``prices`` aceitando base e variante `.SA`.
+
+    Retorna o ticker persistido quando houver correspondência; caso contrário,
+    retorna ``None``.
+    """
+    try:
+        base, provider = ticker_variants(ticker)
+        candidates = (base, provider)
+    except ValueError:
+        candidates = (ticker,)
+
+    close_conn = False
+    if conn is None:
+        conn = _connect(db_path)
+        close_conn = True
+
+    try:
+        cur = conn.cursor()
+        if len(candidates) == 2:
+            cur.execute(
+                "SELECT DISTINCT ticker FROM prices WHERE ticker IN (?, ?)",
+                candidates,
+            )
+        else:
+            cur.execute(
+                "SELECT DISTINCT ticker FROM prices WHERE ticker = ?",
+                candidates,
+            )
+        existing = [row[0] for row in cur.fetchall() if row and row[0]]
+        if not existing:
+            return None
+        if len(candidates) == 2:
+            if base in existing:
+                return base
+            if provider in existing:
+                return provider
+        return existing[0]
+    finally:
+        if close_conn:
+            conn.close()
+
+
 def write_returns(
     df: pd.DataFrame,
     conn: Optional[sqlite3.Connection] = None,
     db_path: Optional[str] = None,
     return_type: str = "daily",
 ):
+    # ensure ticker values inside df are canonical (strip .SA)
+    if "ticker" in df.columns:
+        df = df.copy()
+        df["ticker"] = df["ticker"].astype(str).str.replace(".SA", "", regex=False)
     """Persist returns DataFrame into `returns` table using upsert semantics.
 
     Expects DataFrame columns: `ticker`, `date` (datetime or string), `return_value`,
@@ -580,11 +765,12 @@ def _write_returns_core(conn, df, return_type):
     cur.execute(
         (
             "CREATE TABLE IF NOT EXISTS returns ("
-            f"{qt} TEXT, {qd} TEXT, {qr} REAL, {qrt} TEXT, {qc} TEXT, "
+            f"{qt} TEXT, {qd} DATE, {qr} REAL, {qrt} TEXT, {qc} TEXT, "
             f"UNIQUE({qt}, {qd}, {qrt})"
             ")"
         )
     )
+    _migrate_returns_date_column(conn)
 
     # Normalize DataFrame
     df2 = df.copy()
@@ -600,7 +786,7 @@ def _write_returns_core(conn, df, return_type):
 
     rows = [
         (
-            r["ticker"],
+            _normalize_db_ticker(str(r["ticker"])),
             r["date"].strftime("%Y-%m-%d"),
             float(r["return_value"]),
             r["return_type"],

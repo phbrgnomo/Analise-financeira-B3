@@ -148,11 +148,8 @@ def _write_checksum(file_path: Union[str, Path]) -> str:
         with open(tmp, "w", encoding="utf-8") as fh:
             fh.write(checksum)
             fh.flush()
-            try:
+            with contextlib.suppress(OSError):
                 os.fsync(fh.fileno())
-            except OSError:
-                # best-effort
-                pass
         os.replace(str(tmp), str(checksum_path))
     finally:
         if tmp.exists() and tmp != checksum_path:

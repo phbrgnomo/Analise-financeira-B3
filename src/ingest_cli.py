@@ -76,14 +76,12 @@ def _normalize_df(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
     if "date" in df.columns:
         df["date"] = pd.to_datetime(df["date"]).dt.tz_localize(None)
+    elif isinstance(df.index, pd.DatetimeIndex):
+        df = df.reset_index().rename(columns={df.index.name or "index": "date"})
     else:
-        # try to use index if it looks like dates
-        if isinstance(df.index, pd.DatetimeIndex):
-            df = df.reset_index().rename(columns={df.index.name or "index": "date"})
-        else:
-            raise ValueError(
-                "snapshot DataFrame must have a 'date' column or datetime index"
-            )
+        raise ValueError(
+            "snapshot DataFrame must have a 'date' column or datetime index"
+        )
     return df
 
 
@@ -200,18 +198,17 @@ def ingest_snapshot(
     df = _normalize_df(df)
 
     if ticker is None:
-        if "ticker" in df.columns:
-            unique = df["ticker"].unique()
-            if len(unique) == 1:
-                ticker = unique[0]
-            else:
-                # snapshot contains more than one ticker; refuse to guess
-                raise ValueError(
-                    f"snapshot contains multiple tickers: {unique.tolist()}"
-                )
-        else:
+        if "ticker" not in df.columns:
             raise ValueError("ticker argument required when snapshot lacks column")
 
+        unique = df["ticker"].unique()
+        if len(unique) == 1:
+            ticker = unique[0]
+        else:
+            # snapshot contains more than one ticker; refuse to guess
+            raise ValueError(
+                f"snapshot contains multiple tickers: {unique.tolist()}"
+            )
     # at this point we guarantee a string value for ticker, but the type
     # checker still sees Optional[str].  narrow with an assertion so callers
     # (and Pylance) know it is safe to pass to ``lock_ticker``.

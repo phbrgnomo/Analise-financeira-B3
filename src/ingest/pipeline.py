@@ -36,6 +36,7 @@ from src.ingest.snapshot_ingest import (  # noqa: F401
     rows_to_ingest,
     to_utc_naive_datetime_index,
 )
+from src.tickers import normalize_b3_ticker
 
 logger = logging.getLogger(__name__)
 
@@ -77,12 +78,17 @@ def ingest(
     logic easy to drive from tests or scripting environments while still
     recording useful metadata.
     """
+    try:
+        canonical_ticker = normalize_b3_ticker(ticker)
+    except ValueError:
+        canonical_ticker = ticker.strip().upper()
+
     job_id = str(uuid.uuid4())
     logger.info(
         "pipeline.ingest start",
         extra={
             "job_id": job_id,
-            "ticker": ticker,
+            "ticker": canonical_ticker,
             "source": source,
             "dry_run": dry_run,
             "force_refresh": force_refresh,
@@ -100,7 +106,7 @@ def ingest(
         logger.exception(msg)
         metadata = {
             "job_id": job_id,
-            "ticker": ticker,
+            "ticker": canonical_ticker,
             "source": source,
             "status": "error",
             "error_message": msg,
@@ -112,13 +118,17 @@ def ingest(
     try:
         from src.etl.mapper import to_canonical
 
-        canonical = to_canonical(df, provider_name=source, ticker=ticker)
+        canonical = to_canonical(
+            df,
+            provider_name=source,
+            ticker=canonical_ticker,
+        )
     except Exception as exc:  # mapper failure
         msg = f"mapper failed: {exc}"
         logger.exception(msg)
         metadata = {
             "job_id": job_id,
-            "ticker": ticker,
+            "ticker": canonical_ticker,
             "source": source,
             "status": "error",
             "error_message": msg,
@@ -150,7 +160,7 @@ def ingest(
         logger.exception(msg)
         metadata = {
             "job_id": job_id,
-            "ticker": ticker,
+            "ticker": canonical_ticker,
             "source": source,
             "status": "error",
             "error_message": msg,
@@ -163,7 +173,11 @@ def ingest(
     # so we can call it directly instead of importing ourselves at runtime.
     persist_result: Dict[str, Any] = {}
     try:
-        persist_result = ingest_from_snapshot(canonical, ticker, force=force_refresh)
+        persist_result = ingest_from_snapshot(
+            canonical,
+            canonical_ticker,
+            force=force_refresh,
+        )
     except Exception as exc:  # pragma: no cover - just in case
         logger.exception("persistence step failed: %s", exc)
         persist_result = {"status": "error", "error_message": str(exc)}
@@ -198,7 +212,7 @@ def ingest(
     # final metadata entry for the orchestrator run
     metadata = {
         "job_id": job_id,
-        "ticker": ticker,
+        "ticker": canonical_ticker,
         "source": source,
         "status": top_status,
         "rows": len(canonical),

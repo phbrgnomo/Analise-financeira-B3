@@ -5,6 +5,10 @@ import numpy as np
 import pandas as pd
 
 
+def _canonical_ticker(ticker: str) -> str:
+    return ticker.upper().removesuffix(".SA")
+
+
 def _count_returns(
     conn: sqlite3.Connection,
     ticker: str,
@@ -22,6 +26,7 @@ def _count_returns(
     Returns:
         int: number of matching return rows.
     """
+    ticker = _canonical_ticker(ticker)
     cur = conn.cursor()
     cur.execute(
         "SELECT COUNT(*) FROM returns WHERE ticker = ? AND return_type = ?",
@@ -50,6 +55,7 @@ def _fetch_returns_df(
         pandas.DataFrame: DataFrame indexed by date with a `return` column;
         may be empty if no rows are found.
     """
+    ticker = _canonical_ticker(ticker)
     cur = conn.cursor()
     cur.execute(
         "SELECT date, return_value AS return FROM returns WHERE ticker = ?"
@@ -68,14 +74,17 @@ def test_compute_returns_happy_path(sample_db):
     """Compute returns for sample ticker and verify rows written and numeric sanity."""
     import src.retorno as retorno
 
-    ticker = "PETR4.SA"
+    ticker = "PETR4"
 
     # Run compute_returns (should create `returns` table and insert rows)
     retorno.compute_returns(ticker, conn=sample_db)
 
     # Expect N-1 returns for N price rows in fixture
     cur = sample_db.cursor()
-    cur.execute("SELECT COUNT(*) FROM prices WHERE ticker = ?", (ticker,))
+    cur.execute(
+        "SELECT COUNT(*) FROM prices WHERE ticker = ?",
+        (_canonical_ticker(ticker),),
+    )
     n_prices = cur.fetchone()[0]
 
     n_returns = _count_returns(sample_db, ticker)
@@ -86,7 +95,7 @@ def test_compute_returns_happy_path(sample_db):
     df_prices = pd.read_sql_query(
         "SELECT date, close FROM prices WHERE ticker = ? ORDER BY date",
         sample_db,
-        params=(ticker,),
+        params=(_canonical_ticker(ticker),),
         parse_dates=["date"],
     ).set_index("date")
 
@@ -104,7 +113,7 @@ def test_compute_returns_idempotent(sample_db):
     """Running compute_returns twice should not create duplicate rows."""
     import src.retorno as retorno
 
-    ticker = "PETR4.SA"
+    ticker = "PETR4"
 
     retorno.compute_returns(ticker, conn=sample_db)
     first_count = _count_returns(sample_db, ticker)
@@ -120,7 +129,7 @@ def test_compute_returns_range(sample_db):
     """compute_returns with start/end writes only rows within the requested range."""
     import src.retorno as retorno
 
-    ticker = "PETR4.SA"
+    ticker = "PETR4"
 
     # Choose a sub-range from fixtures (middle dates)
     start = datetime(2023, 1, 3)
@@ -138,7 +147,7 @@ def test_write_returns_preserves_created_at_when_upsert_supported(sample_db):
     """Re-running compute_returns should preserve created_at timestamps."""
     import src.retorno as retorno
 
-    ticker = "PETR4.SA"
+    ticker = "PETR4"
 
     retorno.compute_returns(ticker, conn=sample_db)
 
@@ -175,7 +184,7 @@ def test_write_returns_preserves_created_at_when_upsert_not_supported(
     # Force an older SQLite version to trigger fallback path
     monkeypatch.setattr(sqlite3, "sqlite_version", "3.8.0")
 
-    ticker = "PETR4.SA"
+    ticker = "PETR4"
 
     retorno.compute_returns(ticker, conn=sample_db)
 
