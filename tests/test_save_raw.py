@@ -1,4 +1,5 @@
 import json
+import warnings
 from pathlib import Path
 
 import pandas as pd
@@ -16,14 +17,21 @@ def test_save_raw_csv_and_register(tmp_path):
     # use default metadata file under tmp_path/metadata by patching cwd via raw_root
     metadata_dir = tmp_path / "metadata"
 
-    meta = save_raw_csv(
-        df,
-        "testprov",
-        "TICK",
-        ts,
-        raw_root=raw_root,
-        metadata_path=metadata_dir / "ingest_logs.jsonl",
-    )
+    # passing a non-default db_path should trigger a deprecation warning
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        meta = save_raw_csv(
+            df,
+            "testprov",
+            "TICK",
+            ts,
+            raw_root=raw_root,
+            metadata_path=metadata_dir / "ingest_logs.jsonl",
+            db_path="custom.db",
+        )
+        assert any(
+            isinstance(i.message, DeprecationWarning) for i in w
+        ), "expected deprecation warning"
 
     assert meta["status"] == "success"
     csv_path = Path(meta["filepath"])

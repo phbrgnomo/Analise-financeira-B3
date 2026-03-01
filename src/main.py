@@ -48,188 +48,44 @@ except ImportError as exc:
 d_atual = date.today()
 
 
-def _fetch_and_prepare_asset(  # noqa: C901
+def _fetch_and_prepare_asset(
     a: str,
     d_in: str,
     d_fim: str,
     validation_tolerance: Optional[float],
     provider: str = "yfinance",
 ) -> None:
-    """Fetch, persist raw data, map to canonical schema and optionally validate.
+    """Executa ingestão via pipeline canônico e materializa CSV local para análises.
 
-    Parameters
-    ----------
-    a : str
-        Símbolo do ativo (ex.: 'PETR4').
-    d_in : str
-        Data inicial no formato esperado pelo provedor (ex.: 'MM-DD-YYYY').
-    d_fim : str
-        Data final no formato esperado pelo provedor (ex.: 'MM-DD-YYYY').
-    validation_tolerance : Optional[float]
-        Percentual (0.0-1.0) limite de linhas inválidas aceitáveis para não
-        abortar o ingest; `None` significa não aplicar threshold.
-
-        Side effects
-        ------------
-        - Faz download dos dados do provedor usando o adaptador selecionado
-          pela fábrica (`src.adapters.factory.get_adapter`).
-        - Persiste CSV bruto via `save_raw_csv` em `raw/<provider>/...`.
-        - Mapeia os dados para o esquema canônico com `to_canonical`.
-        - Se o módulo de validação estiver disponível, executa validação
-            (chama `validate_and_handle`) que pode persistir linhas inválidas e
-            registrar entradas em `metadata/ingest_logs.jsonl` (JSONL append-only).
-    - Calcula a coluna `Return` (log-return) e salva um CSV em `DATA_DIR/{a}.csv`.
-
-    Errors / raises
-    ----------------
-    - Esta função captura exceções de download, mapeamento e persistência e
-      imprime mensagens de erro, retornando `None` para interromper o fluxo
-      daquele ativo; erros de baixo nível de DB/FS podem propagar se não
-      tratados internamente.
-    - Quando a validação excede o threshold e a função de validação aborta,
-      o ingest é interrompido para aquele ativo.
-
-    Returns
-    -------
-    None
-
-    Notes
-    -----
-    - A função é intencionalmente tolerante a dependências ausentes: o
-      módulo de validação é importado dinamicamente e ignorado se não
-      estiver disponível, permitindo execução em ambientes leves.
+    O parâmetro ``validation_tolerance`` é mantido por compatibilidade de CLI,
+    mas a validação fica centralizada no pipeline de ingestão.
     """
-    # predefine variables so downstream except-blocks can reference them
-    # before the assignment paths are reached.
-    canonical = None
-    save_meta: dict = {}
+    from src.ingest.pipeline import ingest
 
-    from datetime import datetime
-    from datetime import timezone as _tz
-
-    # use the factory to obtain an adapter for the requested provider
-    from src.adapters.factory import get_adapter
-    from src.ingest.pipeline import save_raw_csv
-
-    try:
-        adapter = get_adapter(provider)
-        df = adapter.fetch(f"{a}.SA", start_date=d_in, end_date=d_fim)
-    except Exception as e:
-        print(f"Problemas baixando dados: {e}")
-        return
-
-    ts_raw = datetime.now(_tz.utc).strftime("%Y%m%dT%H%M%SZ")
-    save_meta = save_raw_csv(
-        df, provider, f"{a}.SA", ts_raw
-    )
-    if save_meta.get("status") != "success":
+    ticker = f"{a}.SA"
+    if validation_tolerance is not None:
         print(
-            f"Falha ao salvar raw para {a}: {save_meta.get('error_message')}"
+            "validation_tolerance informado; a validação é gerenciada "
+            "internamente pelo pipeline."
         )
+
+    result = ingest(ticker=ticker, source=provider, dry_run=False)
+    if result.get("status") != "success":
+        print(f"Falha no ingest para {ticker}: {result.get('error_message')}")
         return
 
-    # Mapping: keep failures local and return early if mapper fails
     try:
-        from src.etl.mapper import to_canonical
-
-        canonical = to_canonical(
-            df,
-            provider_name=provider,
-            ticker=f"{a}.SA",
-            raw_checksum=save_meta.get("raw_checksum"),
-            fetched_at=save_meta.get("fetched_at"),
-        )
-        print(f"Mapper produced {len(canonical)} canonical rows for {a}")
+        target_df = _db.read_prices(ticker)
     except Exception as e:
-        print(f"Mapper failed for {a}: {e}")
+        print(f"Falha ao ler dados persistidos para {ticker}: {e}")
         return
 
-    # Validation: import helpers if available and run validation separately
-    try:
-        from src.validation import ValidationError, validate_and_handle
-    except Exception:
-        validate_and_handle = None
-        ValidationError = None
+    if target_df.empty:
+        print(f"Nenhum dado disponível no banco para {ticker}")
+        return
 
-    if validate_and_handle is None:
-        print("Validation module not available; skipping validation step")
-    else:
-        try:
-            _valid_df, _invalid_df, summary, _details = validate_and_handle(
-                canonical,
-                provider=provider,
-                ticker=f"{a}.SA",
-                raw_file=save_meta.get("filepath") or "",
-                ts=save_meta.get("fetched_at") or "",
-                job_id=save_meta.get("job_id"),
-                raw_root="raw",
-                metadata_path="metadata/ingest_logs.jsonl",
-                threshold=validation_tolerance,
-                abort_on_exceed=True,
-                persist_invalid=True,
-            )
-
-            print(
-                "Validation summary for %s: rows_total=%d, rows_valid=%d, "
-                "rows_invalid=%d, invalid_percent=%.4f"
-                % (
-                    a,
-                    summary.rows_total,
-                    summary.rows_valid,
-                    summary.rows_invalid,
-                    summary.invalid_percent,
-                )
-            )
-        except Exception as e:
-            # Avoid using `except ValidationError` when `ValidationError` may
-            # be None (not imported). Distinguish validation-threshold
-            # failures when we have the specific exception class available.
-            if ValidationError is not None and isinstance(e, ValidationError):
-                print(f"Ingest aborted for {a} due to validation threshold: {e}")
-                return
-            print(f"Validation step failed for {a}: {e}")
-
-    # Persist canonical rows to the DB (use new snapshot cache + incremental
-    # ingestion logic from story 1-10). The helper itself is idempotent and
-    # will create snapshots/checksums, log metadata and only upsert changed
-    # rows. We fall back to a simple write if anything goes wrong.
-    try:
-        from src.ingest.pipeline import ingest_from_snapshot
-
-        resp = ingest_from_snapshot(canonical, f"{a}.SA")
-        if resp.get("cached"):
-            print(f"Cache hit for {a} – no new rows processed.")
-        else:
-            processed = resp.get("rows_processed", 0)
-            print(
-                (
-                    "Persisted %d rows for %s into DB (snapshot=%s)"
-                    % (
-                        processed,
-                        a,
-                        resp.get("snapshot_path"),
-                    )
-                )
-            )
-    except Exception as e:
-        # fallback for environments where the new helper may fail (e.g., missing
-        # DB).  Keep the original direct write as a last resort.  Capture the
-        # outer exception in ``e`` and any error from the fallback in ``e2`` so
-        # logs remain accurate.
-        try:
-            _db.write_prices(canonical, f"{a}.SA")
-            print(f"Persisted canonical rows for {a} into DB (fallback)")
-        except Exception as e2:
-            print(
-                f"Warning: failed to persist canonical rows for {a}: {e2}"
-                f" (original error: {e})",
-            )
-
-    # Calcula o retorno (usa coluna ajustada quando disponível, senão `close`)
-    # Preferir o DataFrame `canonical` (já mapeado/validado) quando disponível.
+    # Calcula o retorno (usa coluna ajustada quando disponível, senão `close`).
     import src.retorno as rt
-
-    target_df = canonical if "canonical" in locals() and canonical is not None else df
 
     price_candidates = ("Adj Close", "adj_close", "Close", "close")
     price_col = next((c for c in price_candidates if c in target_df.columns), None)
@@ -381,10 +237,6 @@ def main(  # noqa: C901
     # importações locais para evitar exigir dependências apenas para `--help`
 
     import src.retorno as rt
-    # O módulo `dados_b3` não é necessário aqui; a lógica de fetch
-    # está encapsulada em `_fetch_and_prepare_asset` que já usa a
-    # fábrica de adaptadores. Mantemos esse comentário para
-    # sinalizar a transição.
 
     # Define ativos a serem pesquisados
     ativos = ["PETR4", "ITUB3", "BBDC4"]

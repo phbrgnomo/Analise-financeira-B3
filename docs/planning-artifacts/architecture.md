@@ -99,7 +99,7 @@ completedAt: 2026-02-16
 
 ### Developer Next Steps (sugestão imediata)
 
-- Criar esqueleto de adaptador em `src/adapters/` e expor via fábrica (`src.adapters.factory`). O antigo `src/dados_b3.py` servirá apenas como fachada legada.
+- Criar esqueleto de adaptador em `src/adapters/` e expor via fábrica (`src.adapters.factory`).
 - Implementar `src/db.py` com `write_prices(df, ticker)` garantindo upsert por `(ticker, date)`.
 - Adicionar testes: `tests/test_ingest.py` (mock adapters) e `tests/test_db_upsert.py` (fixture SQLite temporário) para validar idempotência e integridade dos snapshots.
 - Adicionar `docs/planning-artifacts/adapter-mappings.md` com exemplos de mapeamento por provedor.
@@ -138,8 +138,7 @@ mkdir -p src tests notebooks docs dados snapshots
 
 ### Party Mode Action Items (para implementação imediata)
 
-- Implementar adaptadores em `src/adapters/` (herdando de `Adapter`) e registrar na fábrica;
-  `src/dados_b3.py` pode simplesmente delegar à fábrica.
+- Implementar adaptadores em `src/adapters/` (herdando de `Adapter`) e registrar na fábrica.
 - Implementar `src/db.py` com `write_prices(df, ticker)` garantindo upsert por `(ticker, date)`.
 - Criar testes iniciais: `tests/test_ingest.py` (mock adapters) e `tests/test_db_upsert.py` (fixture SQLite temporário).
 -- Incluir `pre-commit` com hooks para `ruff` (black optional).
@@ -168,7 +167,7 @@ Resumo das convenções e padrões acordados pela revisão colaborativa:
   - Tabelas: plural, snake_case (ex.: `prices`, `ingest_logs`, `snapshots`).
   - Colunas: snake_case (`ticker`, `fetched_at`, `raw_checksum`).
   - Código Python: snake_case para funções/variáveis; PascalCase para classes.
-  - Arquivos: snake_case.py (`dados_b3.py`, `db.py`).
+  - Arquivos: snake_case.py (`db.py`, `pipeline.py`).
   - CLI: comandos kebab-like (`poetry run main ingest --ticker PETR4.SA`).
 
 - Estrutura do repositório

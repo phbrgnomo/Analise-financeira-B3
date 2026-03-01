@@ -2,11 +2,11 @@
 
 [![CI](https://github.com/phbrgnomo/Analise-financeira-B3/actions/workflows/ci.yml/badge.svg)](https://github.com/phbrgnomo/Analise-financeira-B3/actions/workflows/ci.yml) [![Python](https://img.shields.io/badge/python-3.12%2B-blue)](https://www.python.org/)
 
-Ferramenta leve para coletar dados de mercados (B3), calcular retornos e métricas de risco, e gerar relatórios simples a partir de séries históricas.
+Uma ferramenta leve para coletar dados de mercados (B3), calcular retornos e métricas de risco, e gerar relatórios simples a partir de séries históricas.
 
 **Status:** Projeto experimental / utilitários para análise local
 
-> Visão rápida: coleta dados via Yahoo Finance (adaptador em `src/dados_b3.py`), calcula retornos e estatísticas em `src/retorno.py` e tem um entrypoint em `src/main.py`.
+> Visão rápida: coleta dados via adapter factory (`src/adapters/factory.py`), calcula retornos e estatísticas em `src/retorno.py` e tem entrypoint em `src/main.py`.
 
 ## Recursos principais
 - Coleta de cotações OHLC/Adj Close para ativos B3 (sufixo `.SA`).
@@ -86,9 +86,7 @@ NETWORK_MODE=record poetry run pytest tests/adapters/test_adapters.py::TestYFina
 As instruções completas e o playbook estão em `docs/playbooks/testing-network-fixtures.md`.
 
 ## Uso e convenções
-- Dados são obtidos através da fábrica de adaptadores (`src.adapters.factory`).
-- Dados são obtidos através da fábrica de adaptadores (`src.adapters.factory`).  O adaptador padrão é `yfinance`, mas outros podem ser registrados.  Para fins de testes e *smoke* CLI há também um provedor `dummy` embutido; ele gera um DataFrame pequeno sem acesso à rede e pode ser usado via `get_adapter("dummy")` ou pelo parâmetro `--provider dummy` na CLI.  `src/dados_b3.py` existe para compatibilidade e não deve ser usado em
-  código novo.
+- Dados são obtidos através da fábrica de adaptadores (`src.adapters.factory`). O adaptador padrão é `yfinance`, mas outros podem ser registrados. Para fins de testes e *smoke* CLI há também um provedor `dummy` embutido; ele gera um DataFrame pequeno sem acesso à rede e pode ser usado via `get_adapter("dummy")` ou pelo parâmetro `--provider dummy` na CLI.
 
   Exemplo de uso:
   ```python
@@ -109,7 +107,7 @@ As instruções completas e o playbook estão em `docs/playbooks/testing-network
 ## Estrutura do repositório (resumo)
 - `src/` — código principal
   - `src/main.py` — entrypoint do CLI (usa `src.adapters.factory` para selecionar provedores)
-  - `src/dados_b3.py` — *facade* legado; atualmente delega a fábrica de adaptadores
+  - `src/ingest/` — orquestração de ingestão, snapshots e persistência incremental
   - `src/retorno.py` — cálculos de retorno/risco
 - `dados/` — CSVs de séries históricas e outputs gerados
 - `snapshots/` — snapshots e checksums para validação

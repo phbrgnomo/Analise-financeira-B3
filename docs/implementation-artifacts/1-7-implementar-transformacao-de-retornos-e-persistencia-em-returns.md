@@ -39,7 +39,7 @@ so that downstream notebooks and modeling code can read precomputed returns.
 - [ ] Documentar o que foi implantado nessa etapa em `docs/sprint-reports` conforme definido no FR28 (`docs/planning-artifacts/prd.md`)
 ## Dev Notes
 
-- Technical stack: Python, pandas for ETL, SQLAlchemy or `sqlite3` for persistence, use project's DB layer (`src.retorno` / `src.dados_b3` conventions).
+- Technical stack: Python, pandas for ETL, SQLAlchemy or `sqlite3` for persistence, use project's DB layer (`src/retorno.py` + `src/db.py` conventions).
 - Preferred approach: read canonical `prices` into a DataFrame, compute `pct_change()` on `adj_close` or `close` depending on canonical schema, shift/align to ensure `date` maps to next-day returns if desired (but default: return at day t = (price_t / price_{t-1}) - 1 attached to `date = t`).
 - Persist using upsert: for SQLite use `INSERT INTO returns (cols...) VALUES (...) ON CONFLICT(ticker,date,return_type) DO UPDATE SET ...` or `INSERT OR REPLACE` while preserving `created_at` semantics.
 - Annualization: use 252 trading days for annualizing volatility/returns; note this in header comments and tests.
@@ -49,7 +49,7 @@ so that downstream notebooks and modeling code can read precomputed returns.
 
 - Suggested files to touch:
   - `src/retorno.py` (add `compute_returns()` and persistence helpers)
-  - `src/dados_b3.py` / DB layer (use `db.read_prices` / `db.write_returns` patterns)
+  - `src/db.py` / DB layer (use `db.read_prices` / `db.write_returns` patterns)
   - `tests/test_returns.py` (unit tests using `tests/fixtures/sample_ticker.csv`)
 - Paths: canonical prices in `dados/data.db` (`prices` table); returns persisted to `dados/data.db` (`returns` table).
 

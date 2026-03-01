@@ -41,14 +41,14 @@ para que desenvolvedores e analistas reproduzam resultados de forma confiável e
 
 - Paths relevantes:
   - Dados brutos / persistidos: `dados/` (CSV por ativo com coluna `Return`)
-  - Implementação e módulos: `src/` (ex.: `src/dados_b3.py`, `src/retorno.py`)
+  - Implementação e módulos: `src/` (ex.: `src/ingest/pipeline.py`, `src/retorno.py`)
   - Artefatos de documentação e histórias: `docs/` e `docs/implementation-artifacts/`
 - Detectadas diferenças: nenhum padrão divergente encontrado nos arquivos principais; manter convenções do `pyproject.toml` e scripts de exemplo.
 
 ### References
 
 - Source: [docs/planning-artifacts](docs/planning-artifacts) — epics e PRD relacionados a organização de outputs
-- Source: `src/main.py`, `src/dados_b3.py`, `src/retorno.py` — pontos onde arquivos são lidos/gravas
+- Source: `src/main.py`, `src/ingest/pipeline.py`, `src/retorno.py` — pontos onde arquivos são lidos/gravados
 
 ## Dev Agent Record
 

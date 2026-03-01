@@ -17,7 +17,6 @@ Resumo do que foi implementado:
 
 - Documentação atualizada:
   - `docs/schema.json` contém o esquema canônico (colunas e tipos esperados).
-  - `src/validation_schema.py` adiciona loader opcional para `pandera`.
   - `docs/playbooks/quickstart-ticker.md` atualizado com instruções de uso e configuração da validação.
   - `docs/implementation-artifacts/1-5-validar-estrutura-csv-e-filtrar-flag-rows-invalidas.md` atualizado com progresso e arquivos modificados.
 
@@ -37,7 +36,6 @@ Resumo do que foi implementado:
 Arquivos modificados/criados:
 
 - src/validation.py (novo)
-- src/validation_schema.py (novo)
 - src/main.py (adicionado flag e chamada ao validador)
 - docs/playbooks/quickstart-ticker.md (atualizado)
 - docs/implementation-artifacts/1-5-validar-estrutura-csv-e-filtrar-flag-rows-invalidas.md (atualizado)
@@ -45,7 +43,7 @@ Arquivos modificados/criados:
 
 Racional das decisões de implementação
 
-- Validação leve em `src/validation.py` (pandas-only): optou-se por uma implementação conservadora usando pandas para reduzir complexidade e dependências adicionais, garantindo testabilidade rápida em ambientes onde instalar toda a stack pode ser oneroso; mantido um loader opcional `src/validation_schema.py` para usar `pandera` quando disponível para validação mais rígida.
+- Validação leve em `src/validation.py` (pandas-only): optou-se por uma implementação conservadora usando pandas para reduzir complexidade e dependências adicionais, garantindo testabilidade rápida em ambientes onde instalar toda a stack pode ser oneroso.
 - Reaproveitamento de `save_raw_csv` (persistência em `raw/<provider>/...`): reutilizar o mecanismo existente garante escrita atômica, geração consistente de checksum e `job_id`, evitando a necessidade de inicializar esquemas DB adicionais apenas para metadados.
 - Registro estruturado em `metadata/ingest_logs.json` (`log_invalid_rows`): formato JSON-array é compatível com o pipeline atual, facilita auditoria manual e ingestão por ferramentas de batch/CI, e é simples de validar em ambientes restritos.
 - Função de integração `validate_and_handle(...)`: centraliza fluxo (validar → persistir inválidos → logar → aplicar threshold) para simplificar orquestração (CLI/ingest) e testes automatizados, reduzindo duplicação de lógica.

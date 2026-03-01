@@ -61,11 +61,3 @@ def test_register_adapter_raises_for_invalid_classes():
     with pytest.raises(TypeError):
         # passing an object rather than a class; type checker complains
         register_adapter('instance', adapter_instance)  # type: ignore[arg-type]
-
-
-def test_deprecation_warning_on_dados_b3_import(monkeypatch):
-    # import inside capture to check warning
-    with pytest.warns(DeprecationWarning):
-        import importlib
-
-        importlib.reload(__import__('src.dados_b3'))

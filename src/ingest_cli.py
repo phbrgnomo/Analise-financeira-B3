@@ -1,5 +1,11 @@
 """Orquestração de ingestão de snapshots com cache e ingestão incremental.
 
+O bloqueio por ticker usado internamente (via :func:`src.ingest.ticker_lock`) é
+aplicado apenas **no mesmo processo**. Se você deseja garantir exclusão
+mútua entre dois invocados distintos do CLI, será necessário substituir o
+mecanismo por um lock baseado em arquivo ou similar — o código atual não
+faz essa sincronização entre processos.
+
 Esta implementação foi adicionada na story 1.10 e dá suporte aos critérios
 aceitação:
 
@@ -29,6 +35,7 @@ import pandas as pd
 from src.db_client import DatabaseClient, DefaultDatabaseClient
 from src.ingest import cache as _cache
 from src.ingest.pipeline import rows_to_ingest
+from src.ingest.ticker_lock import lock_ticker
 from src.utils.checksums import sha256_file
 
 logger = logging.getLogger(__name__)
@@ -126,7 +133,7 @@ def ingest_snapshot(
     conn: Optional[Any] = None,
     db_path: Optional[str] = None,
     force_refresh: bool = False,
-    ttl: Optional[int] = None,
+    ttl: Optional[float] = None,
     cache_file: Optional[Union[str, Path]] = None,
 ) -> Dict[str, Any]:
     """Processa um snapshot CSV e faz ingest incremental usando cache.
@@ -151,9 +158,10 @@ def ingest_snapshot(
     force_refresh:
         Ignorar cache mesmo que o snapshot já tenha sido processado recentemente.
     ttl:
-        Tempo em segundos a partir do último processamento em que um cache é
-        considerado válido.  ``None`` desativa expiração.  Se nenhum valor for
-        passado, o valor de ambiente ``SNAPSHOT_TTL`` (ou 86400s) é usado.
+        Tempo em segundos (pode ser fracionário nos testes) a partir do último
+        processamento em que um cache é considerado válido.  ``None`` desativa
+        expiração.  Se nenhum valor for passado, o valor de ambiente
+        ``SNAPSHOT_TTL`` (ou 86400s) é usado.
     cache_file:
         Caminho para o arquivo JSON usado como cache.  Padrão:
         ``dados/snapshot_cache.json`` ou ``SNAPSHOT_CACHE_FILE``.
@@ -168,7 +176,9 @@ def ingest_snapshot(
     if not snapshot_path.exists():
         raise FileNotFoundError(f"snapshot not found: {snapshot_path}")
 
-    ttl = DEFAULT_TTL if ttl is None else ttl
+    # TTL may be fractional (tests) and DEFAULT_TTL is already a float; ensure
+    # the returned value is a float so callers can compare using <= reliably.
+    ttl = float(DEFAULT_TTL) if ttl is None else float(ttl)
     cache_file = Path(cache_file or DEFAULT_CACHE_FILE)
 
     checksum = _read_checksum(snapshot_path)
@@ -205,20 +215,21 @@ def ingest_snapshot(
     if db_client is None:
         db_client = DefaultDatabaseClient()
 
-    changed = _compute_changes(df, ticker, db_client, conn=conn, db_path=db_path)
-    processed = len(changed)
-    skipped = len(df) - processed
+    with lock_ticker(ticker):
+        changed = _compute_changes(df, ticker, db_client, conn=conn, db_path=db_path)
+        processed = len(changed)
+        skipped = len(df) - processed
 
-    if processed > 0:
-        db_client.write_prices(changed, ticker, conn=conn, db_path=db_path)
+        if processed > 0:
+            db_client.write_prices(changed, ticker, conn=conn, db_path=db_path)
 
-    # update cache even if nothing was processed, so subsequent calls within the
-    # TTL will skip.  Use the same checksum we validated above.
-    cache[key] = {
-        "sha256": checksum,
-        "processed_at": datetime.now(timezone.utc).isoformat(),
-    }
-    _cache.save_cache(cache_file, cache)
+        # update cache even if nothing was processed, so subsequent calls
+        # within the TTL will skip. Use the same checksum we validated above.
+        cache[key] = {
+            "sha256": checksum,
+            "processed_at": datetime.now(timezone.utc).isoformat(),
+        }
+        _cache.save_cache(cache_file, cache)
 
     logger.info(
         "ingest_snapshot",

@@ -15,7 +15,6 @@ import contextlib
 import json
 import logging
 import os
-import sqlite3
 import tempfile
 import uuid
 from datetime import datetime, timezone
@@ -43,27 +42,12 @@ DEFAULT_METADATA = Path("metadata/ingest_logs.jsonl")
 # ---------------------------------------------------------------------------
 
 
-def _db_initialized(db_path: Union[str, Path]) -> bool:
-    """Return True if DB file exists and ``ingest_logs`` table is present.
-
-    Does *not* create the DB or schema — use ``scripts/init_ingest_db.py``.
-    """
-    db_path = Path(db_path)
-    if not db_path.exists():
-        return False
-    try:
-        conn = sqlite3.connect(str(db_path))
-        try:
-            cur = conn.cursor()
-            cur.execute(
-                "SELECT name FROM sqlite_master "
-                "WHERE type='table' AND name='ingest_logs';"
-            )
-            return cur.fetchone() is not None
-        finally:
-            conn.close()
-    except Exception:
-        return False
+# helper `_db_initialized` removed: list file existed but was unused.
+# (previous story comments noted optional DB checks; these belong in
+# `scripts/init_ingest_db.py` or the orchestration layer, not raw storage.)
+# the implementation was deleted entirely during a refactor, but the
+# comment accidentally left behind a few stray lines.  They have been
+# removed here for clarity.
 
 
 def _ensure_metadata_file(metadata_path: Union[str, Path]) -> None:
@@ -246,8 +230,9 @@ def save_raw_csv(
 
         .. deprecated:: 0.1.0
             The ``db_path`` argument has no effect and will be removed in a
-            future release.  If you are passing a non-default value, the
-            argument will trigger a :class:`DeprecationWarning` at runtime.
+            future release.  Passing a non-default value will raise a
+            :class:`DeprecationWarning` at runtime so callers can update
+            their code before the parameter is removed entirely.
     metadata_path:
         Path to the JSONL audit log.
     set_permissions:
@@ -259,8 +244,9 @@ def save_raw_csv(
         Metadata dict with keys: ``job_id``, ``source``, ``fetched_at``,
         ``raw_checksum``, ``rows``, ``filepath``, ``status``.
     """
-    # db_path is a no-op; warn when callers provide a non-default value
-    if db_path != DEFAULT_DB:
+    # db_path is a no-op; warn when callers provide a non-default value.
+    # convert to Path first to avoid spurious warnings when a str is passed.
+    if Path(db_path) != DEFAULT_DB:
         import warnings
 
         warnings.warn(
@@ -301,8 +287,8 @@ def save_raw_csv(
             na_rep="",
         )
         _write_bytes_atomic(file_path, df_bytes)
-        checksum = sha256_bytes(df_bytes)
-        Path(f"{file_path}.checksum").write_text(checksum)
+        # use helper which writes checksum atomically (temp file + replace)
+        checksum = _write_checksum(file_path)
 
         if set_permissions:
             _apply_posix_permissions([file_path, Path(f"{file_path}.checksum")])
