@@ -57,7 +57,16 @@ def test_entry_is_fresh_for_recent_entry():
     now = datetime.now(timezone.utc)
     entry = {"processed_at": now.isoformat()}
 
+    # integer TTL should continue to work
     assert cache.entry_is_fresh(entry, ttl=60) is True
+
+
+def test_entry_is_fresh_with_fractional_ttl():
+    now = datetime.now(timezone.utc)
+    entry = {"processed_at": now.isoformat()}
+
+    # fractional TTL is allowed and should still treat the entry as fresh
+    assert cache.entry_is_fresh(entry, ttl=60.5) is True
 
 
 def test_entry_is_not_fresh_when_expired():
