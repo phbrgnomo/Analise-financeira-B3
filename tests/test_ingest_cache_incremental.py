@@ -7,6 +7,7 @@ import pandas as pd
 import pytest
 
 from src import db
+from src.db_client import DatabaseClient
 from src.ingest.pipeline import ingest_from_snapshot
 
 
@@ -191,9 +192,19 @@ def test_shared_diff_helper_and_cli_agree():
     assert len(rows) == 1
     assert rows.index[0] == pd.Timestamp("2026-01-02")
 
-    class DummyRepo:
+    class DummyRepo(DatabaseClient):
         def read_prices(self, *args, **kwargs):
             return existing2
+        # other abstract methods are unused in this test and can be
+        # satisfied with no-op implementations
+        def write_returns(self, df, conn=None, return_type="daily"):
+            pass
+
+        def record_snapshot_metadata(self, metadata, conn=None):
+            pass
+
+        def write_prices(self, df, ticker, conn=None, db_path=None, source="provider"):
+            pass
 
     normalized = _normalize_df(df)
     out = _compute_changes(normalized, "T", DummyRepo())

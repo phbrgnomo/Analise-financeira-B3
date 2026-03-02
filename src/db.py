@@ -103,7 +103,15 @@ def _ensure_schema(conn: sqlite3.Connection, schema_path: Optional[str] = None) 
 
     cur = conn.cursor()
     cur.execute(create_prices)
-    _migrate_prices_date_column(conn)
+    # only trigger the potentially expensive date-column migration if the
+    # database hasn't already been bumped to user_version >= 1.  the
+    # migration helper repeats this same check internally, but avoiding the
+    # call entirely saves a PRAGMA/table_info round-trip on every
+    # ``_ensure_schema`` invocation (see sourcery warning on line 140).
+    cur.execute("PRAGMA user_version")
+    version = cur.fetchone()[0] or 0
+    if version < 1:
+        _migrate_prices_date_column(conn)
     cur.execute(
         """
         CREATE TABLE IF NOT EXISTS metadata (
@@ -137,6 +145,11 @@ def _normalize_db_ticker(ticker: str) -> str:
         return ticker.strip().upper().removesuffix(".SA")
 
 
+# sourcery skip: expensive-table-migration
+# The online migration can be expensive, which is why callers (notably
+# ``_ensure_schema`` and ``init_db``) check ``PRAGMA user_version`` before
+# invoking this helper.  The guard here duplicates the check for safety,
+# but it no longer runs on every schema validation.
 def _migrate_prices_date_column(conn: sqlite3.Connection) -> None:
     """Garante afinidade DATE para `prices.date` de forma idempotente.
 
@@ -147,6 +160,10 @@ def _migrate_prices_date_column(conn: sqlite3.Connection) -> None:
     será tentada no máximo uma vez por banco; após ela ser concluída
     com sucesso (ou detectarmos que já está em formato DATE) bumpamos o
     valor de ``user_version`` para 1 para curar chamadas futuras.
+
+    Observação: o chamador decidiu não invocar esta função quando o
+    ``user_version`` já está >= 1, evitando a sobrecarga de `PRAGMA
+    table_info` em cada validação de esquema (sourcery warning).
     """
     cur = conn.cursor()
     # já migrado? / já no formato esperado?
@@ -251,29 +268,34 @@ def _migrate_returns_date_column(conn: sqlite3.Connection) -> None:
     # deixemos a tabela temporária flutuando.
     cur.execute("BEGIN")
     try:
-        cur.execute(
-            "CREATE TABLE returns_tmp_date_migration ("
-            "ticker TEXT, "
-            "date DATE, "
-            "return_value REAL, "
-            "return_type TEXT, "
-            "created_at TEXT, "
-            "UNIQUE(ticker, date, return_type)"
-            ")"
-        )
-        cur.execute(
-            "INSERT OR REPLACE INTO returns_tmp_date_migration "
-            "(ticker, date, return_value, return_type, created_at) "
-            "SELECT ticker, date, return_value, return_type, created_at FROM returns"
-        )
-        cur.execute("DROP TABLE returns")
-        cur.execute("ALTER TABLE returns_tmp_date_migration RENAME TO returns")
-        # versão 2 sinaliza que migração de retornos também foi aplicada
-        cur.execute("PRAGMA user_version = 2")
-        conn.commit()
+        _extracted_from__migrate_returns_date_column_45(cur, conn)
     except Exception:
         conn.rollback()
         raise
+
+
+# TODO Rename this here and in `_migrate_returns_date_column`
+def _extracted_from__migrate_returns_date_column_45(cur, conn):
+    cur.execute(
+        "CREATE TABLE returns_tmp_date_migration ("
+        "ticker TEXT, "
+        "date DATE, "
+        "return_value REAL, "
+        "return_type TEXT, "
+        "created_at TEXT, "
+        "UNIQUE(ticker, date, return_type)"
+        ")"
+    )
+    cur.execute(
+        "INSERT OR REPLACE INTO returns_tmp_date_migration "
+        "(ticker, date, return_value, return_type, created_at) "
+        "SELECT ticker, date, return_value, return_type, created_at FROM returns"
+    )
+    cur.execute("DROP TABLE returns")
+    cur.execute("ALTER TABLE returns_tmp_date_migration RENAME TO returns")
+    # versão 2 sinaliza que migração de retornos também foi aplicada
+    cur.execute("PRAGMA user_version = 2")
+    conn.commit()
 
 
 def _build_row_tuple(vals: dict, schema_cols: list) -> tuple:
@@ -755,6 +777,8 @@ def resolve_existing_ticker(
     Retorna o ticker persistido quando houver correspondência; caso contrário,
     retorna ``None``.
     """
+    # start with fallback values to keep types clear for static analysis
+    base = provider = None
     try:
         base, provider = ticker_variants(ticker)
         candidates = (base, provider)
@@ -767,29 +791,36 @@ def resolve_existing_ticker(
         close_conn = True
 
     try:
-        cur = conn.cursor()
-        if len(candidates) == 2:
-            cur.execute(
-                "SELECT DISTINCT ticker FROM prices WHERE ticker IN (?, ?)",
-                candidates,
-            )
-        else:
-            cur.execute(
-                "SELECT DISTINCT ticker FROM prices WHERE ticker = ?",
-                candidates,
-            )
-        existing = [row[0] for row in cur.fetchall() if row and row[0]]
-        if not existing:
-            return None
-        if len(candidates) == 2:
-            if base in existing:
-                return base
-            if provider in existing:
-                return provider
-        return existing[0]
+        return _extracted_from_resolve_existing_ticker_25(conn, candidates)
     finally:
         if close_conn:
             conn.close()
+
+
+# TODO Rename this here and in `resolve_existing_ticker`
+def _extracted_from_resolve_existing_ticker_25(conn, candidates):
+    cur = conn.cursor()
+    if len(candidates) == 2:
+        cur.execute(
+            "SELECT DISTINCT ticker FROM prices WHERE ticker IN (?, ?)",
+            candidates,
+        )
+    else:
+        cur.execute(
+            "SELECT DISTINCT ticker FROM prices WHERE ticker = ?",
+            candidates,
+        )
+    existing = [row[0] for row in cur.fetchall() if row and row[0]]
+    if not existing:
+        return None
+    if len(candidates) == 2:
+        # use candidates tuple rather than bare variables to avoid
+        # "possibly unbound" warnings when ticker_variants raised
+        if candidates[0] in existing:
+            return candidates[0]
+        if candidates[1] in existing:
+            return candidates[1]
+    return existing[0]
 
 
 def write_returns(

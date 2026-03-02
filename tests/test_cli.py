@@ -96,6 +96,20 @@ def test_run_uses_ingest_pipeline(monkeypatch):
     # e também precisamos que ao menos um ticker seja enviado ao cálculo de
     # retornos
     assert calls_to_compute, "_compute_returns_for_ticker não foi invocado"
-    for t in calls_to_compute:
-        # deve usar forma canônica semelhante à ingest
-        assert t in ("PETR4", "PETR4.SA"), "ticker inesperado para cálculo de retornos"
+
+    # compute_returns deve ser chamado para cada ticker que passou pelo
+    # pipeline de ingest.  O comportamento padrão do comando `run` é iterar
+    # sobre DEFAULT_TICKERS (PETR4, ITUB3, BBDC4), mas o teste não precisa
+    # conhecer essa lista explicitamente; basta comparar contra as chamadas
+    # de ingest gravadas.
+    ingest_tickers = [c["ticker"] for c in calls]
+    # todos os tickers calculados devem aparecer na lista de ingest
+    # usamos conjuntos normalizados para evitar loops explícitos
+    norm_ingest = {t.rstrip(".SA") for t in ingest_tickers}
+    norm_compute = {t.rstrip(".SA") for t in calls_to_compute}
+    assert norm_compute.issubset(norm_ingest), (
+        f"ticker inesperado para cálculo de retornos: "
+        f"{norm_compute - norm_ingest}"
+    )
+    # e não deve haver chamadas extras
+    assert len(calls_to_compute) == len(ingest_tickers)
