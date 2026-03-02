@@ -84,6 +84,11 @@ def _upsert_snapshot_metadata(
         )
         """
     )
+    # index to speed up queries filtering by ticker and ordering by creation time
+    cur.execute(
+        "CREATE INDEX IF NOT EXISTS snapshots_ticker_created_at_idx "
+        "ON snapshots(ticker, created_at)"
+    )
     job_id = (
         metadata.get("job_id")
         or metadata.get("id")

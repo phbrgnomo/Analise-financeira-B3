@@ -1,11 +1,9 @@
-"""Core validation: schema validation, error extraction, threshold, coercion."""
+"""Validação central: verificação de esquema, extração de erros, limiar e coerção."""
 
 from __future__ import annotations
 
-import contextlib
 import logging
-import os
-from typing import Any, Dict, List, Tuple, cast
+from typing import Any, Dict, List, Optional, Tuple, cast
 
 import numpy as np
 import pandas as pd
@@ -31,19 +29,19 @@ logger = logging.getLogger(__name__)
 def _extract_invalid_rows_from_schema_errors(
     df: pd.DataFrame, schema_errors: SchemaErrors
 ) -> Tuple[pd.DataFrame, ErrorRecords]:
-    """Extract invalid rows and their error details from SchemaErrors.
+    """Extrai linhas inválidas e detalhes de erro a partir de SchemaErrors.
 
     Args:
-        df: Original DataFrame being validated
-        schema_errors: SchemaErrors exception from pandera
+        df: DataFrame original sendo validado
+        schema_errors: exceção SchemaErrors lançada pelo pandera
 
     Returns:
-        Tuple of (invalid_df, error_records)
+        Tupla (invalid_df, error_records)
     """
     error_records: ErrorRecords = []
     invalid_indices: set = set()
 
-    # Try to parse pandera failure_cases if available
+    # Tenta analisar pandera failure_cases se disponível
     if (
         hasattr(schema_errors, "failure_cases")
         and schema_errors.failure_cases is not None
@@ -54,14 +52,14 @@ def _extract_invalid_rows_from_schema_errors(
             invalid_indices.update(parsed_indices)
             error_records.extend(parsed_records)
 
-    # If still no indices, run heuristics (e.g., high/low constraint)
+    # Se ainda não houver índices, executa heurísticas (ex.: restrição high/low)
     if not invalid_indices:
         h_indices, h_records = _heuristic_high_low_violations(df)
         if h_indices:
             invalid_indices.update(h_indices)
             error_records.extend(h_records)
 
-    # If still nothing, emit a single schema-level error record
+    # Se ainda nada, registra um único erro de nível de esquema
     if not invalid_indices:
         error_msg = str(schema_errors)
         reason_code = _categorize_error(error_msg)
@@ -76,7 +74,7 @@ def _extract_invalid_rows_from_schema_errors(
             }
         )
 
-    # Build invalid_df from collected indices and return
+    # Constrói invalid_df a partir dos índices coletados e retorna
     invalid_df = (
         df.loc[list(invalid_indices)].copy()
         if invalid_indices
@@ -87,9 +85,9 @@ def _extract_invalid_rows_from_schema_errors(
 
 
 def _parse_failure_cases(
-    failure_cases,
+    failure_cases: pd.DataFrame,
 ) -> Tuple[IndexSet, ErrorRecords]:
-    """Parse ``failure_cases`` DataFrame emitted by pandera into indices and records."""
+    """Analisa o DataFrame ``failure_cases`` gerado pelo pandera em índices e registros."""
     invalid_indices: IndexSet = set()
     error_records: ErrorRecords = []
     for _, row in failure_cases.iterrows():
@@ -119,36 +117,38 @@ def _parse_failure_cases(
 def _heuristic_high_low_violations(
     df: pd.DataFrame,
 ) -> Tuple[IndexSet, ErrorRecords]:
-    """Detect high/low constraint violations and return indices + records."""
+    """Detecta violações de restrição high/low e retorna índices + registros."""
     invalid_indices: set = set()
     error_records: List[Dict[str, Any]] = []
     try:
         if "high" in df.columns and "low" in df.columns:
-            mask_violation = ~(
-                df["high"].isna()
-                | df["low"].isna()
-                | (df["high"] > df["low"])
-            )
-            positions = np.nonzero(mask_violation.to_numpy())[0]
-            vio_idx = df.index[positions]
-            if len(vio_idx) > 0:
-                reason_code = "CONSTRAINT_VIOLATION"
-                for idx in vio_idx:
-                    invalid_indices.add(idx)
-                    error_records.append(
-                        {
-                            "row_index": idx,
-                            "column": "high,low",
-                            "reason_code": reason_code,
-                            "reason_message": (
-                                "Constraint failed: high > low"
-                            ),
-                            "failure_value": {
-                                "high": df.at[idx, "high"],
-                                "low": df.at[idx, "low"],
-                            },
-                        }
-                    )
+                # marca violações apenas quando ambos os valores estiverem presentes _e_
+                # high is strictly less than low; equality is permitted.
+                mask_violation = (
+                    df["high"].notna()
+                    & df["low"].notna()
+                    & (df["high"] < df["low"])
+                )
+                positions = np.nonzero(mask_violation.to_numpy())[0]
+                vio_idx = df.index[positions]
+                if len(vio_idx) > 0:
+                    reason_code = "CONSTRAINT_VIOLATION"
+                    for idx in vio_idx:
+                        invalid_indices.add(idx)
+                        error_records.append(
+                            {
+                                "row_index": idx,
+                                "column": "high,low",
+                                "reason_code": reason_code,
+                                "reason_message": (
+                                    "Constraint failed: high < low"
+                                ),
+                                "failure_value": {
+                                    "high": df.at[idx, "high"],
+                                    "low": df.at[idx, "low"],
+                                },
+                            }
+                        )
     except Exception as exc:
         logger.debug(
             "Heuristic high/low check failed: %s", exc, exc_info=True
@@ -161,10 +161,10 @@ def _heuristic_high_low_violations(
 def _process_schema_exception(
     df: pd.DataFrame, exc: Exception
 ) -> Tuple[pd.DataFrame, ErrorRecords]:
-    """Normalize pandera SchemaErrors or SchemaError into (invalid_df, error_records).
+    """Normaliza exceções SchemaErrors ou SchemaError do pandera em (invalid_df, error_records).
 
-    This centralizes the logic used by ``validate_dataframe`` to keep
-    complexity low.
+    Centraliza a lógica usada por ``validate_dataframe`` para manter a
+    complexidade reduzida.
     """
     if isinstance(exc, SchemaErrors):
         invalid_df, error_records = (
@@ -199,7 +199,13 @@ def _process_schema_exception(
                 else:
                     try:
                         row_index = int(cast(Any, idx))
-                    except Exception:
+                    except (ValueError, TypeError) as e:
+                        # conversão falhou, preserva valor original e registra
+                        logger.debug(
+                            "não foi possível converter índice %r para int: %s",
+                            idx,
+                            e,
+                        )
                         row_index = idx
 
                 error_records.append(
@@ -238,17 +244,17 @@ def _process_schema_exception(
 
 
 def validate_dataframe(
-    df: pd.DataFrame, schema=None, lazy: bool = True
+    df: pd.DataFrame, schema: Optional[type] = None, lazy: bool = True
 ) -> Tuple[pd.DataFrame, pd.DataFrame, ValidationSummary]:
-    """Validate DataFrame against canonical schema and separate valid/invalid rows.
+    """Valida um DataFrame contra o esquema canônico e separa linhas válidas e inválidas.
 
     Args:
-        df: DataFrame to validate (should be in canonical format)
-        schema: Pandera schema to use (defaults to CanonicalSchema)
-        lazy: If True, collect all errors before raising (default: True)
+        df: DataFrame a ser validado (deve estar no formato canônico)
+        schema: esquema Pandera a ser usado (padrão: CanonicalSchema)
+        lazy: se True, coleta todos os erros antes de lançar exceção (padrão: True)
 
     Returns:
-        Tuple of (valid_df, invalid_df, summary)
+        Tupla (valid_df, invalid_df, summary)
     """
     if schema is None:
         schema = CanonicalSchema
@@ -286,9 +292,6 @@ def validate_dataframe(
             str(e)[:200],
         )
         invalid_df, error_records = _process_schema_exception(df, e)
-        valid_df = (
-            df.copy() if invalid_df.empty else df.drop(index=invalid_df.index)
-        )
 
     except SchemaError as e:
         logger.warning(
@@ -296,9 +299,13 @@ def validate_dataframe(
             str(e)[:200],
         )
         invalid_df, error_records = _process_schema_exception(df, e)
-        valid_df = (
-            df.copy() if invalid_df.empty else df.drop(index=invalid_df.index)
+
+    except SchemaError as e:
+        logger.warning(
+            "Schema validation failed with SchemaError: %s",
+            str(e)[:200],
         )
+        invalid_df, error_records = _process_schema_exception(df, e)
 
     # Common handling for SchemaErrors or SchemaError:
     # build metadata, summary and return
@@ -313,9 +320,9 @@ def validate_dataframe(
 
         # Add error metadata to invalid_df
         invalid_df = invalid_df.copy()
-        invalid_df["_validation_errors"] = invalid_df.index.map(
-            lambda idx: errors_by_row.get(idx, [])
-        )
+        invalid_df["_validation_errors"] = [
+            errors_by_row.get(idx, []) for idx in invalid_df.index
+        ]
 
     # Get valid rows (set difference)
     invalid_indices = set() if invalid_df.empty else set(invalid_df.index)
@@ -366,10 +373,10 @@ def check_threshold(
     threshold: float = 0.10,
     abort_on_exceed: bool = True,
 ) -> bool:
-    """Check if invalid row percentage exceeds threshold.
+    """Verifica se a porcentagem de linhas inválidas ultrapassa o limiar.
 
-    Returns True if within threshold, False if exceeded.
-    Raises ValidationError if threshold exceeded and ``abort_on_exceed=True``.
+    Retorna True se dentro do limiar, False se excedido.
+    Lança ValidationError se exceder e ``abort_on_exceed=True``.
     """
     if summary.invalid_percent >= threshold:
         msg = (
@@ -391,78 +398,91 @@ def check_threshold(
 # ---------------------------------------------------------------------------
 
 
-def _normalize_threshold_value(threshold: float | None) -> float:
+def _normalize_threshold_value(
+    threshold: float | str | None,
+    *,
+    source: str = "env",
+    default: float = 0.10,
+) -> float:
     """Normalize the invalid-row threshold used during validation.
 
-    Accepts both fractional values (0.1) and whole percentages (10 for
-    10%).
+    Accepts both fractional values (0.1) and whole percentages (10 for 10%).
+
+    Behavior differs by *source*:
+
+    - For explicit arguments (source="arg"):
+      - Return a float in [0.0, 1.0].
+      - Raise ValueError on invalid input so misconfigurations fail loudly.
+    - For environment / config (other sources):
+      - On invalid input, log a warning and fall back to *default*.
+      - Warnings include the normalized threshold value when possible.
     """
-    DEFAULT = 0.10
 
-    # If caller provided an explicit threshold, validate its range.
-    if threshold is not None:
+    def _coerce_to_float(raw: float | str | None) -> float:
+        if raw is None:
+            raise ValueError("threshold value is None")
+        # allow percentage strings like "10%" transparently
+        if isinstance(raw, str) and raw.strip().endswith("%"):
+            raw = raw.strip()[:-1].strip()
         try:
-            if not (0.0 <= float(threshold) <= 1.0):
-                logger.warning(
-                    "Explicit threshold %s out of range [0.0,1.0]; "
-                    "using default %.2f",
-                    threshold,
-                    DEFAULT,
+            return float(raw)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"threshold value {raw!r} is not a valid float") from exc
+
+    def _finalize(raw_value: float, strict: bool, source: str, default: float) -> float:
+        # convert percentage-style input
+        normalized = raw_value / 100.0 if raw_value > 1.0 else raw_value
+        if not (0.0 <= normalized <= 1.0):
+            if strict:
+                raise ValueError(
+                    f"Explicit threshold {threshold!r} from {source} "
+                    f"normalizes to {normalized:.4f}, which is outside [0.0, 1.0]"
                 )
-                return DEFAULT
-            return float(threshold)
-        except Exception:
             logger.warning(
-                "Invalid explicit threshold %s; using default %.2f",
+                "Threshold %r from %s normalizes to %.4f, which is outside [0.0, 1.0]; "
+                "using default %.4f",
                 threshold,
-                DEFAULT,
+                source,
+                normalized,
+                default,
             )
-            return DEFAULT
+            return default
+        if not strict and normalized != raw_value:
+            logger.warning(
+                "Threshold %r from %s normalized to %.4f",
+                threshold,
+                source,
+                normalized,
+            )
+        return normalized
 
-    # No explicit threshold: try environment variable, with robust parsing.
-    threshold_env = os.getenv("VALIDATION_INVALID_PERCENT_THRESHOLD")
-    if threshold_env is None:
-        return DEFAULT
+    strict = source == "arg"
 
-    s = threshold_env.strip()
+    if threshold is None:
+        if strict:
+            raise ValueError("Explicit threshold must not be None")
+        logger.warning(
+            "No threshold provided from %s; using default %.4f",
+            source,
+            default,
+        )
+        return default
+
     try:
-        # Support values like '10', '0.1', '10%', '  10 % '
-        if s.endswith("%"):
-            num = float(s[:-1].strip())
-            t = num / 100.0
-        else:
-            t = float(s)
-            # Treat numeric values > 1 as whole-percentage (e.g. 10 -> 0.10)
-            if t > 1:
-                t /= 100.0
-
-        if not (0.0 <= t <= 1.0):
-            msg = (
-                "Environment variable "
-                "VALIDATION_INVALID_PERCENT_THRESHOLD='%s' "
-                "parsed to %s which is out of range [0.0,1.0]; "
-                "using default %.2f"
-            )
-            logger.warning(msg, threshold_env, t, DEFAULT)
-            return DEFAULT
-
-        return float(t)
-    except ValueError:
-        msg = (
-            "Could not parse "
-            "VALIDATION_INVALID_PERCENT_THRESHOLD='%s'; "
-            "using default %.2f"
+        raw_value = _coerce_to_float(threshold)
+    except ValueError as exc:
+        if strict:
+            raise
+        logger.warning(
+            "Invalid threshold %r from %s (%s); using default %.4f",
+            threshold,
+            source,
+            exc,
+            default,
         )
-        logger.warning(msg, threshold_env, DEFAULT)
-        return DEFAULT
-    except Exception as e:
-        msg = (
-            "Unexpected error parsing "
-            "VALIDATION_INVALID_PERCENT_THRESHOLD='%s': %s; "
-            "using default %.2f"
-        )
-        logger.warning(msg, threshold_env, e, DEFAULT)
-        return DEFAULT
+        return default
+
+    return _finalize(raw_value, strict, source, default)
 
 
 # ---------------------------------------------------------------------------
@@ -471,27 +491,39 @@ def _normalize_threshold_value(threshold: float | None) -> float:
 
 
 def _coerce_dataframe_columns(df: pd.DataFrame) -> None:
-    """Normalize common DataFrame column types in-place for validation.
+    """Normaliza em memória os tipos de colunas comuns do DataFrame para validação.
 
-    Coerces date, price, and volume columns into consistent datetime,
-    numeric, and nullable-integer types expected by validators.
+    Coerce colunas de data, preço e volume em tipos datetime, numérico e
+    inteiro anulável consistentes esperados pelos validadores.
     """
     # Normalize date
     if "date" in df.columns:
-        with contextlib.suppress(Exception):
+        try:
             df["date"] = pd.to_datetime(
                 df["date"], utc=True, errors="coerce"
+            )
+        except (ValueError, TypeError, OverflowError) as exc:
+            logger.debug(
+                "failed to coerce 'date' column to datetime: %s", exc
             )
     # Coerce numeric price columns
     numeric_cols = [
         c for c in ("open", "high", "low", "close") if c in df.columns
     ]
     for c in numeric_cols:
-        with contextlib.suppress(Exception):
+        try:
             df[c] = pd.to_numeric(df[c], errors="coerce")
+        except (ValueError, TypeError, OverflowError) as exc:
+            logger.debug(
+                "failed to coerce '%s' column to numeric: %s", c, exc
+            )
     # Volume as nullable integer when possible
     if "volume" in df.columns:
-        with contextlib.suppress(Exception):
+        try:
             df["volume"] = pd.to_numeric(
                 df["volume"], errors="coerce"
             ).astype("Int64")
+        except (ValueError, TypeError, OverflowError) as exc:
+            logger.debug(
+                "failed to coerce 'volume' column to Int64: %s", exc
+            )

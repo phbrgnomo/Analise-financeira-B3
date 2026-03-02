@@ -97,9 +97,6 @@ def _compute_returns_for_ticker(
     return len(df)
 
 
-def _as_bool(value: object) -> bool:
-    """Converte valor CLI em booleano. Delega para as_bool compartilhado."""
-    return as_bool(value)
 
 
 @app.command("run")
@@ -128,7 +125,7 @@ def run_cmd(
 
     effective_ticker = ticker or ticker_arg
     effective_provider = provider or provider_arg or "yfinance"
-    effective_force_refresh = _as_bool(force_refresh)
+    effective_force_refresh = as_bool(force_refresh)
 
     tickers: list[str]
     if effective_ticker is None:
@@ -188,7 +185,7 @@ def compute_returns_cmd(
 ) -> None:
     """Calcula retornos diários para um ticker (ou todos) e persiste no DB."""
     effective_ticker = ticker or ticker_arg
-    effective_dry_run = _as_bool(dry_run)
+    effective_dry_run = as_bool(dry_run)
 
     targets: list[str]
     if effective_ticker is not None:
@@ -258,7 +255,7 @@ def ingest_snapshot_cmd(
         if effective_ticker
         else None
     )
-    effective_force_refresh = _as_bool(force_refresh)
+    effective_force_refresh = as_bool(force_refresh)
     try:
         result = ingest_cli.ingest_snapshot(
             snapshot_path,
@@ -277,8 +274,17 @@ def ingest_snapshot_cmd(
 
 @app.command("export-csv")
 def export_csv_cmd(
-    ticker: str = typer.Option(
-        ..., help="Ticker B3 para exportação (ex.: PETR4, BOVA11)"
+    # ticker is optional here to preserve the older CLI behaviour where the
+    # value could be supplied as a positional argument (``ticker_arg``).  The
+    # fallback logic below keeps the same semantics for programmatic callers
+    # that may still pass the value positionally.
+    ticker: Optional[str] = typer.Option(
+        None,
+        help=(
+            "Ticker B3 para exportação (ex.: PETR4, BOVA11). "
+            "Quando omitido, pode ser passado como argumento posicional "
+            "oculto (compatibilidade)."
+        ),
     ),
     ticker_arg: Optional[str] = typer.Argument(None, hidden=True),
     output: Optional[Path] = typer.Option(  # noqa: B008

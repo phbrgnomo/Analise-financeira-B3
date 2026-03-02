@@ -12,6 +12,14 @@ import os
 import sqlite3
 from typing import Optional, Set
 
+# sqlparse provides a safe way to split SQL scripts into individual
+# statements without breaking on semicolons contained within literals or
+# comments. Use it if available; otherwise fall back to naive splitting.
+try:
+    import sqlparse
+except ImportError:  # pragma: no cover - dependency optional
+    sqlparse = None
+
 logger = logging.getLogger(__name__)
 
 
@@ -69,7 +77,14 @@ def apply_migrations(
             # statements from the file, record the filename in
             # schema_migrations, then commit.  This keeps failures scoped to a
             # single migration rather than bundling everything.
-            statements = [s.strip() for s in sql.split(";") if s.strip()]
+            # split the migration text into individual statements
+            if sqlparse:
+                statements = [s.strip() for s in sqlparse.split(sql) if s.strip()]
+            else:
+                # fallback: naive split on semicolon.  This may break when
+                # semicolons appear in strings/comments, so installing
+                # `sqlparse` is strongly recommended for real migrations.
+                statements = [s.strip() for s in sql.split(";") if s.strip()]
             for stmt in statements:
                 cur.execute(stmt)
 

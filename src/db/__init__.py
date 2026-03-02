@@ -11,31 +11,14 @@ compatibilidade retroativa com ``import src.db as _db`` e
 """
 
 # -- connection ---------------------------------------------------------
-# -- schema / helpers (semi-public, used by tests) ----------------------
-from src.db._helpers import (
-    _build_row_tuple,
-    _is_valid_identifier,
-    _normalize_db_ticker,
-    _quote_identifier,
-    _row_tuple_from_series,
-    _sqlite_version_tuple,
-)
-
-# -- internal aliases for backward compatibility (some callers use
-#    ``src.db._connect``) ------------------------------------------------
+# ``connect`` and ``init_db`` are the primary entrypoints for consumers.  the
+# internal ``_connect`` alias and pragmas helper are retained in the
+# :mod:`src.db.connection` module for callers that really need them but are not
+# exported here.
 from src.db.connection import (  # noqa: F401
     DEFAULT_DB_PATH,
-    _apply_pragmas,
-    _connect,
     connect,
     init_db,
-)
-
-# -- migrations ---------------------------------------------------------
-from src.db.migrations import (
-    _migrate_prices_date_column,
-    _migrate_returns_date_column,
-    _recreate_returns_table_with_date_type,
 )
 
 # -- prices -------------------------------------------------------------
@@ -48,12 +31,6 @@ from src.db.prices import (
 
 # -- returns ------------------------------------------------------------
 from src.db.returns import write_returns
-from src.db.schema import (
-    _ensure_schema,
-    _get_upsert_sql,
-    _load_canonical_schema,
-    _sql_type,
-)
 
 # -- snapshots ----------------------------------------------------------
 from src.db.snapshots import (
@@ -66,21 +43,6 @@ __all__ = [
     "DEFAULT_DB_PATH",
     "connect",
     "init_db",
-    # schema helpers
-    "_build_row_tuple",
-    "_ensure_schema",
-    "_get_upsert_sql",
-    "_is_valid_identifier",
-    "_load_canonical_schema",
-    "_normalize_db_ticker",
-    "_quote_identifier",
-    "_row_tuple_from_series",
-    "_sql_type",
-    "_sqlite_version_tuple",
-    # migrations
-    "_migrate_prices_date_column",
-    "_migrate_returns_date_column",
-    "_recreate_returns_table_with_date_type",
     # prices
     "list_price_tickers",
     "read_prices",

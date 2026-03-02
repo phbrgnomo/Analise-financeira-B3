@@ -3,6 +3,7 @@ from datetime import datetime
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from src.tickers import normalize_b3_ticker
 
@@ -202,6 +203,77 @@ def test_write_returns_preserves_created_at_when_upsert_not_supported(
     second_created = cur.fetchone()[0]
 
     assert first_created == second_created
+
+
+def test_fallback_failure_logs_processed_count(monkeypatch):
+    """Logger.exception is invoked with the number of rows processed.
+
+    Instead of relying on the logging subsystem, we patch the logger to
+    capture arguments directly.  This makes the test more deterministic and
+    avoids fiddling with caplog levels.
+    """
+    from src.db import returns as returns_mod
+
+    # force fallback branch and skip migrations (not needed here)
+    monkeypatch.setattr(returns_mod, "_sqlite_version_tuple", lambda: (3, 8, 0))
+    monkeypatch.setattr(returns_mod, "_migrate_returns_date_column", lambda conn: None)
+
+    # spy on logger.exception
+    called: list[tuple] = []
+
+    def fake_exception(msg, *args, **kwargs):
+        called.append((msg, args, kwargs))
+
+    monkeypatch.setattr(returns_mod.logger, "exception", fake_exception)
+
+    class FakeCursor:
+        def __init__(self):
+            self.rowcount = 0
+            self.row_idx = 0
+
+        def execute(self, sql, params=None):
+            # only fail when updating second row
+            if sql.strip().startswith("UPDATE returns SET"):
+                self.row_idx += 1
+                if self.row_idx == 2:
+                    raise RuntimeError("boom")
+                self.rowcount = 0
+            elif sql.strip().startswith("INSERT INTO returns"):
+                self.rowcount = 0
+            else:
+                self.rowcount = 0
+
+        def executemany(self, *args, **kwargs):
+            raise RuntimeError("should not be used in fallback")
+
+    class FakeConn:
+        def __init__(self):
+            self.cur = FakeCursor()
+
+        def cursor(self):
+            return self.cur
+
+        def execute(self, sql, *args, **kwargs):
+            return None
+
+        def commit(self):
+            pass
+
+        def rollback(self):
+            pass
+
+    conn = FakeConn()
+    df = pd.DataFrame(
+        {"ticker": ["A", "B"], "date": ["2026-01-01", "2026-01-02"], "return_value": [1, 2]}
+    )
+
+    with pytest.raises(RuntimeError):
+        returns_mod._write_returns_core(conn, df, return_type="daily")
+
+    assert called, "logger.exception should have been called"
+    msg, args, kwargs = called[0]
+    assert "processed %d rows" in msg
+    assert args and args[0] == 1
 
 
 def _returns_table_exists(conn: sqlite3.Connection) -> bool:

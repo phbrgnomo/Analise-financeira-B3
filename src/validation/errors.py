@@ -2,12 +2,9 @@
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass
 from functools import lru_cache
 from typing import Any, Dict, List, Set
-
-logger = logging.getLogger(__name__)
 
 # Type aliases for common shapes used across the validation package
 ErrorRecord = Dict[str, Any]

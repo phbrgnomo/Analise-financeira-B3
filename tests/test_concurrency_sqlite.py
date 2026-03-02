@@ -7,7 +7,7 @@ import pandas as pd
 import pytest
 
 import src.db as db_module
-from src.db import _sqlite_version_tuple
+from src.db._helpers import _sqlite_version_tuple
 
 
 @pytest.mark.flaky(reruns=1)

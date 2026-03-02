@@ -1,4 +1,5 @@
 import csv
+import logging
 import os
 import sqlite3
 
@@ -76,8 +77,6 @@ def create_prices_db_from_rows(rows):
             pass
         except Exception:
             # unexpected fault, log full traceback but continue with fallback
-            import logging
-
             logging.getLogger(__name__).exception(
                 "unexpected error normalizing ticker %r", t
             )

@@ -18,11 +18,9 @@ Environment variables
 
 from __future__ import annotations
 
-import contextlib
 import json
 import logging
 import os
-import re
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
@@ -31,7 +29,6 @@ from typing import Any, Dict, Optional, Union
 import pandas as pd
 
 from src.ingest.ticker_lock import lock_ticker
-from src.utils.checksums import serialize_df_bytes, sha256_bytes
 
 logger = logging.getLogger(__name__)
 
@@ -244,15 +241,12 @@ def ingest_from_snapshot(  # noqa: C901
     if force is None:
         force = force_refresh_flag()
 
-    # Compute incoming checksum --------------------------------------------
-    data_bytes = serialize_df_bytes(
-        df,
-        index=False,
-        date_format="%Y-%m-%d",
-        float_format="%.10g",
-        na_rep="",
-    )
-    checksum = sha256_bytes(data_bytes)
+    # Compute incoming checksum using shared exporter helper.
+    # this centralises the serialization logic so the cache check and the
+    # subsequent write (which also serialises the DataFrame) remain in sync.
+    from src.etl.snapshot import snapshot_checksum
+
+    checksum = snapshot_checksum(df)
 
     # Serialize ingestion by ticker within this process. This protects the
     # read-cache -> write-snapshot -> diff -> DB upsert critical section.
@@ -336,39 +330,12 @@ def ingest_from_snapshot(  # noqa: C901
 
         from src.etl.snapshot import write_snapshot
 
+        # write_snapshot already handles pruning of old files; the earlier
+        # incarnation of this function implemented its own regex-based cleanup
+        # here which diverged from the logic in :mod:`src.etl.snapshot`.  we
+        # now delegate entirely to the exporter helper to eliminate duplication
+        # and reduce the risk of drifts between the two codepaths.
         sha = write_snapshot(df, out_path)
-
-        # cleanup older snapshot files for this ticker to avoid buildup
-        # support environment variable for how many recent files to keep
-        keep = int(os.environ.get("SNAPSHOTS_KEEP_LATEST", "1"))
-        sanitized = ticker.replace(".", "_")
-        pattern = f"{sanitized}*"  # names start with sanitized ticker
-        all_files = sorted(snapshot_dir.glob(pattern))
-
-        # construct regex that matches names beginning with the sanitized
-        # ticker
-        # followed by end-of-string or a non-alphanumeric delimiter. this
-        # guards against removing files for tickers like ABC when cleaning up
-        # ABCDEF.
-        regex = re.compile(rf"^{re.escape(sanitized)}(?:$|[^A-Za-z0-9])")
-
-        # filter only csv files that truly belong to this ticker
-        csv_files = [
-            f
-            for f in all_files
-            if f.suffix == ".csv" and regex.match(f.name)
-        ]
-        # keep newest `keep` files (alphabetical order corresponds to time)
-        to_remove = csv_files[:-keep] if keep > 0 else csv_files
-        for old in to_remove:
-            try:
-                old.unlink()
-            except Exception:
-                logger.warning("failed to remove old snapshot %s", old)
-            # also remove corresponding checksum
-            chk = old.with_suffix(old.suffix + ".checksum")
-            with contextlib.suppress(Exception):
-                chk.unlink()
 
         snapshot_meta: Dict[str, Any] = {
             "snapshot_id": filename,

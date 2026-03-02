@@ -156,6 +156,32 @@ def test_ingest_cache_ttl_expiration(tmp_path, monkeypatch):
 
 
 
+def test_snapshot_index_created(tmp_path):
+    """Recording metadata should create the composite index used by queries.
+
+    We check the sqlite_master table for the expected index name after an
+    initial insert. The test doesn't rely on helper functions because the
+    operation should work even if the database is otherwise empty.
+    """
+    import sqlite3
+
+    db_path = tmp_path / "dados" / "data.db"
+    # no need to call init_db; record_snapshot_metadata will create table
+    metadata = {"ticker": "X", "created_at": "2026-01-01T00:00:00Z"}
+    from src import db as _db
+
+    _db.record_snapshot_metadata(metadata, db_path=str(db_path))
+    conn = sqlite3.connect(str(db_path))
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT name FROM sqlite_master WHERE type='index' "
+        "AND name='snapshots_ticker_created_at_idx'",
+    )
+    row = cur.fetchone()
+    assert row is not None, "index should exist after recording metadata"
+    conn.close()
+
+
 def test_shared_diff_helper_and_cli_agree():
     """The extracted helper should produce the same result as the CLI diff."""
     from src.ingest.pipeline import rows_to_ingest
@@ -178,13 +204,13 @@ def test_shared_diff_helper_and_cli_agree():
             return existing2
         # other abstract methods are unused in this test and can be
         # satisfied with no-op implementations
-        def write_returns(self, df, conn=None, return_type="daily"):
+        def write_returns(self, df, conn=None, return_type="daily") -> None:
             pass
 
-        def record_snapshot_metadata(self, metadata, conn=None):
+        def record_snapshot_metadata(self, metadata, conn=None) -> None:
             pass
 
-        def write_prices(self, df, ticker, conn=None, db_path=None, source="provider"):
+        def write_prices(self, df, ticker, conn=None, db_path=None, source="provider") -> None:
             pass
 
     normalized = _normalize_df(df)
@@ -199,18 +225,22 @@ def test_snapshot_change_triggers_reprocess(tmp_path, monkeypatch):
     mp, snap_dir = setup_env(tmp_path, ttl="100000")
 
     base = make_sample_df(["2026-01-01"])
-    r1 = ingest_from_snapshot(base, "FOO", db_path=str(db_path))
-    assert not r1["cached"]
-    assert r1["rows_processed"] == 1
-
+    ingest_snapshot_and_assert_not_cached(base, db_path)
     # modify the same date value
     changed = make_sample_df(["2026-01-01"], values=[999])
-    r2 = ingest_from_snapshot(changed, "FOO", db_path=str(db_path))
-    assert not r2["cached"]
-    # because the row existed but was changed, rows_processed should count it
-    assert r2["rows_processed"] == 1
-
+    ingest_snapshot_and_assert_not_cached(changed, db_path)
     mp.undo()
+
+
+def ingest_snapshot_and_assert_not_cached(snapshot, db_path):
+    """Helper for tests: ingest *snapshot* and expect not cached.
+
+    Used by `test_snapshot_change_triggers_reprocess` where successive
+    snapshots for the same date are applied.
+    """
+    r1 = ingest_from_snapshot(snapshot, "FOO", db_path=str(db_path))
+    assert not r1["cached"]
+    assert r1["rows_processed"] == 1
 
 
 def test_incremental_ingest_only_new_and_changed_rows(tmp_path, monkeypatch):
@@ -218,23 +248,25 @@ def test_incremental_ingest_only_new_and_changed_rows(tmp_path, monkeypatch):
     db.init_db(str(db_path))
     mp, snap_dir = setup_env(tmp_path, ttl="100000")
 
-    df1 = make_sample_df(["2026-01-01", "2026-01-02"], values=[10, 20])
-    r1 = ingest_from_snapshot(df1, "BAR", db_path=str(db_path))
-    assert not r1["cached"]
-    assert r1["rows_processed"] == 2
-
-    # build a new snapshot with one unchanged row and one new row
-    df2 = make_sample_df(["2026-01-01", "2026-01-03"], values=[10, 30])
-    r2 = ingest_from_snapshot(df2, "BAR", db_path=str(db_path))
-    assert not r2["cached"]
-    # only the new row should be processed
-    assert r2["rows_processed"] == 1
-
+    _extracted_from_test_incremental_ingest_only_new_and_changed_rows_6(
+        "2026-01-02", 20, db_path, 2
+    )
+    _extracted_from_test_incremental_ingest_only_new_and_changed_rows_6(
+        "2026-01-03", 30, db_path, 1
+    )
     # verify that the database contains three rows now
     out = db.read_prices("BAR", db_path=str(db_path))
     assert len(out) == 3
 
     mp.undo()
+
+
+# TODO Rename this here and in `test_incremental_ingest_only_new_and_changed_rows`
+def _extracted_from_test_incremental_ingest_only_new_and_changed_rows_6(arg0, arg1, db_path, arg3):
+    df1 = make_sample_df(["2026-01-01", arg0], values=[10, arg1])
+    r1 = ingest_from_snapshot(df1, "BAR", db_path=str(db_path))
+    assert not r1["cached"]
+    assert r1["rows_processed"] == arg3
 
 
 def test_snapshot_metadata_cache_fallback(tmp_path, monkeypatch, caplog):
@@ -330,17 +362,11 @@ def test_snapshot_retention_policy(monkeypatch, tmp_path, mock_time_progression)
     db_path = tmp_path / "dados" / "data.db"
     db.init_db(str(db_path))
 
-    # first ingestion creates one file
-    df1 = make_sample_df(["2026-01-01"])
-    r1 = ingest_from_snapshot(df1, "RET", db_path=str(db_path))
-    assert not r1["cached"]
+    initial_ingest_and_assert_not_cached("2026-01-01", db_path)
     snaps = list((tmp_path / "snaps").glob("RET-*.csv"))
     assert len(snaps) == 1
 
-    # second ingestion adds another snapshot; keep=2 should allow both
-    df2 = make_sample_df(["2026-01-02"])
-    r2 = ingest_from_snapshot(df2, "RET", db_path=str(db_path))
-    assert not r2["cached"]
+    initial_ingest_and_assert_not_cached("2026-01-02", db_path)
     snaps = sorted((tmp_path / "snaps").glob("RET-*.csv"))
     assert len(snaps) == 2
 
@@ -362,19 +388,87 @@ def test_snapshot_retention_policy(monkeypatch, tmp_path, mock_time_progression)
     mp.undo()
 
 
+# helper used by test_snapshot_retention_policy to perform an initial
+# ingest and assert that it is not cached.
+def initial_ingest_and_assert_not_cached(arg0, db_path):
+    # first ingestion creates one file
+    df1 = make_sample_df([arg0])
+    r1 = ingest_from_snapshot(df1, "RET", db_path=str(db_path))
+    assert not r1["cached"]
+
+
+def test_snapshot_checksum_helper():
+    """The shared checksum utility should agree with manual serialization.
+
+    This regression test guards against drift between the exporter and the
+    ingestion cache logic.  Both sides rely on an identical serialization
+    format so the hash values remain stable.
+    """
+    from src.etl.snapshot import snapshot_checksum
+    from src.utils.checksums import serialize_df_bytes, sha256_bytes
+
+    df = make_sample_df(["2026-01-01", "2026-01-02"], values=[1, 2])
+    expected_bytes = serialize_df_bytes(
+        df,
+        index=False,
+        date_format="%Y-%m-%d",
+        float_format="%.10g",
+        na_rep="",
+    )
+    expected = sha256_bytes(expected_bytes)
+    assert snapshot_checksum(df) == expected
+
+
+def test_ingest_lock_settings(monkeypatch):
+    """Lock configuration helper should parse environment variables.
+
+    We verify defaults, a couple of valid permutations, and that invalid
+    settings raise ``ValueError`` so callers can treat misconfiguration as a
+    hard error.
+    """
+    from src.ingest.config import get_ingest_lock_settings
+
+    # defaults (no env vars set)
+    monkeypatch.delenv("INGEST_LOCK_MODE", raising=False)
+    monkeypatch.delenv("INGEST_LOCK_TIMEOUT_SECONDS", raising=False)
+    assert get_ingest_lock_settings() == (120.0, "wait", True)
+
+    # explicit timeout and exit mode
+    monkeypatch.setenv("INGEST_LOCK_MODE", "exit")
+    monkeypatch.setenv("INGEST_LOCK_TIMEOUT_SECONDS", "5")
+    assert get_ingest_lock_settings() == (5.0, "exit", False)
+
+    # invalid mode
+    monkeypatch.setenv("INGEST_LOCK_MODE", "bogus")
+    with pytest.raises(ValueError):
+        get_ingest_lock_settings()
+
+    # invalid timeout
+    monkeypatch.setenv("INGEST_LOCK_MODE", "wait")
+    monkeypatch.setenv("INGEST_LOCK_TIMEOUT_SECONDS", "not-a-number")
+    with pytest.raises(ValueError):
+        get_ingest_lock_settings()
+
+
 def test_snapshot_keep_latest_helper(monkeypatch):
     """The low-level helper parses the env var and enforces a minimum of 1.
     """
     from src.etl.snapshot import _snapshot_keep_latest
+    from src.ingest.config import get_snapshot_keep_latest
 
     monkeypatch.delenv("SNAPSHOTS_KEEP_LATEST", raising=False)
     assert _snapshot_keep_latest() == 1
+    assert get_snapshot_keep_latest() == 1
 
     monkeypatch.setenv("SNAPSHOTS_KEEP_LATEST", "0")
     assert _snapshot_keep_latest() == 1
+    assert get_snapshot_keep_latest() == 1
     monkeypatch.setenv("SNAPSHOTS_KEEP_LATEST", "-5")
     assert _snapshot_keep_latest() == 1
+    assert get_snapshot_keep_latest() == 1
     monkeypatch.setenv("SNAPSHOTS_KEEP_LATEST", "3")
     assert _snapshot_keep_latest() == 3
+    assert get_snapshot_keep_latest() == 3
     monkeypatch.setenv("SNAPSHOTS_KEEP_LATEST", "abc")
     assert _snapshot_keep_latest() == 1
+    assert get_snapshot_keep_latest() == 1

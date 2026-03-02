@@ -1,6 +1,6 @@
 import sqlite3
 
-from src import db
+from src.db.schema import _ensure_schema
 
 
 def _create_old_prices_table(conn: sqlite3.Connection) -> None:
@@ -32,7 +32,7 @@ def test_ensure_schema_performs_migration(tmp_path):
     assert cur.fetchone()[0] == 0
 
     # running ensure_schema should bump user_version and convert affinity
-    db._ensure_schema(conn)
+    _ensure_schema(conn)
 
     cur.execute("PRAGMA user_version")
     assert cur.fetchone()[0] == 1
@@ -45,7 +45,7 @@ def test_ensure_schema_skips_migration_when_version_set(monkeypatch):
     # When the database is already at user_version >= 1, the helper should
     # not be invoked again.
     conn = sqlite3.connect(":memory:")
-    db._ensure_schema(conn)
+    _ensure_schema(conn)
 
     cur = conn.cursor()
     cur.execute("PRAGMA user_version")
@@ -56,8 +56,10 @@ def test_ensure_schema_skips_migration_when_version_set(monkeypatch):
     def fake_migrate(c):
         called["count"] += 1
 
-    monkeypatch.setattr(db, "_migrate_prices_date_column", fake_migrate)
+    monkeypatch.setattr(
+        "src.db.schema._migrate_prices_date_column", fake_migrate
+    )
 
     # second call should skip the migration completely
-    db._ensure_schema(conn)
+    _ensure_schema(conn)
     assert called["count"] == 0

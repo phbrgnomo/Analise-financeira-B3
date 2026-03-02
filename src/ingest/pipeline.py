@@ -13,7 +13,6 @@ Snapshot caching and incremental diff logic live in
 from __future__ import annotations
 
 import logging
-import os
 import time
 import uuid
 from datetime import datetime, timezone
@@ -107,35 +106,12 @@ def ingest(  # noqa: C901 - function is intentionally orchestrator-style
     # ------------------------------------------------------------------
     # Story 1.9: bloqueio por ticker para evitar ingestões concorrentes
     # ------------------------------------------------------------------
-    # a configuração é controlada por variáveis de ambiente para que os
-    # testes possam ajustar o comportamento sem precisar importar helpers
-    # internos.
-    # uma validação básica é aplicada para que valores malformados falhem
-    # rapidamente com erros claros em vez de causar comportamento inesperado.
-    lock_timeout_raw = os.environ.get("INGEST_LOCK_TIMEOUT_SECONDS", "120")
-    try:
-        lock_timeout = float(lock_timeout_raw)
-    except (TypeError, ValueError):
-        raise ValueError(
-            f"Invalid INGEST_LOCK_TIMEOUT_SECONDS value {lock_timeout_raw!r}: "
-            "must be a numeric number of seconds"
-        ) from None
-    if lock_timeout < 0:
-        raise ValueError(
-            f"Invalid INGEST_LOCK_TIMEOUT_SECONDS value {lock_timeout_raw!r}: "
-            "must be non-negative"
-        )
+    # parsing of the environment variables has been pulled into a shared
+    # helper so that both this module and other callers (e.g. tests) can
+    # rely on the same validation logic and it is easier to extend later.
+    from src.ingest.config import get_ingest_lock_settings
 
-    lock_mode_raw = os.environ.get("INGEST_LOCK_MODE", "wait")
-    lock_mode = lock_mode_raw.lower()
-    allowed_lock_modes = {"wait", "exit"}
-    if lock_mode not in allowed_lock_modes:
-        raise ValueError(
-            f"Invalid INGEST_LOCK_MODE value {lock_mode_raw!r}: "
-            f"must be one of {sorted(allowed_lock_modes)}"
-        )
-
-    wait_for_lock = lock_mode != "exit"
+    lock_timeout, lock_mode, wait_for_lock = get_ingest_lock_settings()
 
     # import inside this section so the module can be imported without a
     # hard dependency on the locking machinery (tests and other helpers may
@@ -213,8 +189,8 @@ def ingest(  # noqa: C901 - function is intentionally orchestrator-style
                     "status": "success",
                     "dry_run": True,
                     "rows": len(canonical),
+                    **lock_meta,
                 }
-                result.update(lock_meta)
                 # record metadata even for dry runs to make lock activity visible
                 metadata = result.copy()
                 metadata["started_at"] = started_at
@@ -269,6 +245,9 @@ def ingest(  # noqa: C901 - function is intentionally orchestrator-style
                 "status": top_status,
                 "rows": len(canonical),
                 "persist": persist_result,
+                "started_at": started_at,
+                "finished_at": _now_iso(),
+                **lock_meta,
             }
             _record_ingest_metadata(metadata)
 
@@ -282,6 +261,7 @@ def ingest(  # noqa: C901 - function is intentionally orchestrator-style
                 "status": top_status,
                 "save_meta": save_meta,
                 "persist": persist_result,
+                **lock_meta,
             }
     except locks.LockTimeout as exc:
         # record a metadata entry indicating the lock failure and bail out

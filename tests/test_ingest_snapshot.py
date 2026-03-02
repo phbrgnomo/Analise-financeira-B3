@@ -20,7 +20,7 @@ def empty_db(tmp_path):
     """Creates an in-memory sqlite connection with canonical schema."""
     conn = sqlite3.connect(":memory:")
     # ensure schema exists
-    from src.db import _ensure_schema
+    from src.db.schema import _ensure_schema
 
     _ensure_schema(conn)
     yield conn

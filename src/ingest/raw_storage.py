@@ -36,6 +36,10 @@ logger = logging.getLogger(__name__)
 DEFAULT_DB = Path("dados/data.db")
 DEFAULT_METADATA = Path("metadata/ingest_logs.jsonl")
 
+# Emitir aviso de depreciação do parâmetro `db_path` apenas uma vez por
+# processo para evitar poluir logs em chamadas repetidas.
+_DB_PATH_DEPRECATION_WARNED = False
+
 
 # ---------------------------------------------------------------------------
 # Internal helpers
@@ -238,7 +242,8 @@ def save_raw_csv(
     """
     # db_path is a no-op; warn when callers provide a non-default value.
     # convert to Path first to avoid spurious warnings when a str is passed.
-    if Path(db_path) != DEFAULT_DB:
+    global _DB_PATH_DEPRECATION_WARNED
+    if Path(db_path) != DEFAULT_DB and not _DB_PATH_DEPRECATION_WARNED:
         import warnings
 
         warnings.warn(
@@ -247,6 +252,7 @@ def save_raw_csv(
             DeprecationWarning,
             stacklevel=2,
         )
+        _DB_PATH_DEPRECATION_WARNED = True
 
     if ts is None:
         ts_str = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")

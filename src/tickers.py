@@ -69,6 +69,6 @@ def ticker_variants(ticker: str) -> tuple[str, str]:
     Returns
     -------
     tuple[str, str]
-        Paré de variantes (base, com sufixo)."""
+        Par de variantes (base, com sufixo)."""
     base = normalize_b3_ticker(ticker)
     return base, f"{base}.SA"

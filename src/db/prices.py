@@ -2,7 +2,7 @@
 
 import logging
 import sqlite3
-from typing import Optional
+from typing import Optional, Sequence
 
 import pandas as pd
 
@@ -80,6 +80,13 @@ def write_prices(
         cur = conn.cursor()
         cur.executemany(sql, rows)
         conn.commit()
+    except Exception:  # rollback on failure to avoid partial commits
+        try:
+            conn.rollback()
+        except Exception:  # pragma: no cover - best effort
+            logger.exception("rollback failed after write_prices error")
+        # re-raise so callers can respond to the original error
+        raise
     finally:
         if close_conn:
             conn.close()
@@ -206,8 +213,6 @@ def resolve_existing_ticker(
     Retorna o ticker persistido quando houver correspondência; caso
     contrário, retorna ``None``.
     """
-    # start with fallback values to keep types clear for static analysis
-    base = provider = None
     try:
         base, provider = ticker_variants(ticker)
         candidates = (base, provider)
@@ -226,7 +231,9 @@ def resolve_existing_ticker(
             conn.close()
 
 
-def _query_existing_tickers(conn, candidates):
+def _query_existing_tickers(
+    conn: sqlite3.Connection, candidates: Sequence[str]
+):
     """Consulta quais tickers dos candidatos já existem na tabela prices."""
     cur = conn.cursor()
     if len(candidates) == 2:

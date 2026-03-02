@@ -49,6 +49,8 @@ def test_pipeline_ingest_dry_run(monkeypatch, capsys):
     result = pipeline.ingest("TEST", "dummy", dry_run=True)
     assert result.get("dry_run") is True
     assert result.get("status") == "success"
+    # lock metadata should be surfaced even on success paths
+    assert "lock_action" in result and "lock_waited_seconds" in result
 
 
 def test_pipeline_ingest_error_logging(monkeypatch, capsys):
@@ -124,6 +126,27 @@ def test_invalid_provider_returns_error(monkeypatch):
     """Supplying an unknown source should result in exit code !=0."""
     rc = pipeline.ingest_command("TST", "no_such_provider")
     assert rc != 0
+
+
+def test_get_ingest_lock_settings_helper(monkeypatch):
+    """The shared config helper parses and validates lock environment vars."""
+    from src.ingest.config import get_ingest_lock_settings
+
+    monkeypatch.setenv("INGEST_LOCK_TIMEOUT_SECONDS", "5")
+    monkeypatch.setenv("INGEST_LOCK_MODE", "exit")
+    timeout, mode, wait = get_ingest_lock_settings()
+    assert isinstance(timeout, float) and timeout == 5.0
+    assert mode == "exit"
+    assert wait is False
+
+    # invalid timeout or mode should raise
+    monkeypatch.setenv("INGEST_LOCK_TIMEOUT_SECONDS", "-1")
+    with pytest.raises(ValueError):
+        get_ingest_lock_settings()
+    monkeypatch.setenv("INGEST_LOCK_TIMEOUT_SECONDS", "120")
+    monkeypatch.setenv("INGEST_LOCK_MODE", "invalid")
+    with pytest.raises(ValueError):
+        get_ingest_lock_settings()
 
 
 def test_invalid_lock_configuration(monkeypatch):

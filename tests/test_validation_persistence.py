@@ -1,9 +1,11 @@
 import json
+import logging
+import os
 from pathlib import Path
 
 import pandas as pd
 
-from src.validation import validate_and_handle
+from src.validation import persistence, validate_and_handle
 
 
 def test_persist_and_log_invalid_rows(tmp_path):
@@ -59,3 +61,38 @@ def test_persist_and_log_invalid_rows(tmp_path):
     assert recorded["provider"] == "yfinance"
     assert recorded["ticker"] == "PETR4.SA"
     assert recorded["invalid_count"] == len(details.get("error_records", []))
+
+
+def test_persist_invalid_rows_drop_failure_logs_exception(tmp_path, caplog, monkeypatch):
+    """If removing the metadata column fails, we still persist and log a warning.
+
+    The warning message should include the underlying exception text so that
+    debugging isn't opaque.
+    """
+    # create a small df with the column present
+    df = pd.DataFrame({"a": [1], "_validation_errors": [[]]})
+
+    # monkey-patch pandas DataFrame.drop globally so even after copy() it fails
+    orig = pd.DataFrame.drop
+
+    def broken_drop(self, *args, **kwargs):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(pd.DataFrame, "drop", broken_drop)
+    caplog.set_level(logging.WARNING)
+
+    try:
+        out = persistence.persist_invalid_rows(
+            df, raw_root=str(tmp_path), provider="P", ticker="T", ts="TS"
+        )
+    finally:
+        # restore original method
+        monkeypatch.setattr(pd.DataFrame, "drop", orig)
+    assert os.path.exists(out)
+    # should have logged the error including 'boom'
+    records = [r for r in caplog.records if r.levelno == logging.WARNING]
+    assert records, "expected at least one warning"
+    # log message may include the exception text or the record may carry exc_info
+    assert any("boom" in r.getMessage() for r in records) or any(
+        r.exc_info for r in records
+    )

@@ -107,12 +107,13 @@ def persist_invalid_rows(
     if "_validation_errors" in df_to_write.columns:
         try:
             df_to_write = df_to_write.drop(columns=["_validation_errors"])
-        except Exception:
+        except Exception as e:  # capture any unexpected failure
             msg = (
                 "Could not drop _validation_errors column before persisting "
-                "invalid rows for %s/%s"
+                "invalid rows for %s/%s: %s"
             )
-            logger.warning(msg, provider, ticker)
+            # include exception info so we don't silently swallow it
+            logger.warning(msg, provider, ticker, e, exc_info=e)
 
     # Write CSV
     df_to_write.to_csv(path, index=True)

@@ -97,6 +97,12 @@ class RetryConfig:
                 f"max_delay_ms deve ser >= 0, recebido: "
                 f"{self.max_delay_ms}"
             )
+        # ensure sane relation: maximum delay cannot be smaller than initial
+        if self.max_delay_ms < self.initial_delay_ms:
+            raise ValueError(
+                f"max_delay_ms ({self.max_delay_ms}) não pode ser menor que "
+                f"initial_delay_ms ({self.initial_delay_ms})"
+            )
         if self.backoff_factor <= 0:
             raise ValueError(
                 f"backoff_factor deve ser > 0, recebido: "

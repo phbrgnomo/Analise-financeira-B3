@@ -122,6 +122,7 @@ def _write_returns_core(conn, df, return_type):
 
         try:
             conn.execute("BEGIN")
+            processed = 0
             for row in rows:
                 (
                     ticker_val,
@@ -136,10 +137,13 @@ def _write_returns_core(conn, df, return_type):
                 )
                 if cur.rowcount == 0:
                     cur.execute(insert_sql, row)
+                processed += 1
             conn.commit()
         except Exception:
             conn.rollback()
             logger.exception(
-                "Failed transactional upsert fallback for returns"
+                "Failed transactional upsert fallback for returns; "
+                "processed %d rows",
+                processed,
             )
             raise

@@ -57,7 +57,10 @@ def serialize_df_bytes(
     if columns is None:
         try:
             columns = sorted(df_to_serialize.columns)
-        except Exception:
+        except (TypeError, ValueError):
+            # Only catch errors we expect from attempting to sort non-sortable
+            # column labels; other exceptions should propagate so the caller
+            # can debug unexpected failures.
             logger.warning(
                 "Não foi possível ordenar colunas do DataFrame; "
                 "usando ordem original (checksum pode ser "

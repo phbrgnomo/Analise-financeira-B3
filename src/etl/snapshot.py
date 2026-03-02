@@ -12,24 +12,47 @@ import re
 from datetime import datetime
 from pathlib import Path
 
+import pandas as pd
+
 from src.utils.checksums import serialize_df_bytes, sha256_bytes
 
 
+def snapshot_checksum(df: pd.DataFrame) -> str:
+    """Compute the canonical SHA256 digest for a DataFrame snapshot.
+
+    The implementation mirrors the serialization used by :func:`write_snapshot`.
+    Having a dedicated helper avoids duplicating the formatting rules in the
+    ingestion layer and ensures cache comparisons remain accurate if the
+    serialization logic ever changes.
+    """
+    data = serialize_df_bytes(
+        df,
+        index=False,
+        date_format="%Y-%m-%d",
+        float_format="%.10g",
+        na_rep="",
+    )
+    return sha256_bytes(data)
+
+
 def _snapshot_keep_latest() -> int:
-    """Quantidade de snapshots recentes a manter por ticker."""
-    raw = os.getenv("SNAPSHOTS_KEEP_LATEST", "1").strip()
-    try:
-        value = int(raw)
-    except ValueError:
-        return 1
-    return max(1, value)
+    """Quantidade de snapshots recentes a manter por ticker.
+
+    This wrapper exists for backward compatibility with existing tests and
+    callers.  The actual logic is delegated to
+    :func:`src.ingest.config.get_snapshot_keep_latest` so that the same
+    implementation is shared with the ingestion layer.
+    """
+    from src.ingest.config import get_snapshot_keep_latest
+
+    return get_snapshot_keep_latest()
 
 
 # regex para reconhecer nomes de snapshot no formato esperado (ticker-timestamp.csv)
 _SNAPSHOT_FILENAME_RE = re.compile(
     r"""
     ^(?P<ticker>[^-]+)              # ticker (anything except dash)
-    -(?P<timestamp>\d{8}T\d{6})     # timestamp like 20240101T235959
+    -(?P<timestamp>\d{8}T\d{6}Z?)  # timestamp like 20240101T235959 or 20240101T235959Z
     (?:-(?P<suffix>[^.]+))?         # optional suffix before extension
     \.csv$                          # .csv extension
     """,
@@ -50,6 +73,12 @@ def _parse_snapshot_timestamp(path: Path) -> tuple[datetime | None, float]:
         return None, mtime
 
     ts_str = match.group("timestamp")
+    # strip trailing Z if present; the formatter used by
+    # :func:`write_snapshot` appends a Z suffix to indicate UTC, but the
+    # original parsing logic expected plain digits.  keeping both in sync
+    # avoids mis-detecting otherwise valid filenames.
+    if ts_str.endswith("Z"):
+        ts_str = ts_str[:-1]
     # Ajuste o formato caso o padrão de timestamp mude.
     try:
         ts = datetime.strptime(ts_str, "%Y%m%dT%H%M%S")
@@ -66,15 +95,30 @@ def _prune_old_snapshots(out_path: Path) -> None:
     este processo.
     """
     keep_latest = _snapshot_keep_latest()
-    prefix = out_path.name.split("-", 1)[0]
-    pattern = f"{prefix}-*.csv"
 
-    # Filtra apenas arquivos que batem com o padrão de snapshot esperado
-    candidate_files = [
-        path
-        for path in out_path.parent.glob(pattern)
-        if _SNAPSHOT_FILENAME_RE.match(path.name)
-    ]
+    # Preferir extrair o ticker do próprio out_path usando a regex canônica.
+    # Se o nome não casar com o padrão, caímos para o comportamento baseado
+    # em prefixo (compatibilidade), mas sempre filtramos por ticker quando
+    # possível para evitar deletar arquivos de tickers com prefixos comuns
+    # (ex: PETR4 vs PETR4F).
+    target_match = _SNAPSHOT_FILENAME_RE.match(out_path.name)
+    if target_match:
+        target_ticker = target_match.group("ticker")
+        # procurar todos os CSVs que batem o padrão geral e então filtrar
+        # apenas aqueles cujo ticker extraído coincide exatamente.
+        candidate_files = []
+        for path in out_path.parent.glob("*-*.csv"):
+            m = _SNAPSHOT_FILENAME_RE.match(path.name)
+            if not m:
+                continue
+            if m.group("ticker") != target_ticker:
+                continue
+            candidate_files.append(path)
+    else:
+        # Nome fora do padrão: não sabemos o ticker, portanto não fazemos
+        # pruning algum para evitar exclusões equivocadas.  Isto é raro e
+        # significa que o arquivo não segue o formato `ticker-timestamp.csv`.
+        candidate_files = []
 
     # Ordena por timestamp extraído do nome (mais recente primeiro).
     # Arquivos sem timestamp válido caem para o final usando mtime como fallback.
@@ -127,7 +171,9 @@ def write_snapshot(df, out_path: Path, *, set_permissions: bool = False) -> str:
     _prune_old_snapshots(out_path)
 
     if set_permissions and hasattr(os, "chmod"):
-        with contextlib.suppress(Exception):
+        # only ignore OS-level permission errors; other exceptions should
+        # propagate so callers can notice unexpected issues.
+        with contextlib.suppress(OSError):
             os.chmod(str(out_path), 0o640)
             os.chmod(str(checksum_path), 0o640)
     return checksum

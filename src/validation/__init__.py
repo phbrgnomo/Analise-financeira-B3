@@ -17,11 +17,7 @@ import pandas as pd
 # -- core ---------------------------------------------------------------
 from src.validation.core import (
     _coerce_dataframe_columns,
-    _extract_invalid_rows_from_schema_errors,
-    _heuristic_high_low_violations,
     _normalize_threshold_value,
-    _parse_failure_cases,
-    _process_schema_exception,
     check_threshold,
     validate_dataframe,
 )
@@ -33,16 +29,10 @@ from src.validation.errors import (
     IndexSet,
     ValidationError,
     ValidationSummary,
-    _cached_categorize,
-    _categorize_error,
-    _column_specific_code,
-    _generic_code,
-    _is_missing_col,
 )
 
 # -- persistence --------------------------------------------------------
 from src.validation.persistence import (
-    _ensure_dir,
     _flatten_invalid_error_records,
     _persist_and_log_invalids,
     log_invalid_rows,
@@ -71,7 +61,7 @@ def validate_and_handle(
     Returns: ``(valid_df, invalid_df, summary, details)``
     """
     # Normalize threshold and coerce common columns
-    threshold = _normalize_threshold_value(threshold)
+    threshold = _normalize_threshold_value(threshold, source="arg")
     _coerce_dataframe_columns(df)
 
     valid_df, invalid_df, summary = validate_dataframe(df)
@@ -109,24 +99,10 @@ __all__ = [
     "IndexSet",
     "ValidationError",
     "ValidationSummary",
-    "_cached_categorize",
-    "_categorize_error",
-    "_column_specific_code",
-    "_generic_code",
-    "_is_missing_col",
     # core
-    "_coerce_dataframe_columns",
-    "_extract_invalid_rows_from_schema_errors",
-    "_heuristic_high_low_violations",
-    "_normalize_threshold_value",
-    "_parse_failure_cases",
-    "_process_schema_exception",
     "check_threshold",
     "validate_dataframe",
     # persistence
-    "_ensure_dir",
-    "_flatten_invalid_error_records",
-    "_persist_and_log_invalids",
     "log_invalid_rows",
     "persist_invalid_rows",
     # facade

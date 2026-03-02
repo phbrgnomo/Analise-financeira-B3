@@ -147,12 +147,9 @@ class Adapter(ABC):
         # that return lowercase/uppercase variations of the expected names.
         # convert to str before lower() to handle non-str column names
         cols_lower = {str(c).lower() for c in cols}
-        missing_columns = {
-            col
-            for col in required_columns_list
-            if col.lower() not in cols_lower
-        }
-        if missing_columns:
+        if missing_columns := {
+            col for col in required_columns_list if col.lower() not in cols_lower
+        }:
             # report the original casing to make the error message familiar
             raise ValidationError(
                 f"Colunas obrigatórias ausentes para {ticker}: {missing_columns}"
@@ -363,7 +360,7 @@ class Adapter(ABC):
         required_columns: Optional[List[str]] = None,
         idempotent: bool = True,
         **kwargs,
-    ) -> pd.DataFrame:  # noqa: C901
+    ) -> pd.DataFrame:    # noqa: C901
         """
         Loop de retry/backoff que chama `_fetch_once` e aplica validações genéricas.
         Mapeia exceções para `NetworkError` / `FetchError`.
@@ -374,9 +371,11 @@ class Adapter(ABC):
         - Respeita idempotência: se idempotent=False, retries são desabilitados
         - Usa `RetryConfig` se disponível para calcular delays
         """
-        if max_retries < 1:
+        # Allow zero to be specified by configuration (interpreted as
+        # "no additional retries"). Only negative values are invalid.
+        if max_retries < 0:
             raise ValueError(
-                f"max_retries deve ser >= 1, recebido: {max_retries}"
+                f"max_retries deve ser >= 0, recebido: {max_retries}"
             )
 
         last_exception = None
@@ -385,7 +384,10 @@ class Adapter(ABC):
 
         metrics = getattr(self, "_metrics", get_global_metrics())
 
-        effective_max_retries = max_retries
+        # Ensure we have at least one attempt by default. A configured
+        # `max_retries=0` is treated as "no extra retries" which means a
+        # single attempt (behavior preserved for backwards compatibility).
+        effective_max_retries = max(1, max_retries)
         if not idempotent and effective_max_retries > 1:
             logger.warning(
                 "Operação não-idempotente; desabilitando retries",
