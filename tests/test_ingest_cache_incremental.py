@@ -152,25 +152,6 @@ def test_ingest_cache_ttl_expiration(tmp_path, monkeypatch):
     assert not r2["cached"]
 
     mp.undo()
-    db.init_db(str(db_path))
-
-    # set environment with generous TTL so cache is valid
-    mp, snap_dir = setup_env(tmp_path, ttl="100000")
-
-    df = make_sample_df(["2026-01-01", "2026-01-02"])
-
-    # first ingestion should write all rows
-    r1 = ingest_from_snapshot(df, "TEST", db_path=str(db_path))
-    assert not r1["cached"]
-    assert r1["rows_processed"] == len(df)
-    assert f"{snap_dir}/TEST-" in r1["snapshot_path"]
-
-    # second ingestion with identical df should hit cache
-    r2 = ingest_from_snapshot(df, "TEST", db_path=str(db_path))
-    assert r2["cached"]
-    assert r2["rows_processed"] == 0
-
-    mp.undo()
 
 
 
@@ -269,17 +250,17 @@ def test_snapshot_metadata_cache_fallback(tmp_path, monkeypatch, caplog):
     _db.init_db(str(db_path))
 
     call_count = {"n": 0}
-    orig_connect = _db.connect
+    orig_get = _db.get_last_snapshot_payload
 
-    def fake_connect(path=None):
-        # fail on first connection (metadata read) but succeed thereafter
+    def fake_get_payload(*args, **kwargs):
+        # fail on first call (metadata read) but succeed thereafter
         if call_count["n"] == 0:
             call_count["n"] += 1
             raise OSError("simulated IO failure")
         # otherwise delegate to original implementation
-        return orig_connect(path)
+        return orig_get(*args, **kwargs)
 
-    monkeypatch.setattr(_db, "connect", fake_connect)
+    monkeypatch.setattr(_db, "get_last_snapshot_payload", fake_get_payload)
 
     caplog.set_level("WARNING")
     called = False

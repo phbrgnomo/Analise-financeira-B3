@@ -170,13 +170,14 @@ class Adapter(ABC):
         Centraliza a classificação por nome/tipo/módulo para manter a
         lógica do loop de retry mais legível.
         """
-        err_name = type(e).__name__
-        is_network = err_name in ("ConnectionError", "TimeoutError")
+        # Verifica tipos builtin via isinstance (captura subclasses)
+        is_network = isinstance(e, (ConnectionError, TimeoutError))
 
         # Exceções vindas do namespace 'requests' também devem ser tratadas
-        # como erros de rede.
-        module_name = getattr(e, "__module__", "")
-        if hasattr(e, "__class__") and module_name.startswith("requests"):
+        # como erros de rede (requests.exceptions.ConnectionError herda de
+        # IOError, não do builtin ConnectionError).
+        module_name = getattr(type(e), "__module__", "")
+        if module_name.startswith("requests"):
             is_network = True
 
         return is_network
@@ -373,6 +374,11 @@ class Adapter(ABC):
         - Respeita idempotência: se idempotent=False, retries são desabilitados
         - Usa `RetryConfig` se disponível para calcular delays
         """
+        if max_retries < 1:
+            raise ValueError(
+                f"max_retries deve ser >= 1, recebido: {max_retries}"
+            )
+
         last_exception = None
         if log_context is None:
             log_context = {}

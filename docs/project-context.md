@@ -19,7 +19,8 @@ _Documento enxuto com regras críticas e padrões que agentes de IA devem seguir
 ## Technology Stack & Versions
 
 - Python: ^3.12 (Poetry) — seguir `pyproject.toml`
-- SQLAlchemy: ^2.0.x
+- sqlite3 (standard library) — persistência principal
+- SQLAlchemy: ^2.0.x (dependência declarada, mas não usada diretamente no core; pode ser removida em sprint futuro)
 - pandas: ^2.x
 - numpy: ^2.x
 - typer: ^0.9.x (entrypoint: `src.main:app`)

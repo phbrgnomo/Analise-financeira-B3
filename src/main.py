@@ -16,15 +16,15 @@ from dotenv import load_dotenv
 
 # load any local .env file early so calls to os.getenv work below; this
 # is a no-op when running in CI or when no file exists.
-import src.db as _db
-import src.retorno as _retorno
-from src import metrics
-from src.logging_config import configure_logging
-from src.paths import DATA_DIR
-from src.tickers import normalize_b3_ticker, ticker_variants
-
-# load environment file now that imports are done
 load_dotenv()
+
+import src.db as _db  # noqa: E402
+import src.retorno as _retorno  # noqa: E402
+from src import metrics  # noqa: E402
+from src.logging_config import configure_logging  # noqa: E402
+from src.paths import DATA_DIR  # noqa: E402
+from src.tickers import normalize_b3_ticker, ticker_variants  # noqa: E402
+from src.utils.conversions import as_bool  # noqa: E402
 
 # compatibility shims have been extracted to ``src.cli_compat``; import
 # here to ensure the patches are applied when the CLI is loaded.
@@ -89,21 +89,17 @@ def _compute_returns_for_ticker(
         return 0
 
     if dry_run:
-        print(f"{ticker}: {len(df)} retornos calculados (dry-run)")
-        print(df.head())
+        typer.echo(f"{ticker}: {len(df)} retornos calculados (dry-run)")
+        typer.echo(df.head())
     else:
-        print(f"{ticker}: {len(df)} retornos persistidos")
+        typer.echo(f"{ticker}: {len(df)} retornos persistidos")
 
     return len(df)
 
 
 def _as_bool(value: object) -> bool:
-    """Converte valor potencialmente serializado pela CLI em booleano."""
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, str):
-        return value.strip().lower() in {"1", "true", "yes", "on"}
-    return bool(value)
+    """Converte valor CLI em booleano. Delega para as_bool compartilhado."""
+    return as_bool(value)
 
 
 @app.command("run")
@@ -137,8 +133,8 @@ def run_cmd(
     tickers: list[str]
     if effective_ticker is None:
         tickers = list(DEFAULT_TICKERS)
-        print(f"Executando tickers padrão: {', '.join(tickers)}")
-        print("Para ticker específico, execute: main run --ticker <ticker>")
+        typer.echo(f"Executando tickers padrão: {', '.join(tickers)}")
+        typer.echo("Para ticker específico, execute: main run --ticker <ticker>")
     else:
         tickers = [_normalize_cli_ticker(effective_ticker)]
 
@@ -154,7 +150,7 @@ def run_cmd(
         )
         if result.get("status") != "success":
             failed += 1
-            print(
+            typer.echo(
                 f"Falha no ingest para {tk}: "
                 f"{result.get('error_message', 'erro desconhecido')}"
             )
@@ -164,14 +160,14 @@ def run_cmd(
         if rows == 0:
             # zero rows is not necessarily an error; could mean no new data
             warnings += 1
-            print(f"{tk}: ingest concluído, mas sem retornos calculados (aviso)")
+            typer.echo(f"{tk}: ingest concluído, mas sem retornos calculados (aviso)")
             continue
         ok += 1
 
     summary = f"Resumo run: sucesso={ok}, falhas={failed}"
     if warnings:
         summary += f", avisos={warnings}"
-    print(summary)
+    typer.echo(summary)
 
 
 @app.command("compute-returns")
@@ -201,9 +197,9 @@ def compute_returns_cmd(
     else:
         targets = _db.list_price_tickers()
         if not targets:
-            print("Nenhum ticker encontrado na tabela prices")
+            typer.echo("Nenhum ticker encontrado na tabela prices")
             return
-        print(
+        typer.echo(
             "--ticker não informado; calculando retornos para todos os "
             f"tickers no banco ({len(targets)})"
         )
@@ -213,19 +209,19 @@ def compute_returns_cmd(
     for target in targets:
         rows = _compute_returns_for_ticker(target, start, end, effective_dry_run)
         if rows == 0:
-            print(f"{target}: nenhum retorno calculado")
+            typer.echo(f"{target}: nenhum retorno calculado")
             continue
         processed += 1
         total_rows += rows
 
     if processed == 0:
-        print("Nenhum retorno calculado para os parâmetros fornecidos")
+        typer.echo("Nenhum retorno calculado para os parâmetros fornecidos")
         return
 
     if effective_dry_run:
-        print(f"Dry-run concluído: {total_rows} retornos calculados")
+        typer.echo(f"Dry-run concluído: {total_rows} retornos calculados")
     else:
-        print(
+        typer.echo(
             "Cálculo concluído: "
             f"{total_rows} retornos persistidos para {processed} ticker(s)"
         )
@@ -272,11 +268,11 @@ def ingest_snapshot_cmd(
             cache_file=cache_file,
         )
     except Exception as e:
-        print(f"Falha ao ingerir snapshot: {e}")
+        typer.echo(f"Falha ao ingerir snapshot: {e}")
         raise
 
-    print("Ingestão de snapshot concluída")
-    print(result)
+    typer.echo("Ingestão de snapshot concluída")
+    typer.echo(result)
 
 
 @app.command("export-csv")
@@ -311,7 +307,7 @@ def export_csv_cmd(
         alt = _db.resolve_existing_ticker(provider_variant)
         if alt is not None:
             resolved = alt
-            print(
+            typer.echo(
                 "Ticker não encontrado com nome base no banco; "
                 f"usando variante {provider_variant}"
             )
@@ -322,14 +318,14 @@ def export_csv_cmd(
 
     df = _db.read_prices(resolved, start=start, end=end)
     if df.empty:
-        print(f"Nenhum dado encontrado para {normalized}")
+        typer.echo(f"Nenhum dado encontrado para {normalized}")
         return
 
     if output is None:
         output = DATA_DIR / f"{normalized}.csv"
     output.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(output, index_label="date")
-    print(f"CSV exportado com {len(df)} linha(s): {output}")
+    typer.echo(f"CSV exportado com {len(df)} linha(s): {output}")
 
 
 if __name__ == "__main__":

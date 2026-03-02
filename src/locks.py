@@ -75,8 +75,11 @@ def _acquire_with_portalocker(
     comportamento tenta adquirir o bloqueio em loop até o tempo expirar.
     """
     # the caller only invokes this when ``portalocker`` is available, but
-    # type checkers can't prove that, so assert it for static analysis.
-    assert portalocker is not None
+    # type checkers can't prove that, so guard explicitly.
+    if portalocker is None:
+        raise RuntimeError(
+            "_acquire_with_portalocker called but portalocker is not installed"
+        )
 
     # Always attempt non-blocking acquisitions so we can implement our own
     # timeout rather than relying on portalocker's blocking behaviour which

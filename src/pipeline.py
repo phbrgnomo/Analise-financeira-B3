@@ -22,16 +22,9 @@ import typer
 
 from src.adapters.factory import available_providers
 from src.tickers import normalize_b3_ticker
+from src.utils.conversions import as_bool as _as_bool
 
 app = typer.Typer()
-
-
-def _as_bool(value: object) -> bool:
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, str):
-        return value.strip().lower() in {"1", "true", "yes", "on"}
-    return bool(value)
 
 
 @app.command("ingest")

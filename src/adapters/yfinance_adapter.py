@@ -130,7 +130,7 @@ class YFinanceAdapter(Adapter):
         normalized_ticker = self._normalize_ticker(ticker)
 
         # Definir datas padrão se não fornecidas usando uma única referência de tempo
-        now = datetime.now()
+        now = datetime.now(timezone.utc)
         if end_date is None:
             end_date = now.strftime("%Y-%m-%d")
         if start_date is None:

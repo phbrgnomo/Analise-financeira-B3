@@ -412,8 +412,11 @@ def validate_dataframe(
     )
 
     logger.info(
-        f"Validation complete: {rows_valid}/{rows_total} valid "
-        f"({invalid_percent:.1%} invalid). Error codes: {error_codes_count}"
+        "Validation complete: %d/%d valid (%.1f%% invalid). Error codes: %s",
+        rows_valid,
+        rows_total,
+        invalid_percent * 100,
+        error_codes_count,
     )
 
     return valid_df, invalid_df, summary

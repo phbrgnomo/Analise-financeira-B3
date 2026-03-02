@@ -262,21 +262,16 @@ def ingest_from_snapshot(  # noqa: C901
 
         last_meta: Optional[Dict[str, Any]] = None
         try:
-            # use public connection API; context manager closes automatically
-            with _db.connect(db_path) as conn:
-                cur = conn.cursor()
-                cur.execute(
-                    "SELECT payload FROM snapshots WHERE ticker = ? "
-                    "ORDER BY created_at DESC LIMIT 1",
-                    (ticker,),
-                )
-                if row := cur.fetchone():
-                    try:
-                        last_meta = json.loads(row[0])
-                    except json.JSONDecodeError as exc:
-                        logger.warning(
-                            "invalid snapshot metadata JSON for %s: %s", ticker, exc
-                        )
+            payload_str = _db.get_last_snapshot_payload(
+                ticker, db_path=db_path
+            )
+            if payload_str is not None:
+                try:
+                    last_meta = json.loads(payload_str)
+                except json.JSONDecodeError as exc:
+                    logger.warning(
+                        "invalid snapshot metadata JSON for %s: %s", ticker, exc
+                    )
         except (OSError, sqlite3.DatabaseError) as exc:
             logger.warning(
                 "snapshot metadata cache fallback; failed to read metadata for %s: %s",

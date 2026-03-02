@@ -7,9 +7,12 @@ pendentes numa conexão existente. A tabela ``schema_migrations`` registra o
 identificador e o momento de aplicação de cada script para evitar reaplicação.
 """
 
+import logging
 import os
 import sqlite3
 from typing import Optional, Set
+
+logger = logging.getLogger(__name__)
 
 
 def _ensure_migrations_table(conn: sqlite3.Connection) -> None:
@@ -56,6 +59,7 @@ def apply_migrations(
     cur = conn.cursor()
     for fname in files:
         if fname in applied:
+            logger.debug("migration already applied, skipping: %s", fname)
             continue
         path = os.path.join(migrations_dir, fname)
         with open(path, "r", encoding="utf-8") as f:
@@ -75,7 +79,9 @@ def apply_migrations(
             )
             cur.execute(insert_sql, (fname,))
             conn.commit()
+            logger.info("migration applied successfully: %s", fname)
         except Exception as e:
             # rollback before propagating; provide context for easier debugging
             conn.rollback()
+            logger.error("migration failed: %s — %s", fname, e)
             raise RuntimeError(f"migration failed ({fname})") from e

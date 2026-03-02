@@ -56,7 +56,9 @@ def create_prices_db_from_rows(rows):
             low REAL,
             close REAL,
             volume INTEGER,
-            source TEXT
+            source TEXT,
+            fetched_at TEXT DEFAULT '',
+            raw_checksum TEXT DEFAULT ''
         )
         """
     )

@@ -52,16 +52,61 @@ class RetryConfig:
         Returns:
             RetryConfig com valores carregados do ambiente ou padrões
         """
-        return cls(
+        config = cls(
             max_attempts=int(os.getenv(f"{prefix}_MAX_ATTEMPTS", "3")),
-            initial_delay_ms=int(os.getenv(f"{prefix}_INITIAL_DELAY_MS", "1000")),
-            max_delay_ms=int(os.getenv(f"{prefix}_MAX_DELAY_MS", "30000")),
-            backoff_factor=float(os.getenv(f"{prefix}_BACKOFF_FACTOR", "2.0")),
-            retry_on_status_codes=cls._parse_status_codes(
-                os.getenv(f"{prefix}_ON_STATUS_CODES", "429,500,502,503,504")
+            initial_delay_ms=int(
+                os.getenv(f"{prefix}_INITIAL_DELAY_MS", "1000")
             ),
-            timeout_seconds=int(os.getenv(f"{prefix}_TIMEOUT_SECONDS", "30")),
+            max_delay_ms=int(
+                os.getenv(f"{prefix}_MAX_DELAY_MS", "30000")
+            ),
+            backoff_factor=float(
+                os.getenv(f"{prefix}_BACKOFF_FACTOR", "2.0")
+            ),
+            retry_on_status_codes=cls._parse_status_codes(
+                os.getenv(
+                    f"{prefix}_ON_STATUS_CODES",
+                    "429,500,502,503,504",
+                )
+            ),
+            timeout_seconds=int(
+                os.getenv(f"{prefix}_TIMEOUT_SECONDS", "30")
+            ),
         )
+        config._validate()
+        return config
+
+    def _validate(self) -> None:
+        """Valida que os parâmetros estão em faixas aceitáveis.
+
+        Raises:
+            ValueError: Se algum parâmetro estiver fora da faixa válida.
+        """
+        if self.max_attempts < 1:
+            raise ValueError(
+                f"max_attempts deve ser >= 1, recebido: "
+                f"{self.max_attempts}"
+            )
+        if self.initial_delay_ms < 0:
+            raise ValueError(
+                f"initial_delay_ms deve ser >= 0, recebido: "
+                f"{self.initial_delay_ms}"
+            )
+        if self.max_delay_ms < 0:
+            raise ValueError(
+                f"max_delay_ms deve ser >= 0, recebido: "
+                f"{self.max_delay_ms}"
+            )
+        if self.backoff_factor <= 0:
+            raise ValueError(
+                f"backoff_factor deve ser > 0, recebido: "
+                f"{self.backoff_factor}"
+            )
+        if self.timeout_seconds < 0:
+            raise ValueError(
+                f"timeout_seconds deve ser >= 0, recebido: "
+                f"{self.timeout_seconds}"
+            )
 
     @staticmethod
     def _parse_status_codes(codes_str: str) -> List[int]:

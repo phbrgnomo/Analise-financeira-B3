@@ -34,13 +34,13 @@ def test_acquire_lock_timeout(tmp_path, monkeypatch) -> None:
     # mantém o bloqueio durante o teste
     ctx = locks.acquire_lock("X", timeout_seconds=1, wait=True)
     try:
-        _extracted_from_test_acquire_lock_timeout_10(ctx)
+        _assert_lock_timeout_behavior(ctx)
     finally:
         ctx.__exit__(None, None, None)
 
 
-# TODO Rename this here and in `test_acquire_lock_timeout`
-def _extracted_from_test_acquire_lock_timeout_10(ctx):
+def _assert_lock_timeout_behavior(ctx):
+    """Verifica que tentativa de lock concorrente levanta LockTimeout."""
     ctx.__enter__()
 
     timeout = 0.1

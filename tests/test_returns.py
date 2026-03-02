@@ -204,25 +204,35 @@ def test_write_returns_preserves_created_at_when_upsert_not_supported(
     assert first_created == second_created
 
 
-# sourcery skip: extract-duplicate-method,remove-pass-body,remove-assert-true
-# the function deliberately contains repetitive/conditional patterns
-# for clarity; ignore automated refactor hints here.
+def _returns_table_exists(conn: sqlite3.Connection) -> bool:
+    """Return True if the ``returns`` table exists in the database."""
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT name FROM sqlite_master "
+        "WHERE type='table' AND name='returns'"
+    )
+    return cur.fetchone() is not None
+
+
+def _safe_count_returns(
+    conn: sqlite3.Connection,
+    ticker: str,
+    return_type: str = "daily",
+) -> int:
+    """Count returns rows, returning 0 if the table does not exist."""
+    if not _returns_table_exists(conn):
+        return 0
+    return _count_returns(conn, ticker, return_type)
+
+
 def test_compute_returns_empty_and_single_price(sample_db):
     """Handle empty ticker (no prices) and single-price series gracefully."""
     import src.retorno as retorno
 
     # Empty ticker: should not raise and produce zero rows
     retorno.compute_returns("EMPTY_TICKER", conn=sample_db)
-    # If `returns` table was never created (no prices), treat as zero rows.
-    cur = sample_db.cursor()
-    cur.execute("PRAGMA table_info(returns)")
-    # sourcery skip: no-conditionals-in-tests
-    if not cur.fetchall():
-        # Table missing -> treat as zero rows (nothing to assert against)
-        assert True
-    else:
-        # Table exists: explicitly assert count is zero
-        assert _count_returns(sample_db, "EMPTY_TICKER") == 0
+    assert _safe_count_returns(sample_db, "EMPTY_TICKER") == 0
+
     # Single price row: insert one price and expect zero returns
     cur = sample_db.cursor()
     cur.execute("PRAGMA table_info(prices)")
@@ -258,10 +268,4 @@ def test_compute_returns_empty_and_single_price(sample_db):
     sample_db.commit()
 
     retorno.compute_returns("SINGLE", conn=sample_db)
-    cur = sample_db.cursor()
-    cur.execute("PRAGMA table_info(returns)")
-    if not cur.fetchall():
-        # No returns table -> treat as zero rows
-        assert True
-    else:
-        assert _count_returns(sample_db, "SINGLE") == 0
+    assert _safe_count_returns(sample_db, "SINGLE") == 0

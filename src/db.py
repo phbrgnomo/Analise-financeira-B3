@@ -268,14 +268,14 @@ def _migrate_returns_date_column(conn: sqlite3.Connection) -> None:
     # deixemos a tabela temporária flutuando.
     cur.execute("BEGIN")
     try:
-        _extracted_from__migrate_returns_date_column_45(cur, conn)
+        _recreate_returns_table_with_date_type(cur, conn)
     except Exception:
         conn.rollback()
         raise
 
 
-# TODO Rename this here and in `_migrate_returns_date_column`
-def _extracted_from__migrate_returns_date_column_45(cur, conn):
+def _recreate_returns_table_with_date_type(cur, conn):
+    """Recria a tabela returns com coluna date tipada como DATE."""
     cur.execute(
         "CREATE TABLE returns_tmp_date_migration ("
         "ticker TEXT, "
@@ -523,6 +523,39 @@ def init_db(db_path: Optional[str] = None, allow_external: bool = False) -> None
             logger.info("database_initialized", extra={"db_path": db_path})
     finally:
         conn.close()
+
+
+def get_last_snapshot_payload(
+    ticker: str,
+    conn: Optional[sqlite3.Connection] = None,
+    db_path: Optional[str] = None,
+) -> Optional[str]:
+    """Retorna o payload JSON do último snapshot para um ticker.
+
+    Parameters:
+        ticker: Código do ticker (ex: 'PETR4').
+        conn: Conexão SQLite existente (opcional).
+        db_path: Caminho para o banco (usado se conn não for fornecido).
+
+    Returns:
+        String JSON do payload ou None se não encontrado.
+    """
+    close_conn = False
+    if conn is None:
+        conn = _connect(db_path)
+        close_conn = True
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT payload FROM snapshots WHERE ticker = ? "
+            "ORDER BY created_at DESC LIMIT 1",
+            (ticker,),
+        )
+        row = cur.fetchone()
+        return row[0] if row else None
+    finally:
+        if close_conn:
+            conn.close()
 
 
 def record_snapshot_metadata(
@@ -791,14 +824,14 @@ def resolve_existing_ticker(
         close_conn = True
 
     try:
-        return _extracted_from_resolve_existing_ticker_25(conn, candidates)
+        return _query_existing_tickers(conn, candidates)
     finally:
         if close_conn:
             conn.close()
 
 
-# TODO Rename this here and in `resolve_existing_ticker`
-def _extracted_from_resolve_existing_ticker_25(conn, candidates):
+def _query_existing_tickers(conn, candidates):
+    """Consulta quais tickers dos candidatos já existem na tabela prices."""
     cur = conn.cursor()
     if len(candidates) == 2:
         cur.execute(

@@ -114,29 +114,28 @@ class TestYFinanceAdapter:
     def test_adapter_initialization(self):
         """Testa inicialização com parâmetros padrão."""
         adapter = YFinanceAdapter()
-        self._extracted_from_test_adapter_custom_initialization_4(adapter, 3, 2.0, 30)
+        self._assert_adapter_config(adapter, 3, 2.0, 30)
 
     def test_adapter_custom_initialization(self):
         """Testa inicialização com parâmetros customizados."""
         adapter = YFinanceAdapter(max_retries=5, backoff_factor=1.5, timeout=60)
-        self._extracted_from_test_adapter_custom_initialization_4(adapter, 5, 1.5, 60)
+        self._assert_adapter_config(adapter, 5, 1.5, 60)
 
-    # TODO: rename this helper and update references in
-    # `test_adapter_initialization` and `test_adapter_custom_initialization`
-    def _extracted_from_test_adapter_custom_initialization_4(
+    def _assert_adapter_config(
         self,
         adapter,
-        arg1,
-        arg2,
-        arg3,
+        expected_retries,
+        expected_backoff,
+        expected_timeout,
     ):
-        assert adapter.max_retries == arg1
-        assert adapter.backoff_factor == arg2
-        assert adapter.timeout == arg3
+        """Verifica configuração de retry do adapter."""
+        assert adapter.max_retries == expected_retries
+        assert adapter.backoff_factor == expected_backoff
+        assert adapter.timeout == expected_timeout
 
     def test_normalize_ticker_b3(self):
         """Testa normalização de tickers B3 (adiciona .SA)."""
-        adapter = self._extracted_from_test_normalize_ticker_non_b3_3(
+        adapter = self._assert_ticker_normalization(
             "PETR4", "PETR4.SA", "vale3", "VALE3.SA"
         )
         assert adapter._normalize_ticker("ITUB3") == "ITUB3.SA"
@@ -148,42 +147,39 @@ class TestYFinanceAdapter:
 
     def test_normalize_ticker_non_b3(self):
         """Testa que tickers sem número não recebem .SA."""
-        # helper já realiza asserções; não capturamos o resultado
-        self._extracted_from_test_normalize_ticker_non_b3_3(
+        self._assert_ticker_normalization(
             "AAPL", "AAPL", "MSFT", "MSFT"
         )
 
-    # TODO: rename this helper and update references in
-    # `test_normalize_ticker_b3` and `test_normalize_ticker_non_b3`
-    def _extracted_from_test_normalize_ticker_non_b3_3(
+    def _assert_ticker_normalization(
         self,
-        arg0,
-        arg1,
-        arg2,
-        arg3,
+        ticker_a,
+        expected_a,
+        ticker_b,
+        expected_b,
     ):
-        result = YFinanceAdapter()
-        assert result._normalize_ticker(arg0) == arg1
-        assert result._normalize_ticker(arg2) == arg3
-        return result
+        """Verifica normalização de dois tickers."""
+        adapter = YFinanceAdapter()
+        assert adapter._normalize_ticker(ticker_a) == expected_a
+        assert adapter._normalize_ticker(ticker_b) == expected_b
+        return adapter
 
     def test_normalize_date_yyyy_mm_dd(self):
         """Testa normalização de data YYYY-MM-DD (já normalizada)."""
-        self._extracted_from_test_normalize_date_mm_dd_yyyy_3(
+        self._assert_date_normalization(
             "2024-01-01", "2024-01-01", "2024-12-31"
         )
 
-    # TODO: rename this helper and update references in
-    # `test_normalize_date_yyyy_mm_dd` and `test_normalize_date_mm_dd_yyyy`
-    def _extracted_from_test_normalize_date_mm_dd_yyyy_3(
+    def _assert_date_normalization(
         self,
-        arg0,
-        arg1,
-        arg2,
+        date_input,
+        expected_output,
+        second_date,
     ):
+        """Verifica normalização de datas no adapter."""
         adapter = YFinanceAdapter()
-        assert adapter._normalize_date(arg0) == arg1
-        assert adapter._normalize_date(arg2) == "2024-12-31"
+        assert adapter._normalize_date(date_input) == expected_output
+        assert adapter._normalize_date(second_date) == "2024-12-31"
 
     @patch("src.adapters.yfinance_adapter.web.DataReader")
     def test_fetch_success(self, mock_datareader):

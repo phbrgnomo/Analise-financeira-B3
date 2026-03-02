@@ -41,8 +41,8 @@ def compute_returns(
 ) -> pd.DataFrame | None:
     """Compute simple daily returns for `ticker` and persist to `returns` table.
 
-    - Reads `prices` from provided `conn` (sqlite3.Connection). If `conn` is None,
-      raises ValueError (caller should inject connection in tests/CLI).
+    - Reads `prices` from provided ``repo`` adapter.  When ``repo`` is None a
+      :class:`DefaultDatabaseClient` is created automatically.
     - Uses `close` column when present, otherwise looks for common variants.
     - Creates `returns` table idempotently and upserts by (ticker, date, return_type)
       using `INSERT OR REPLACE` for SQLite compatibility.
@@ -260,9 +260,9 @@ def correlacao(ativos: list[str]) -> pd.DataFrame:
             fp = DATA_DIR / f"{a}.csv"
             df1 = pd.read_csv(fp)
         except OSError as e:
-            print(f"Dados de {a} não encontrados: {e}")
+            logger.warning("Dados de %s não encontrados: %s", a, e)
             continue
-        df1.rename({"Return": f"{a}"}, axis=1, inplace=True)
+        df1 = df1.rename({"Return": f"{a}"}, axis=1)
         ret_a = df1[f"{a}"]
         new_df[f"{a}"] = ret_a.copy()
     return new_df.corr(method="pearson")

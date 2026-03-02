@@ -14,8 +14,10 @@ def project_root() -> Path:
     return Path(__file__).resolve().parents[1]
 
 
-# Paths comuns usados pelo pipeline
-SNAPSHOTS_DIR = Path("snapshots")
-RAW_DIR = Path("raw")
-METADATA_DIR = Path("metadata")
-DATA_DIR = Path("dados")
+# Paths comuns usados pelo pipeline — resolvidos a partir do project root
+# para garantir comportamento correto independente do CWD.
+_ROOT = project_root()
+SNAPSHOTS_DIR = _ROOT / "snapshots"
+RAW_DIR = _ROOT / "raw"
+METADATA_DIR = _ROOT / "metadata"
+DATA_DIR = _ROOT / "dados"

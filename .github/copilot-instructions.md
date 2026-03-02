@@ -12,7 +12,7 @@
 ## Architecture
 - Always reference `docs/architecture.md` for high-level design and rationale.
 - Single-package Python app: core modules live in `src/` (ex.: `src/db.py`, `src/main.py`, `src/validation.py`).
-- Persistence: lightweight SQLite via SQLAlchemy Core; `dados/` holds runtime DB and data snapshots (`snapshots/`, `dados/`).
+- Persistence: lightweight SQLite via `sqlite3` (standard library); `dados/` holds runtime DB and data snapshots (`snapshots/`, `dados/`).
 - ETL and adapters live under `src/adapters/`, `src/etl/`, and `scripts/` for small helpers.
 - **The adapter factory (`src/adapters/factory.py`) is the canonical entry point**; all data-provider logic should obtain instances via `get_adapter()` or `register_adapter()`.
 - Adapter guidelines and patterns are in `docs/modules/adapter-guidelines.md` (fetch helpers, retry logic, metadata, testing).
@@ -36,13 +36,13 @@
 ## Project Conventions
 - Data files: small example CSVs are kept in `dados/` and `snapshots/` for tests—avoid committing large raw datasets. Place additional sample files under `dados/samples` or `snapshots/` and add a corresponding checksum entry in `snapshots/checksums.json` when needed.
 - O helper legado de coleta foi removido; utilize apenas a adapter factory.
-- DB path default: `dados/data.db`. Tests typically inject a temporary `engine` or override `db_path` via fixtures; follow patterns in `tests/conftest.py`.
+- DB path default: `dados/data.db`. Tests typically inject a temporary `conn` or override `db_path` via fixtures; follow patterns in `tests/conftest.py`.
 - Idempotency: `src/db.py` computes a `raw_checksum` to avoid unnecessary upserts—respect this behavior when writing adapters or ETL scripts.
 - CLI helpers: many scripts in `scripts/` (e.g. `validate_snapshots.py`, `init_ingest_db.py`) exist for one-off tasks; read their headers when extending.
 
 ## Integration Points
 - External APIs: `yfinance` (see `pyproject.toml`)—mock network calls in unit tests using fixtures in `tests/fixtures`.
-- Persistence: SQLite via SQLAlchemy (see `src/db.py`); prefer `engine` injection in tests.
+- Persistence: SQLite via `sqlite3` (see `src/db.py`); prefer `conn` injection in tests.
 
 ## Security
 - Secrets/config: use environment variables and `.env` (project uses `python-dotenv`). Do NOT commit credentials or `.env` files.

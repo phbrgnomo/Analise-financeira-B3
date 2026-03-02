@@ -4,10 +4,13 @@ Small helpers to compute SHA256 checksums for files and bytes.
 """
 
 import hashlib
+import logging
 from pathlib import Path
 from typing import Union
 
 import pandas as pd
+
+logger = logging.getLogger(__name__)
 
 
 def sha256_file(path: Union[str, Path]) -> str:
@@ -55,12 +58,21 @@ def serialize_df_bytes(
         try:
             columns = sorted(df_to_serialize.columns)
         except Exception:
+            logger.warning(
+                "Não foi possível ordenar colunas do DataFrame; "
+                "usando ordem original (checksum pode ser "
+                "não-determinístico)"
+            )
             columns = None
 
     if columns is not None:
         try:
             df_to_serialize = df_to_serialize.reindex(columns=columns)
         except Exception:
+            logger.warning(
+                "Não foi possível reindexar colunas do DataFrame; "
+                "usando cópia sem reordenação"
+            )
             df_to_serialize = df_to_serialize.copy()
 
     # Sort by index to make output deterministic across runs
@@ -72,6 +84,11 @@ def serialize_df_bytes(
             na_rep=na_rep,
         )
     except Exception:
+        logger.warning(
+            "Falha ao ordenar DataFrame por índice; "
+            "serializando sem sort (checksum pode ser "
+            "não-determinístico)"
+        )
         csv_str = df_to_serialize.to_csv(
             index=index,
             date_format=date_format,
