@@ -56,14 +56,16 @@ def test_persist_and_log_invalid_rows(tmp_path):
     assert metadata_path.exists()
     text = metadata_path.read_text(encoding="utf-8")
     lines = [line for line in text.splitlines() if line.strip()]
-    assert len(lines) >= 1
+    assert lines
     recorded = json.loads(lines[-1])
     assert recorded["provider"] == "yfinance"
     assert recorded["ticker"] == "PETR4.SA"
     assert recorded["invalid_count"] == len(details.get("error_records", []))
 
 
-def test_persist_invalid_rows_drop_failure_logs_exception(tmp_path, caplog, monkeypatch):
+def test_persist_invalid_rows_drop_failure_logs_exception(
+    tmp_path, caplog, monkeypatch
+):
     """If removing the metadata column fails, we still persist and log a warning.
 
     The warning message should include the underlying exception text so that

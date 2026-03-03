@@ -120,9 +120,11 @@ def _write_returns_core(conn, df, return_type):
             f"INSERT INTO returns ({cols_sql}) VALUES (?,?,?,?,?)"
         )
 
+        # track how many rows have been handled in case an error
+        # occurs before the loop (e.g. BEGIN failure); initialize here
+        processed = 0
         try:
             conn.execute("BEGIN")
-            processed = 0
             for row in rows:
                 (
                     ticker_val,

@@ -205,7 +205,7 @@ def test_write_returns_preserves_created_at_when_upsert_not_supported(
     assert first_created == second_created
 
 
-def test_fallback_failure_logs_processed_count(monkeypatch):
+def test_fallback_failure_logs_processed_count(monkeypatch):  # noqa: C901
     """Logger.exception is invoked with the number of rows processed.
 
     Instead of relying on the logging subsystem, we patch the logger to
@@ -233,6 +233,7 @@ def test_fallback_failure_logs_processed_count(monkeypatch):
 
         def execute(self, sql, params=None):
             # only fail when updating second row
+            # sourcery skip: no-conditionals-in-tests
             if sql.strip().startswith("UPDATE returns SET"):
                 self.row_idx += 1
                 if self.row_idx == 2:
@@ -264,7 +265,11 @@ def test_fallback_failure_logs_processed_count(monkeypatch):
 
     conn = FakeConn()
     df = pd.DataFrame(
-        {"ticker": ["A", "B"], "date": ["2026-01-01", "2026-01-02"], "return_value": [1, 2]}
+        {
+            "ticker": ["A", "B"],
+            "date": ["2026-01-01", "2026-01-02"],
+            "return_value": [1, 2],
+        }
     )
 
     with pytest.raises(RuntimeError):

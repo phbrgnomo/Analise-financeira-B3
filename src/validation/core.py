@@ -87,7 +87,8 @@ def _extract_invalid_rows_from_schema_errors(
 def _parse_failure_cases(
     failure_cases: pd.DataFrame,
 ) -> Tuple[IndexSet, ErrorRecords]:
-    """Analisa o DataFrame ``failure_cases`` gerado pelo pandera em índices e registros."""
+    """Analisa o DataFrame ``failure_cases`` gerado pelo pandera
+    em índices e registros."""
     invalid_indices: IndexSet = set()
     error_records: ErrorRecords = []
     for _, row in failure_cases.iterrows():
@@ -161,11 +162,11 @@ def _heuristic_high_low_violations(
 def _process_schema_exception(
     df: pd.DataFrame, exc: Exception
 ) -> Tuple[pd.DataFrame, ErrorRecords]:
-    """Normaliza exceções SchemaErrors ou SchemaError do pandera em (invalid_df, error_records).
-
+    """Normaliza exceções SchemaErrors ou SchemaError do pandera em
+    (invalid_df, error_records).
     Centraliza a lógica usada por ``validate_dataframe`` para manter a
     complexidade reduzida.
-    """
+    """  # noqa: E501
     if isinstance(exc, SchemaErrors):
         invalid_df, error_records = (
             _extract_invalid_rows_from_schema_errors(df, exc)
@@ -243,10 +244,11 @@ def _process_schema_exception(
 # ---------------------------------------------------------------------------
 
 
-def validate_dataframe(
-    df: pd.DataFrame, schema: Optional[type] = None, lazy: bool = True
+def validate_dataframe(  # noqa: E501
+    df: pd.DataFrame, schema: Optional[Any] = None, lazy: bool = True
 ) -> Tuple[pd.DataFrame, pd.DataFrame, ValidationSummary]:
-    """Valida um DataFrame contra o esquema canônico e separa linhas válidas e inválidas.
+    """Valida um DataFrame contra o esquema canônico e separa linhas válidas
+    e inválidas.
 
     Args:
         df: DataFrame a ser validado (deve estar no formato canônico)
@@ -286,25 +288,18 @@ def validate_dataframe(
         )
         return valid_df, pd.DataFrame(), summary
 
-    except SchemaErrors as e:
-        logger.warning(
-            "Schema validation failed with SchemaErrors: %s",
-            str(e)[:200],
-        )
-        invalid_df, error_records = _process_schema_exception(df, e)
-
-    except SchemaError as e:
-        logger.warning(
-            "Schema validation failed with SchemaError: %s",
-            str(e)[:200],
-        )
-        invalid_df, error_records = _process_schema_exception(df, e)
-
-    except SchemaError as e:
-        logger.warning(
-            "Schema validation failed with SchemaError: %s",
-            str(e)[:200],
-        )
+    except (SchemaErrors, SchemaError) as e:
+        # log different message depending on type
+        if isinstance(e, SchemaErrors):
+            logger.warning(
+                "Schema validation failed with SchemaErrors: %s",
+                str(e)[:200],
+            )
+        else:
+            logger.warning(
+                "Schema validation failed with SchemaError: %s",
+                str(e)[:200],
+            )
         invalid_df, error_records = _process_schema_exception(df, e)
 
     # Common handling for SchemaErrors or SchemaError:
@@ -398,7 +393,7 @@ def check_threshold(
 # ---------------------------------------------------------------------------
 
 
-def _normalize_threshold_value(
+def _normalize_threshold_value(  # noqa: C901
     threshold: float | str | None,
     *,
     source: str = "env",

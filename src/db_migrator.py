@@ -16,7 +16,7 @@ from typing import Optional, Set
 # statements without breaking on semicolons contained within literals or
 # comments. Use it if available; otherwise fall back to naive splitting.
 try:
-    import sqlparse
+    import sqlparse  # type: ignore[import]
 except ImportError:  # pragma: no cover - dependency optional
     sqlparse = None
 

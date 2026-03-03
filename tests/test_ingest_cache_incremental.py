@@ -210,7 +210,9 @@ def test_shared_diff_helper_and_cli_agree():
         def record_snapshot_metadata(self, metadata, conn=None) -> None:
             pass
 
-        def write_prices(self, df, ticker, conn=None, db_path=None, source="provider") -> None:
+        def write_prices(
+            self, df, ticker, conn=None, db_path=None, source="provider"
+        ) -> None:
             pass
 
     normalized = _normalize_df(df)
@@ -262,7 +264,11 @@ def test_incremental_ingest_only_new_and_changed_rows(tmp_path, monkeypatch):
 
 
 # TODO Rename this here and in `test_incremental_ingest_only_new_and_changed_rows`
-def _extracted_from_test_incremental_ingest_only_new_and_changed_rows_6(arg0, arg1, db_path, arg3):
+# noqa: E501
+
+def _extracted_from_test_incremental_ingest_only_new_and_changed_rows_6(
+    arg0, arg1, db_path, arg3
+):
     df1 = make_sample_df(["2026-01-01", arg0], values=[10, arg1])
     r1 = ingest_from_snapshot(df1, "BAR", db_path=str(db_path))
     assert not r1["cached"]

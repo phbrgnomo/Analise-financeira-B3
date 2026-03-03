@@ -17,7 +17,7 @@ from src.tickers import normalize_b3_ticker, ticker_variants
 logger = logging.getLogger(__name__)
 
 
-def write_prices(
+def write_prices(  # noqa: C901
     df: pd.DataFrame,
     ticker: str,
     conn: Optional[sqlite3.Connection] = None,

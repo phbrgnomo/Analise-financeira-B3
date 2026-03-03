@@ -17,7 +17,10 @@ from src.validation.core import _normalize_threshold_value
 )
 def test_normalize_threshold_strict_valid_values(input_value, expected):
     """Verify that valid threshold inputs normalize to expected numeric values."""
-    assert _normalize_threshold_value(input_value, source="arg") == pytest.approx(expected)
+    assert (
+        _normalize_threshold_value(input_value, source="arg")
+        == pytest.approx(expected)
+    )
 
 
 @pytest.mark.parametrize(
