@@ -101,16 +101,18 @@ def _compute_returns_for_ticker(
 
 @app.command("run")
 def run_cmd(
-    ticker: Optional[str] = typer.Option(
-        None,
+    ticker: str = typer.Option(
+        "",
         help=(
             "Ticker B3 específico (ex.: PETR4). Quando omitido, usa tickers "
             "padrão do projeto."
         ),
+        is_flag=False,
     ),
     provider: str = typer.Option(
         "yfinance",
         help="Nome do provider/adaptador a ser usado (ex.: yfinance)",
+        is_flag=False,
     ),
     ticker_arg: Optional[str] = typer.Argument(None, hidden=True),
     provider_arg: Optional[str] = typer.Argument(None, hidden=True),
@@ -123,7 +125,7 @@ def run_cmd(
     """Executa fluxo ETL principal (ingestão + cálculo de retornos)."""
     from src.ingest.pipeline import ingest
 
-    effective_ticker = ticker or ticker_arg
+    effective_ticker = ticker or ticker_arg or None
     effective_provider = provider or provider_arg or "yfinance"
     effective_force_refresh = as_bool(force_refresh)
 
@@ -169,23 +171,36 @@ def run_cmd(
 
 @app.command("compute-returns")
 def compute_returns_cmd(
-    ticker: Optional[str] = typer.Option(
-        None,
+    ticker: str = typer.Option(
+        "",
         help=(
             "Ticker B3 para cálculo de retornos (ex.: PETR4, ITUB4, BOVA11). "
             "Quando omitido, calcula para todos os tickers existentes no banco."
         ),
+        is_flag=False,
     ),
-    ticker_arg: Optional[str] = typer.Argument(None, hidden=True),
-    start: Optional[str] = typer.Option(None, help="Data inicial YYYY-MM-DD"),
-    end: Optional[str] = typer.Option(None, help="Data final YYYY-MM-DD"),
+    start: Optional[str] = typer.Option(
+        None,
+        help="Data inicial YYYY-MM-DD",
+        is_flag=False,
+    ),
+    end: Optional[str] = typer.Option(
+        None,
+        help="Data final YYYY-MM-DD",
+        is_flag=False,
+    ),
     dry_run: bool = typer.Option(
         False, "--dry-run", help="Não persiste, apenas exibe resultados"
     ),
+    ticker_arg: Optional[str] = typer.Argument(None, hidden=True),
 ) -> None:
     """Calcula retornos diários para um ticker (ou todos) e persiste no DB."""
-    effective_ticker = ticker or ticker_arg
+    effective_ticker = ticker or ticker_arg or None
     effective_dry_run = as_bool(dry_run)
+
+    # start/end may already be None when not provided
+    # (previous logic converted empty strings, but Optional annotation
+    # lets Typer produce None directly).
 
     targets: list[str]
     if effective_ticker is not None:
@@ -229,40 +244,44 @@ def ingest_snapshot_cmd(
     snapshot_path: str = typer.Argument(
         ..., help="Caminho do arquivo CSV local a ser importado para o banco"
     ),
-    ticker: Optional[str] = typer.Option(
-        None,
+    ticker: str = typer.Option(
+        "",
         help=(
             "Ticker B3 associado ao snapshot quando o CSV não traz coluna ticker"
         ),
+        is_flag=False,
     ),
-    ticker_arg: Optional[str] = typer.Argument(None, hidden=True),
     force_refresh: bool = typer.Option(
         False, "--force-refresh", help="Ignora cache e processa novamente"
     ),
-    ttl: Optional[int] = typer.Option(
-        None, help="TTL do cache em segundos (usa SNAPSHOT_TTL se omitido)"
+    ttl: float = typer.Option(
+        -1.0,
+        help="TTL do cache em segundos (usa SNAPSHOT_TTL se omitido)",
+        is_flag=False,
     ),
-    cache_file: Optional[str] = typer.Option(
-        None, help="Arquivo JSON usado para armazenar o cache"
+    cache_file: str = typer.Option(
+        "", help="Arquivo JSON usado para armazenar o cache", is_flag=False
     ),
+    ticker_arg: Optional[str] = typer.Argument(None, hidden=True),
 ) -> None:
     """Importa CSV local no SQLite com cache/checksum e ingestão incremental."""
     from src import ingest_cli
 
     effective_ticker = ticker or ticker_arg
     normalized_ticker = (
-        _normalize_cli_ticker(effective_ticker)
-        if effective_ticker
-        else None
+        _normalize_cli_ticker(effective_ticker) if effective_ticker else None
     )
     effective_force_refresh = as_bool(force_refresh)
+    # translate CLI defaults back to None semantics for the helper
+    ttl_arg = None if ttl < 0 else ttl
+    cache_arg = cache_file or None
     try:
         result = ingest_cli.ingest_snapshot(
             snapshot_path,
             normalized_ticker,
             force_refresh=effective_force_refresh,
-            ttl=ttl,
-            cache_file=cache_file,
+            ttl=ttl_arg,
+            cache_file=cache_arg,
         )
     except Exception as e:
         typer.echo(f"Falha ao ingerir snapshot: {e}")

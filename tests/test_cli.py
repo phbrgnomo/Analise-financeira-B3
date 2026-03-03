@@ -14,8 +14,9 @@ def test_cli_help():
     runner = CliRunner()
     result = runner.invoke(app, ["--help"])
     assert result.exit_code == 0
-    assert "Options:" in result.output
-
+    # rich help output varies across Typer/Click versions; just ensure the
+    # usage line is present rather than hard-coding the "Options" label.
+    assert "Usage:" in result.output
 
 def test_ingest_snapshot_help():
     runner = CliRunner()
@@ -108,3 +109,151 @@ def test_run_uses_ingest_pipeline(monkeypatch):
     )
     # e não deve haver chamadas extras
     assert len(calls_to_compute) == len(ingest_tickers)
+
+
+# ---------------------------------------------------------------------------
+# missing-command tests added per review
+# ---------------------------------------------------------------------------
+
+def test_compute_returns_single_ticker(monkeypatch):
+    """`compute-returns` invoca o helper e imprime linhas geradas."""
+    from src.main import app
+
+    called: list[tuple] = []
+
+    def fake_compute(ticker, start, end, dry_run):
+        called.append((ticker, start, end, dry_run))
+        return 3
+
+    monkeypatch.setattr("src.main._compute_returns_for_ticker", fake_compute)
+    # ensure no DB dependency when listing all tickers
+    monkeypatch.setattr("src.db.list_price_tickers", lambda: ["PETR4"])
+
+    runner = CliRunner()
+    result = runner.invoke(app, ["compute-returns", "--ticker", "PETR4"])
+    assert result.exit_code == 0
+    assert "retornos" in result.output
+    assert called == [("PETR4", None, None, False)]
+
+
+def test_compute_returns_date_range(monkeypatch):
+    """Passing ``--start`` and ``--end`` should reach helper with values."""
+    from src.main import app
+
+    called = []
+
+    def fake_compute(ticker, start, end, dry_run):
+        called.append((ticker, start, end, dry_run))
+        return 1
+
+    monkeypatch.setattr("src.main._compute_returns_for_ticker", fake_compute)
+    # provide a ticker so we exercise the loop
+    monkeypatch.setattr("src.db.list_price_tickers", lambda: ["PETR4"])
+    monkeypatch.setattr("src.db.resolve_existing_ticker", lambda t: t)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        app,
+        [
+            "compute-returns",
+            "--start",
+            "2020-01-01",
+            "--end",
+            "2020-01-31",
+        ],
+    )
+    assert result.exit_code == 0
+    assert called == [("PETR4", "2020-01-01", "2020-01-31", False)]
+
+
+def test_compute_returns_all_when_empty(monkeypatch):
+    """Se não há tickers no banco, CLI imprime aviso e retorna 0."""
+    from src.main import app
+
+    monkeypatch.setattr("src.db.list_price_tickers", lambda: [])
+
+    runner = CliRunner()
+    result = runner.invoke(app, ["compute-returns"])
+    assert result.exit_code == 0
+    assert "Nenhum ticker encontrado" in result.output
+
+
+def test_export_csv_success(tmp_path, monkeypatch):
+    """`export-csv` escreve arquivo quando ticker existe."""
+    import pandas as pd
+
+    from src.main import app
+
+    # resolve returns normalized but we don't care about output option
+    monkeypatch.setattr("src.db.resolve_existing_ticker", lambda t: t)
+    monkeypatch.setattr(
+        "src.db.read_prices",
+        lambda t, start=None, end=None: pd.DataFrame(
+            {"date": ["2021-01-01"], "price": [1]}
+        ),
+    )
+    # intercept default DATA_DIR in main module so file lands in tmp_path
+    import src.main as mainmod
+    monkeypatch.setattr(mainmod, "DATA_DIR", tmp_path)
+
+    runner = CliRunner()
+    result = runner.invoke(app, ["export-csv", "--ticker", "PETR4"])
+    assert result.exit_code == 0
+    out = tmp_path / "PETR4.csv"
+    assert out.exists(), "arquivo de saída deveria ser criado"
+    assert "linha" in result.output
+
+
+def test_export_csv_not_found(monkeypatch):
+    """CLI falha se o ticker válido não estiver no banco nem na variante."""
+    from src.main import app
+    # use a valid ticker so normalization passes
+    monkeypatch.setattr("src.db.resolve_existing_ticker", lambda t: None)
+    monkeypatch.setattr("src.tickers.ticker_variants", lambda t: (t, f"{t}.SA"))
+
+    runner = CliRunner()
+    result = runner.invoke(app, ["export-csv", "--ticker", "PETR4"])
+    assert result.exit_code != 0
+    assert "não encontrado" in result.stderr.lower()
+
+
+def test_ingest_snapshot_command(monkeypatch, tmp_path):
+    """Invocar `ingest-snapshot` dispara ingest_snapshot() com argumentos."""
+    from src.main import app
+
+    called = []
+
+    def fake_snapshot(path, ticker, force_refresh=False, ttl=None, cache_file=None):
+        called.append((path, ticker, force_refresh, ttl, cache_file))
+        return {"status": "ok"}
+
+    monkeypatch.setattr("src.ingest_cli.ingest_snapshot", fake_snapshot)
+
+    snapshot = tmp_path / "foo.csv"
+    snapshot.write_text("date,close\n2021-01-01,1")
+
+    runner = CliRunner()
+    # snapshot path is a required positional argument and must come first
+    result = runner.invoke(
+        app,
+        [
+            "ingest-snapshot",
+            str(snapshot),
+            "--ticker",
+            "PETR4",
+            "--force-refresh",
+            "--ttl",
+            "123",
+            "--cache-file",
+            "foo.json",
+        ],
+    )
+    assert result.exit_code == 0
+    assert called and called[0][0] == str(snapshot)
+    assert called[0][1] == "PETR4"
+    assert called[0][2] is True
+    # TTL and cache args should also be passed through
+    # CLI provides numeric ttl which is converted to float
+    assert called[0][3] == 123.0
+    assert called[0][4] == "foo.json"
+    assert "Ingestão de snapshot concluída" in result.output

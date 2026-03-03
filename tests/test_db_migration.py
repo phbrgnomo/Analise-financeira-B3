@@ -56,8 +56,9 @@ def test_ensure_schema_skips_migration_when_version_set(monkeypatch):
     def fake_migrate(c):
         called["count"] += 1
 
+    # migration helper now lives in migrations module
     monkeypatch.setattr(
-        "src.db.schema._migrate_prices_date_column", fake_migrate
+        "src.db.migrations._migrate_prices_date_column", fake_migrate
     )
 
     # second call should skip the migration completely
