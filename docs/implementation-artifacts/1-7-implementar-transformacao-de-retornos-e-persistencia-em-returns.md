@@ -29,8 +29,8 @@ so that downstream notebooks and modeling code can read precomputed returns.
 
 - [x] Implement `compute_returns(ticker: str, start: Optional[date]=None, end: Optional[date]=None)` routine
   - [x] Load canonical `prices` for ticker via `db.read_prices(ticker, start, end)`
-  - [x] Compute simple daily returns: `return = price.close.pct_change()` (preserve date alignment)
-  - [x] Populate `returns` DataFrame with columns: `ticker, date, return, return_type, created_at`
+  - [x] Compute simple daily returns: `return_value = price.close.pct_change()` (preserve date alignment)
+  - [x] Populate `returns` DataFrame with columns: `ticker, date, return_value, return_type, created_at`
   - [x] Upsert into `returns` table by `(ticker, date, return_type)` using `INSERT OR REPLACE` / `ON CONFLICT` semantics
   - [x] Add telemetry/logging (job_id, rows_written, duration_ms) to `ingest_logs` or `metrics` as appropriate
 - [x] Add unit tests in `tests/` for happy path and edge cases (missing dates, duplicated runs)

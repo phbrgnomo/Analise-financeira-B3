@@ -53,3 +53,52 @@ db.write_returns(out, conn=conn)
 ```
 
 Referência: `docs/implementation-artifacts/1-7-implementar-transformacao-de-retornos-e-persistencia-em-returns.md`.
+
+## Compatibilidade e migração
+
+Observação: o nome canônico da coluna persistida usada pelo código do projeto
+é `return_value`. Alguns exemplos antigos e notebooks podem referir-se à
+coluna como `return` ou `Return`. Abaixo seguem estratégias de compatibilidade
+e um exemplo de migração quando for necessário renomear a coluna no banco.
+
+- Consulta compatível (mantém `return_value` como fonte da verdade, expõe alias):
+
+```sql
+SELECT date, return_value AS return
+FROM returns
+WHERE ticker = 'PETR4.SA'
+ORDER BY date;
+```
+
+- Criar uma view de compatibilidade (não altera dados, apenas expõe o alias):
+
+```sql
+CREATE VIEW IF NOT EXISTS returns_compat AS
+SELECT ticker, date, return_value AS "return", return_type, created_at
+FROM returns;
+```
+
+- Migração de coluna no SQLite (padrão seguro): criar nova tabela, copiar e
+  renomear. Exemplo para renomear `return_value` → `return` (ou o inverso):
+
+```sql
+BEGIN TRANSACTION;
+CREATE TABLE returns_new (
+  ticker TEXT,
+  date TEXT,
+  "return" REAL,
+  return_type TEXT,
+  created_at TEXT,
+  UNIQUE(ticker, date, return_type)
+);
+INSERT INTO returns_new (ticker, date, "return", return_type, created_at)
+  SELECT ticker, date, return_value, return_type, created_at FROM returns;
+DROP TABLE returns;
+ALTER TABLE returns_new RENAME TO returns;
+COMMIT;
+```
+
+Aviso: a migração destrói a tabela anterior — faça backup/export antes de
+executar em produção. Em muitos casos preferimos criar uma `view` de
+compatibilidade até que consumidores externos migrem para o campo
+`return_value`.
