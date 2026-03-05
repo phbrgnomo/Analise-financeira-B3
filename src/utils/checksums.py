@@ -50,10 +50,22 @@ def serialize_df_bytes(
     This helper is intended to produce a stable CSV bytes representation used
     both for writing raw files and for computing checksums so that different
     components generate the same digest when given the same DataFrame.
+
+    The function may encounter situations where pandas operations cannot be
+    performed (e.g. non-sortable columns); in those cases we log a *single*
+    warning for the entire process using ``_non_deterministic_checksum_warned``
+    so users aren't spammed by subsequent calls.
     """
+    # declare global once for the entire function so subsequent assignments
+    # aren't treated as local by the parser
+    global _non_deterministic_checksum_warned
+
     df_to_serialize = df
     # Default to deterministic alphabetical column ordering unless caller
-    # provided explicit `columns` ordering.
+    # provided explicit `columns` ordering.  When any of our helpers fail we
+    # scribble a warning; however such warnings tend to happen repeatedly in
+    # loops so we guard with a global flag so the user only sees one message
+    # per process.
     if columns is None:
         try:
             columns = sorted(df_to_serialize.columns)
@@ -61,21 +73,25 @@ def serialize_df_bytes(
             # Only catch errors we expect from attempting to sort non-sortable
             # column labels; other exceptions should propagate so the caller
             # can debug unexpected failures.
-            logger.warning(
-                "Não foi possível ordenar colunas do DataFrame; "
-                "usando ordem original (checksum pode ser "
-                "não-determinístico)"
-            )
+            if not _non_deterministic_checksum_warned:
+                logger.warning(
+                    "Não foi possível ordenar colunas do DataFrame; "
+                    "usando ordem original (checksum pode ser "
+                    "não-determinístico)"
+                )
+                _non_deterministic_checksum_warned = True
             columns = None
 
     if columns is not None:
         try:
             df_to_serialize = df_to_serialize.reindex(columns=columns)
         except Exception:
-            logger.warning(
-                "Não foi possível reindexar colunas do DataFrame; "
-                "usando cópia sem reordenação"
-            )
+            if not _non_deterministic_checksum_warned:
+                logger.warning(
+                    "Não foi possível reindexar colunas do DataFrame; "
+                    "usando cópia sem reordenação"
+                )
+                _non_deterministic_checksum_warned = True
             df_to_serialize = df_to_serialize.copy()
 
     # Sort by index to make output deterministic across runs
@@ -87,11 +103,13 @@ def serialize_df_bytes(
             na_rep=na_rep,
         )
     except Exception:
-        logger.warning(
-            "Falha ao ordenar DataFrame por índice; "
-            "serializando sem sort (checksum pode ser "
-            "não-determinístico)"
-        )
+        if not _non_deterministic_checksum_warned:
+            logger.warning(
+                "Falha ao ordenar DataFrame por índice; "
+                "serializando sem sort (checksum pode ser "
+                "não-determinístico)"
+            )
+            _non_deterministic_checksum_warned = True
         csv_str = df_to_serialize.to_csv(
             index=index,
             date_format=date_format,
@@ -101,5 +119,14 @@ def serialize_df_bytes(
 
     return csv_str.encode("utf-8")
 
+
+
+# module-level flags used by the warning guards above.  Older
+# versions of the code tracked each failure case separately; new logic uses
+# a single global guard so only the first warning is emitted.
+_non_deterministic_checksum_warned = False
+_warned_unsortable_columns = False  # kept for backward-compatibility tests
+_warned_reindex_failure = False
+_warned_sort_index_failure = False
 
 __all__ = ["sha256_file", "sha256_bytes", "serialize_df_bytes"]

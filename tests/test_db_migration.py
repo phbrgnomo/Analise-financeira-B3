@@ -1,5 +1,7 @@
 import sqlite3
 
+import pytest
+
 from src.db.schema import _ensure_schema
 
 
@@ -64,3 +66,20 @@ def test_ensure_schema_skips_migration_when_version_set(monkeypatch):
     # second call should skip the migration completely
     _ensure_schema(conn)
     assert called["count"] == 0
+
+
+def test_apply_migrations_failure_preserves_cause(tmp_path):
+    """A broken SQL file should raise MigrationError with original cause."""
+    from src import db_migrator
+    # create a migrations directory with invalid SQL
+    migdir = tmp_path / "migrations"
+    migdir.mkdir()
+    bad = migdir / "0000_bad.sql"
+    bad.write_text("THIS IS NOT SQL;")
+
+    conn = sqlite3.connect(":memory:")
+    with pytest.raises(db_migrator.MigrationError) as excinfo:
+        db_migrator.apply_migrations(conn, migrations_dir=str(migdir))
+    # original sqlite error should be chained as __cause__
+    assert isinstance(excinfo.value.__cause__, Exception)
+    assert "syntax error" in str(excinfo.value.__cause__).lower()

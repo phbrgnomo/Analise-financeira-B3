@@ -7,6 +7,7 @@ serialization utilities so generated snapshots are stable across runs.
 from __future__ import annotations
 
 import contextlib
+import logging
 import os
 import re
 from datetime import datetime
@@ -15,6 +16,8 @@ from pathlib import Path
 import pandas as pd
 
 from src.utils.checksums import serialize_df_bytes, sha256_bytes
+
+logger = logging.getLogger(__name__)
 
 
 def snapshot_checksum(df: pd.DataFrame) -> str:
@@ -48,17 +51,20 @@ def _snapshot_keep_latest() -> int:
     return get_snapshot_keep_latest()
 
 
-# regex para reconhecer nomes de snapshot no formato esperado (ticker-timestamp.csv)
+# regex para reconhecer nomes de snapshot no formato esperado
+# o ticker B3 consiste em caracteres alfanuméricos maiúsculos e pode
+# incluir um sufixo de provedor (por ex. ``.SA``), portanto restringimos o
+# grupo para evitar que arquivos arbitrários coincidam acidentalmente.
 _SNAPSHOT_FILENAME_RE = re.compile(
     r"""
-    ^(?P<ticker>[^-]+)              # ticker (anything except dash)
-    -(?P<timestamp>\d{8}T\d{6}Z?)  # timestamp like 20240101T235959 or 20240101T235959Z
-    (?:-(?P<suffix>[^.]+))?         # optional suffix before extension
-    \.csv$                          # .csv extension
+    ^
+    (?P<ticker>[A-Z0-9]+(?:\.[A-Z0-9]+)?)   # ticker maiúsculo com opcional ".SA"
+    -(?P<timestamp>\d{8}T\d{6}Z?)          # timestamp yyyyMMddTHHMMSS, Z suffix allowed
+    (?:-(?P<suffix>[^.]+))?                  # sufixo opcional antes da extensão
+    \.csv$                                   # extensão .csv
     """,
     re.VERBOSE,
 )
-
 
 def _parse_snapshot_timestamp(path: Path) -> tuple[datetime | None, float]:
     """Tenta extrair o timestamp a partir do nome do arquivo.
@@ -93,6 +99,11 @@ def _prune_old_snapshots(out_path: Path) -> None:
     Apenas arquivos que seguem o padrão de nome esperado são considerados
     snapshots. Arquivos CSV fora do padrão são ignorados e nunca removidos por
     este processo.
+
+    Logs em nível ``DEBUG`` as ações de pruning para ajudar a diagnosticar
+    possíveis exclusões inesperadas.  Se o nome do arquivo não casar com o
+    padrão conhecido, um aviso em DEBUG também é emitido para esclarecer que
+    nenhum pruning ocorrerá.
     """
     keep_latest = _snapshot_keep_latest()
 
@@ -115,9 +126,15 @@ def _prune_old_snapshots(out_path: Path) -> None:
                 continue
             candidate_files.append(path)
     else:
-        # Nome fora do padrão: não sabemos o ticker, portanto não fazemos
-        # pruning algum para evitar exclusões equivocadas.  Isto é raro e
+        # nome fora do padrão: não sabemos o ticker, portanto não fazemos
+        # pruning algum para evitar exclusões equivocadas. Isto é raro e
         # significa que o arquivo não segue o formato `ticker-timestamp.csv`.
+        # logamos como WARNING para que seja visível em cenários onde o
+        # comando é executado manualmente e nenhum filename válido foi usado.
+        logger.warning(
+            "_prune_old_snapshots: nome '%s' não combina com padrão, pulando pruning",
+            out_path.name,
+        )
         candidate_files = []
 
     # Ordena por timestamp extraído do nome (mais recente primeiro).
@@ -133,7 +150,11 @@ def _prune_old_snapshots(out_path: Path) -> None:
 
     files = sorted(candidate_files, key=_sort_key)
 
+    if not candidate_files:
+        logger.debug("_prune_old_snapshots: nenhuma snapshot candidata a pruning")
+
     for old_csv in files[keep_latest:]:
+        logger.debug("_prune_old_snapshots: removendo snapshot antiga %s", old_csv.name)
         # ignore common filesystem errors; let other exceptions bubble
         with contextlib.suppress(OSError):
             old_csv.unlink()

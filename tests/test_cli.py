@@ -78,7 +78,8 @@ def test_run_uses_ingest_pipeline(monkeypatch):
 
     def fake_compute(ticker: str, *args, **kwargs):
         calls_to_compute.append(ticker)
-        return 1
+        # mimic structure returned by helper
+        return {"rows": 1, "persisted": True, "sample_df": None}
 
     monkeypatch.setattr("src.main._compute_returns_for_ticker", fake_compute)
 
@@ -123,7 +124,7 @@ def test_compute_returns_single_ticker(monkeypatch):
 
     def fake_compute(ticker, start, end, dry_run):
         called.append((ticker, start, end, dry_run))
-        return 3
+        return {"rows": 3, "persisted": True, "sample_df": None}
 
     monkeypatch.setattr("src.main._compute_returns_for_ticker", fake_compute)
     # ensure no DB dependency when listing all tickers
@@ -144,7 +145,7 @@ def test_compute_returns_date_range(monkeypatch):
 
     def fake_compute(ticker, start, end, dry_run):
         called.append((ticker, start, end, dry_run))
-        return 1
+        return {"rows": 1, "persisted": True, "sample_df": None}
 
     monkeypatch.setattr("src.main._compute_returns_for_ticker", fake_compute)
     # provide a ticker so we exercise the loop

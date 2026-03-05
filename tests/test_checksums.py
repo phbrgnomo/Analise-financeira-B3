@@ -56,3 +56,74 @@ def test_sha256_file_and_bytes(tmp_path):
     bytes_digest = sha256_bytes(data)
 
     assert file_digest == bytes_digest
+
+
+def test_serialize_df_warnings_only_once(caplog):
+    """When serialize_df_bytes encounters problems it should warn just once.
+
+    This prevents log spam when the function is called repeatedly in loops.
+    The code recently consolidated several per-case guards into a single
+    ``_non_deterministic_checksum_warned`` flag; tests need to reset that
+    between scenarios so each block remains isolated.
+    """
+    import pandas as pd
+
+    from src.utils import checksums
+
+    # helper to clear the global warning state between sub-exercises
+    def reset_guard():
+        checksums._non_deterministic_checksum_warned = False
+        # keep the old flags around too so existing assertions still work
+        checksums._warned_unsortable_columns = False
+        checksums._warned_reindex_failure = False
+        checksums._warned_sort_index_failure = False
+
+    # craft a DataFrame with mixed-type column labels to trigger a
+    # TypeError during sorting (str vs int).  pandas happily accepts mixed
+    # labels, but our helper will hit the exception and log a warning.
+    df = pd.DataFrame([[1, 2]], columns=["a", 1])
+    caplog.set_level("WARNING")
+
+    reset_guard()
+    checksums.serialize_df_bytes(df)
+    checksums.serialize_df_bytes(df)
+    # should warn about unsortable columns exactly once
+    assert caplog.text.count("ordenar colunas") == 1
+
+    # force a reindex failure by monkeypatching DataFrame.reindex to raise
+    class BadDF(pd.DataFrame):
+        def reindex(self, *args, **kwargs):
+            raise RuntimeError("boom")
+
+    df2 = BadDF([[1]])
+    caplog.clear()
+    caplog.set_level("WARNING")
+    reset_guard()
+    checksums.serialize_df_bytes(df2)
+    checksums.serialize_df_bytes(df2)
+    assert caplog.text.count("reindexar colunas") == 1
+
+    # sort_index failure case: patch the method on DataFrame to guarantee
+    # an exception rather than relying on subclass dispatch quirks.
+    caplog.clear()
+    caplog.set_level("WARNING")
+    reset_guard()
+    orig_sort = pd.DataFrame.sort_index
+    pd.DataFrame.sort_index = lambda self, *args, **kwargs: (_ for _ in ()).throw(
+        RuntimeError("nope")
+    )
+    try:
+        checksums.serialize_df_bytes(pd.DataFrame([[1]]))
+        checksums.serialize_df_bytes(pd.DataFrame([[1]]))
+    finally:
+        pd.DataFrame.sort_index = orig_sort
+    assert "ordenar DataFrame por índice" in caplog.text
+
+    # finally, ensure the global guard suppresses warnings across different
+    # failure types if it fires early
+    caplog.clear()
+    caplog.set_level("WARNING")
+    reset_guard()
+    checksums.serialize_df_bytes(df)   # triggers unsortable-col warnings
+    checksums.serialize_df_bytes(df2)  # reindex issue should be silent now
+    assert caplog.text.count("checksum pode ser não-determinístico") == 1

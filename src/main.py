@@ -9,7 +9,7 @@ Use ``poetry run main --help`` para ver todos os comandos disponíveis.
 import os
 from contextlib import suppress
 from pathlib import Path
-from typing import Optional
+from typing import Optional, TypedDict
 
 import typer
 from dotenv import load_dotenv
@@ -77,24 +77,47 @@ def _normalize_cli_ticker(value: str) -> str:
         raise typer.BadParameter(str(exc)) from exc
 
 
+
+
+class _ComputeResult(TypedDict):
+    rows: int
+    persisted: bool
+    sample_df: object | None  # pandas.DataFrame or None
+
+
+
 def _compute_returns_for_ticker(
     ticker: str,
     start: Optional[str],
     end: Optional[str],
     dry_run: bool,
-) -> int:
-    """Executa cálculo de retornos para um ticker e retorna linhas geradas."""
+) -> _ComputeResult:
+    """Executa cálculo de retornos para um ticker e retorna metadados.
+
+    O dicionário retornado contém os campos:
+      * ``rows``: número de linhas no DataFrame final (0 caso vazio/None)
+      * ``persisted``: ``True`` quando o resultado veio de uma escrita no DB
+        (i.e. ``dry_run`` é ``False`` e havia pelo menos uma linha)
+      * ``sample_df``: um pequeno subconjunto do DataFrame para uso em logs/CLI
+        ou ``None`` se não houver dados.
+
+    O objetivo é manter esta função livre de efeitos de apresentação; os
+    comandos de nível superior decidem como (e se) exibem mensagens via
+    ``typer.echo``.  Isso facilita o reuso da lógica em contextos não-CLI e
+    torna os testes mais simples, já que podemos inspecionar o retorno sem
+    capturar stdout.
+    """
     df = _retorno.compute_returns(ticker, start=start, end=end, dry_run=dry_run)
+
     if df is None or df.empty:
-        return 0
+        return {"rows": 0, "persisted": False, "sample_df": None}
 
-    if dry_run:
-        typer.echo(f"{ticker}: {len(df)} retornos calculados (dry-run)")
-        typer.echo(df.head())
-    else:
-        typer.echo(f"{ticker}: {len(df)} retornos persistidos")
+    rows = len(df)
+    persisted = not dry_run
 
-    return len(df)
+    sample_df = df.head(5) if rows > 5 else df
+
+    return {"rows": rows, "persisted": persisted, "sample_df": sample_df}
 
 
 
@@ -155,11 +178,14 @@ def run_cmd(
             )
             continue
 
-        rows = _compute_returns_for_ticker(tk, None, None, False)
+        compute_info = _compute_returns_for_ticker(tk, None, None, False)
+        rows = compute_info.get("rows", 0)
         if rows == 0:
             # zero rows is not necessarily an error; could mean no new data
             warnings += 1
-            typer.echo(f"{tk}: ingest concluído, mas sem retornos calculados (aviso)")
+            typer.echo(
+                f"{tk}: ingest concluído, mas sem retornos calculados (aviso)"
+            )
             continue
         ok += 1
 
@@ -219,7 +245,10 @@ def compute_returns_cmd(
     total_rows = 0
     processed = 0
     for target in targets:
-        rows = _compute_returns_for_ticker(target, start, end, effective_dry_run)
+        compute_info = _compute_returns_for_ticker(
+            target, start, end, effective_dry_run
+        )
+        rows = compute_info.get("rows", 0)
         if rows == 0:
             typer.echo(f"{target}: nenhum retorno calculado")
             continue

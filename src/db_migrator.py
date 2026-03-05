@@ -45,6 +45,15 @@ def _applied_migrations(conn: sqlite3.Connection) -> Set[str]:
     return {r[0] for r in cur.fetchall()}
 
 
+class MigrationError(Exception):
+    """Erro genérico envolvendo a aplicação de migrações.
+
+    É levantado quando uma das instruções SQL falha ou o registro na
+    tabela ``schema_migrations`` não pode ser inserido.  O erro original é
+    preservado como causa para que callers possam inspecioná-lo se necessário.
+    """
+
+
 def apply_migrations(
     conn: sqlite3.Connection, migrations_dir: Optional[str] = None
 ) -> None:
@@ -99,4 +108,6 @@ def apply_migrations(
             # rollback before propagating; provide context for easier debugging
             conn.rollback()
             logger.error("migration failed: %s — %s", fname, e)
-            raise RuntimeError(f"migration failed ({fname})") from e
+            # preserve original exception as __cause__ so traceback remains
+            # intact and callers can catch ``MigrationError`` specifically.
+            raise MigrationError(f"migration failed ({fname})") from e
