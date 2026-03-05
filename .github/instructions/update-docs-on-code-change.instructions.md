@@ -171,14 +171,28 @@ If `apply-doc-file-structure == true`, then apply the following configurable ins
 Maintain these documentation files and update as needed:
 
 - **README.md**: Project overview, quick start, basic usage
-- **CHANGELOG.md**: Version history and user-facing changes
 - **docs/**: Detailed documentation
-  - `installation.md`: Setup and installation guide
-  - `configuration.md`: Configuration options and examples
-  - `api.md`: API reference documentation
-  - `contributing.md`: Contribution guidelines
-  - `migration-guides/`: Version migration guides
-- **examples/**: Working code examples and tutorials
+  - `diagrama-dataflow.md`: Data flow diagrams and explanations
+  - `metadata_contract.md`: Metadata contract specifications
+  - `metadata_schema.json`: JSON Schema for metadata validation
+  - `project-context.md`: Project context and rules for AI agents
+  - `quickstart-ci.md`: Guide to reproducing CI locally
+  - `schema.md`: Data schema documentation
+- **docs/modules/**: Module-specific documentation
+  - `adapter-guidelines.md`: Guidelines for creating adapters
+  - `adapter-mappings.md`: Mapping of provider fields to internal schema
+  - `adapter-pr-checklist.md`: Checklist for PRs that modify adapters
+  - `retornos-conventions.md`: Conventions for financial returns calculations
+  - `yfinance_adapter.md`: Specific documentation for the Yahoo Finance adapter
+- **docs/planning-artifacts/**: Planning and design documents
+  - `architecture.md`: System architecture overview
+  - `prd.md`: Product requirements document
+- **docs/playbooks/**: Step-by-step guides for common tasks
+  - `quickstart-cli.md`: Guide to using the CLI
+  - `quickstart-tickers.md`: Guide to reproduce ingest pipeline
+  - `validate-snapshots.md`: Guide to identify and validate snapshots
+  - `testing-network-fixtures.md`: Guide to using network fixtures in tests
+  - `ux.md`: UX expectations for CLI, notebooks, and Streamlit interface
 
 ### Changelog Management
 

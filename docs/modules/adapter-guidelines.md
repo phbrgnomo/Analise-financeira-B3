@@ -1,6 +1,6 @@
 # Guia de Implementação — Adaptadores de Provedores
 
-Objetivo: documentar o contrato, convenções e melhores práticas para implementar novos adaptadores de provedores de dados (ex.: Yahoo, AlphaVantage) neste repositório.
+Objetivo: documentar o contrato, convenções e melhores práticas para implementar novos adaptadores de provedores de dados (ex.: yfinance, AlphaVantage) neste repositório.
 
 **Visão geral**
 - Local: `src/adapters/`
@@ -12,7 +12,7 @@ Objetivo: documentar o contrato, convenções e melhores práticas para implemen
   - Normaliza argumentos (p.ex. ticker, datas).
   - Deve delegar ao mecanismo de retry do `Adapter` base ou chamar `_fetch_once` diretamente quando apropriado.
   - Deve preencher metadados em `df.attrs`:
-    - `source`: provedor (ex.: `yahoo`)
+    - `source`: provedor (ex.: `yfinance`)
     - `ticker`: ticker usado
     - `fetched_at`: timestamp ISO UTC
     - `adapter`: nome da classe do adaptador

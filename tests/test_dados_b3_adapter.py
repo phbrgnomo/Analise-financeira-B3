@@ -13,9 +13,9 @@ def test_factory_returns_adapter_and_provider_override(monkeypatch):
         def fetch(self, ticker, start_date=None, end_date=None, **kwargs):
             return pd.DataFrame({'a': [1]})
 
-    monkeypatch.setattr('src.adapters.factory._ADAPTER_REGISTRY', {'yahoo': Dummy})
+    monkeypatch.setattr('src.adapters.factory._ADAPTER_REGISTRY', {'yfinance': Dummy})
 
-    adapter = get_adapter('yahoo')
+    adapter = get_adapter('yfinance')
     assert isinstance(adapter, Dummy)
     df = adapter.fetch('PETR4.SA', start_date='2022-01-01', end_date='2022-12-31')
     assert not df.empty

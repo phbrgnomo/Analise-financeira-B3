@@ -17,4 +17,4 @@ def test_yfinance_adapter_playback(monkeypatch):
     assert not df.empty
     # Check adapter metadata
     assert df.attrs.get("adapter") == "YFinanceAdapter"
-    assert df.attrs.get("source") == "yahoo"
+    assert df.attrs.get("source") == "yfinance"

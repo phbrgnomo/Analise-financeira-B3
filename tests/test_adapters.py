@@ -205,7 +205,7 @@ class TestYFinanceAdapter:
         # Verificar chamada ao DataReader
         mock_datareader.assert_called_once_with(
             "PETR4.SA",
-            data_source="yahoo",
+            data_source="yfinance",
             start="2024-01-01",
             end="2024-01-05",
             timeout=30,
@@ -224,7 +224,7 @@ class TestYFinanceAdapter:
         assert isinstance(result.index, pd.DatetimeIndex)
 
         # Verificar metadados
-        assert result.attrs["source"] == "yahoo"
+        assert result.attrs["source"] == "yfinance"
         assert result.attrs["ticker"] == "PETR4.SA"
         assert "fetched_at" in result.attrs
         assert result.attrs["adapter"] == "YFinanceAdapter"
@@ -371,7 +371,7 @@ class TestYFinanceAdapter:
         adapter = YFinanceAdapter(max_retries=5)
         metadata = adapter.get_metadata()
 
-        assert metadata["provider"] == "yahoo"
+        assert metadata["provider"] == "yfinance"
         assert metadata["library"] == "yfinance"
         assert metadata["max_retries"] == "5"
         assert "adapter_version" in metadata

@@ -58,7 +58,7 @@ class DummyAdapter(Adapter):
         pytest.param(
             ValueError("invalid data format"),
             "PETR4",
-            "yahoo",
+            "yfinance",
             "invalid data format",
             id="happy-path-value-error-simple-message",
         ),

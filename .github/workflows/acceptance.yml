@@ -2,8 +2,6 @@ name: Acceptance
 
 on:
   workflow_dispatch: {}
-  schedule:
-    - cron: '0 3 * * *'
   pull_request:
     paths:
       - 'src/**'
