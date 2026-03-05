@@ -93,6 +93,11 @@ def apply_migrations(
                 # fallback: naive split on semicolon.  This may break when
                 # semicolons appear in strings/comments, so installing
                 # `sqlparse` is strongly recommended for real migrations.
+                logger.warning(
+                    "sqlparse unavailable; using naive ';' splitter. "
+                    "This may mis-handle semicolons in strings/comments; "
+                    "install 'sqlparse' for safer migrations."
+                )
                 statements = [s.strip() for s in sql.split(";") if s.strip()]
             for stmt in statements:
                 cur.execute(stmt)

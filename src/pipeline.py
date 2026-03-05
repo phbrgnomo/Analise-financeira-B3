@@ -128,8 +128,13 @@ def pull_sample_cmd(
             )
         src_name = prov_map[src_key]
 
+    try:
+        normalized_ticker = normalize_b3_ticker(ticker)
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+
     exit_code = pull_sample_command(
-        ticker,
+        normalized_ticker,
         src_name,
         days=days,
         start=start,

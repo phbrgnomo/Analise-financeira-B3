@@ -8,7 +8,7 @@
 ## Code Style
 - Linting: `ruff` config is in `pyproject.toml` (line-length 88). Run `poetry run ruff check src tests`.
 - Tests use `pytest` (see `tests/`). Follow existing test patterns and fixtures in `src/tests` and `tests/conftest.py`.
-- **CRITICAL**: When modifying `.py` files, ensure the new code adheres do the linting rules, especially the line-length limit of 88 characters. This is a strict requirement to maintain code readability and consistency across the project. Always run `poetry run precommit` on modified files before committing changes.
+- **CRITICAL**: When modifying `.py` files, ensure the new code adheres to the linting rules, especially the line-length limit of 88 characters. This is a strict requirement to maintain code readability and consistency across the project. Always run `poetry run precommit` on modified files before committing changes.
 
 ## Architecture
 - Always reference `docs/architecture.md` for high-level design and rationale.

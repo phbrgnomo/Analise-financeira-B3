@@ -163,7 +163,6 @@ def test_snapshot_index_created(tmp_path):
     initial insert. The test doesn't rely on helper functions because the
     operation should work even if the database is otherwise empty.
     """
-    import sqlite3
 
     db_path = tmp_path / "dados" / "data.db"
     # no need to call init_db; record_snapshot_metadata will create table
@@ -250,10 +249,10 @@ def test_incremental_ingest_only_new_and_changed_rows(tmp_path, monkeypatch):
     db.init_db(str(db_path))
     mp, snap_dir = setup_env(tmp_path, ttl="100000")
 
-    _extracted_from_test_incremental_ingest_only_new_and_changed_rows_6(
+    ingest_only_new_and_changed_rows_helper(
         "2026-01-02", 20, db_path, 2
     )
-    _extracted_from_test_incremental_ingest_only_new_and_changed_rows_6(
+    ingest_only_new_and_changed_rows_helper(
         "2026-01-03", 30, db_path, 1
     )
     # verify that the database contains three rows now
@@ -263,12 +262,11 @@ def test_incremental_ingest_only_new_and_changed_rows(tmp_path, monkeypatch):
     mp.undo()
 
 
-# TODO Rename this here and in `test_incremental_ingest_only_new_and_changed_rows`
-# noqa: E501
+# helper for incremental ingest tests, called from
+# ``test_incremental_ingest_only_new_and_changed_rows``
 
-def _extracted_from_test_incremental_ingest_only_new_and_changed_rows_6(
-    arg0, arg1, db_path, arg3
-):
+def ingest_only_new_and_changed_rows_helper(arg0, arg1, db_path, arg3):
+    """Create a two-row snapshot, ingest it, and assert results."""
     df1 = make_sample_df(["2026-01-01", arg0], values=[10, arg1])
     r1 = ingest_from_snapshot(df1, "BAR", db_path=str(db_path))
     assert not r1["cached"]

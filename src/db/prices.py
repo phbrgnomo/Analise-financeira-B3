@@ -233,7 +233,7 @@ def resolve_existing_ticker(
 
 def _query_existing_tickers(
     conn: sqlite3.Connection, candidates: Sequence[str]
-):
+) -> Optional[str]:
     """Consulta quais tickers dos candidatos já existem na tabela prices."""
     cur = conn.cursor()
     if len(candidates) == 2:

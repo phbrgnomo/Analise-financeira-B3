@@ -123,33 +123,33 @@ def _heuristic_high_low_violations(
     error_records: List[Dict[str, Any]] = []
     try:
         if "high" in df.columns and "low" in df.columns:
-                # marca violações apenas quando ambos os valores estiverem presentes _e_
-                # high is strictly less than low; equality is permitted.
-                mask_violation = (
-                    df["high"].notna()
-                    & df["low"].notna()
-                    & (df["high"] < df["low"])
-                )
-                positions = np.nonzero(mask_violation.to_numpy())[0]
-                vio_idx = df.index[positions]
-                if len(vio_idx) > 0:
-                    reason_code = "CONSTRAINT_VIOLATION"
-                    for idx in vio_idx:
-                        invalid_indices.add(idx)
-                        error_records.append(
-                            {
-                                "row_index": idx,
-                                "column": "high,low",
-                                "reason_code": reason_code,
-                                "reason_message": (
-                                    "Constraint failed: high < low"
-                                ),
-                                "failure_value": {
-                                    "high": df.at[idx, "high"],
-                                    "low": df.at[idx, "low"],
-                                },
-                            }
-                        )
+            # marca violações apenas quando ambos os valores estiverem presentes _e_
+            # high is strictly less than low; equality is permitted.
+            mask_violation = (
+                df["high"].notna()
+                & df["low"].notna()
+                & (df["high"] < df["low"])
+            )
+            positions = np.nonzero(mask_violation.to_numpy())[0]
+            vio_idx = df.index[positions]
+            if len(vio_idx) > 0:
+                reason_code = "CONSTRAINT_VIOLATION"
+                for idx in vio_idx:
+                    invalid_indices.add(idx)
+                    error_records.append(
+                        {
+                            "row_index": idx,
+                            "column": "high,low",
+                            "reason_code": reason_code,
+                            "reason_message": (
+                                "Constraint failed: high < low"
+                            ),
+                            "failure_value": {
+                                "high": df.at[idx, "high"],
+                                "low": df.at[idx, "low"],
+                            },
+                        }
+                    )
     except Exception as exc:
         logger.debug(
             "Heuristic high/low check failed: %s", exc, exc_info=True

@@ -13,6 +13,7 @@ Snapshot caching and incremental diff logic live in
 from __future__ import annotations
 
 import logging
+import os
 import re
 import time
 import uuid
@@ -20,7 +21,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict
 
-import typer  # used by ingest_command error handling
+import typer
 
 # Re-export constants and helpers so existing callers keep working without
 # updating their import paths.
@@ -40,6 +41,11 @@ from src.ingest.snapshot_ingest import (  # noqa: F401
     to_utc_naive_datetime_index,
 )
 from src.tickers import normalize_b3_ticker
+
+# default locations are exported by raw_storage; mirror pattern here
+DEFAULT_SAMPLES_DIR = Path("dados") / "samples"
+
+
 
 
 def _now_iso() -> str:
@@ -83,6 +89,7 @@ def pull_sample(
     start: str | None = None,
     end: str | None = None,
     output: str | None = None,
+    samples_dir: Path | str | None = None,
 ) -> Dict[str, Any]:
     """Fetch provider data and export raw/canonical CSV sample artifacts.
 
@@ -134,10 +141,15 @@ def pull_sample(
 
         safe_ticker = _safe_filename_token(canonical_ticker)
         safe_source = _safe_filename_token(source)
-        samples_dir = Path("dados") / "samples"
-        samples_dir.mkdir(parents=True, exist_ok=True)
+        # resolve samples directory (configure via parameter or SAMPLES_DIR env var)
+        if samples_dir is not None:
+            samples_path = Path(samples_dir)
+        else:
+            env_val = os.getenv("SAMPLES_DIR")
+            samples_path = Path(env_val) if env_val else DEFAULT_SAMPLES_DIR
+        samples_path.mkdir(parents=True, exist_ok=True)
 
-        raw_out = samples_dir / f"{safe_ticker}_{safe_source}_raw.csv"
+        raw_out = samples_path / f"{safe_ticker}_{safe_source}_raw.csv"
         raw_to_write = raw_df
         if "Date" not in raw_to_write.columns and "date" not in raw_to_write.columns:
             raw_to_write = raw_to_write.reset_index()
@@ -146,7 +158,7 @@ def pull_sample(
         canonical_out = (
             Path(output)
             if output
-            else samples_dir / f"{safe_ticker}_{safe_source}_sample.csv"
+            else samples_path / f"{safe_ticker}_{safe_source}_sample.csv"
         )
         canonical_out.parent.mkdir(parents=True, exist_ok=True)
         canonical_df.to_csv(canonical_out, index=False)

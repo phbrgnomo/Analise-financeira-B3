@@ -11,54 +11,6 @@ Ensure documentation stays synchronized with code changes by automatically detec
 API documentation, configuration guides, and other documentation files need updates based on code
 modifications.
 
-## Instruction Sections and Configuration
-
-The following parts of this section, `Instruction Sections and Configurable Instruction Sections`
-and `Instruction Configuration` are only relevant to THIS instruction file, and are meant to be a
-method to easily modify how the Copilot instructions are implemented. Essentially the two parts
-are meant to turn portions or sections of the actual Copilot instructions on or off, and allow for
-custom cases and conditions for when and how to implement certain sections of this document.
-
-### Instruction Sections and Configurable Instruction Sections
-
-There are several instruction sections in this document. The start of an instruction section is
-indicated by a level two header. Call this an **INSTRUCTION SECTION**.  Some instruction
-sections are configurable. Some are not configurable and will always be used.
-
-Instruction sections that ARE configurable are not required, and are subject to additional context
-and/or conditions. Call these **CONFIGURABLE INSTRUCTION SECTIONS**.
-
-**Configurable instruction sections** will have the section's configuration property appended to
-the level two header, wrapped in backticks (e.g., `apply-this`). Call this the
-**CONFIGURABLE PROPERTY**.
-
-The **configurable property** will be declared and defined in the **Instruction Configuration**
-portion of this section. They are booleans. If `true`, then apply, utilize, and/or follow the
-instructions in that section.
-
-Each **configurable instruction section** will also have a sentence that follows the section's
-level two header with the section's configuration details. Call this the **CONFIGURATION DETAIL**.
-
-The **configuration detail** is a subset of rules that expand upon the configurable instruction
-section. This allows for custom cases and/or conditions to be checked that will determine the final
-implementation for that **configurable instruction section**.
-
-Before resolving on how to apply a **configurable instruction section**, check the
-**configurable property** for a nested and/or corresponding `apply-condition`, and utilize the `apply-condition` when settling on the final approach for the **configurable instruction section**. By
-default the `apply-condition` for each **configurable property** is unset, but an example of a set
-`apply-condition` could be something like:
-
-    - **apply-condition** :
-      ` this.parent.property = (git.branch == "master") ? this.parent.property = true : this.parent.property = false; `
-
-The sum of all the **constant instructions sections**, and **configurable instruction sections**
-will determine the complete instructions to follow. Call this the **COMPILED INSTRUCTIONS**.
-
-The **compiled instructions** are dependent on the configuration. Each instruction section
-included in the **compiled instructions** will be interpreted and utilized AS IF a separate set
-of instructions that are independent of the entirety of this instruction file. Call this the
-**FINAL PROCEDURE**.
-
 ### Instruction Configuration
 
 - **apply-doc-file-structure** : true

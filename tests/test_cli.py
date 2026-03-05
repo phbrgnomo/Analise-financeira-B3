@@ -112,10 +112,6 @@ def test_run_uses_ingest_pipeline(monkeypatch):
     assert len(calls_to_compute) == len(ingest_tickers)
 
 
-# ---------------------------------------------------------------------------
-# missing-command tests added per review
-# ---------------------------------------------------------------------------
-
 def test_compute_returns_single_ticker(monkeypatch):
     """`compute-returns` invoca o helper e imprime linhas geradas."""
     from src.main import app
@@ -138,7 +134,7 @@ def test_compute_returns_single_ticker(monkeypatch):
 
 
 def test_compute_returns_date_range(monkeypatch):
-    """Passing ``--start`` and ``--end`` should reach helper with values."""
+    """Passar ``--start`` e ``--end`` deve repassar os valores para o helper."""
     from src.main import app
 
     called = []
@@ -215,7 +211,8 @@ def test_export_csv_not_found(monkeypatch):
     runner = CliRunner()
     result = runner.invoke(app, ["export-csv", "--ticker", "PETR4"])
     assert result.exit_code != 0
-    assert "não encontrado" in result.stderr.lower()
+    # Typer combines stdout/stderr into output on most environments
+    assert "não encontrado" in result.output.lower()
 
 
 def test_ingest_snapshot_command(monkeypatch, tmp_path):

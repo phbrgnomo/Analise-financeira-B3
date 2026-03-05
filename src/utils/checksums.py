@@ -13,6 +13,14 @@ import pandas as pd
 logger = logging.getLogger(__name__)
 
 
+# Guard to ensure we emit at most one checksum-related warning per process.
+# Historical versions tracked multiple flags (_warned_unsortable_columns,
+# _warned_reindex_failure, _warned_sort_index_failure) but the logic was
+# consolidated; we keep a single boolean and expose legacy names briefly in
+# tests for backwards compatibility.
+_non_deterministic_checksum_warned = False
+
+
 def sha256_file(path: Union[str, Path]) -> str:
     """Calculate SHA256 checksum for a file and return the hex digest.
 
@@ -118,15 +126,5 @@ def serialize_df_bytes(
         )
 
     return csv_str.encode("utf-8")
-
-
-
-# module-level flags used by the warning guards above.  Older
-# versions of the code tracked each failure case separately; new logic uses
-# a single global guard so only the first warning is emitted.
-_non_deterministic_checksum_warned = False
-_warned_unsortable_columns = False  # kept for backward-compatibility tests
-_warned_reindex_failure = False
-_warned_sort_index_failure = False
 
 __all__ = ["sha256_file", "sha256_bytes", "serialize_df_bytes"]

@@ -62,8 +62,8 @@ def test_concurrent_writes_file_backed(tmp_path: Path):
 
             def task():
                 try:
-                    # use comprehension for side effects instead of explicit loop
-                    [
+                    # iterate explicitly; we only care about side effects
+                    for i in range(rows_per_worker):
                         db_module.write_prices(
                             make_df(
                                 start + timedelta(days=w * rows_per_worker + i),
@@ -72,8 +72,6 @@ def test_concurrent_writes_file_backed(tmp_path: Path):
                             ticker,
                             db_path=db_path,
                         )
-                        for i in range(rows_per_worker)
-                    ]
                 except Exception as e:  # pragma: no cover - surface errors
                     return e
                 return None

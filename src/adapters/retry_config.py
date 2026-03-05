@@ -33,6 +33,15 @@ class RetryConfig:
     )
     timeout_seconds: int = 30
 
+    def __post_init__(self) -> None:
+        """Run validation after dataclass initialization.
+
+        This mirrors the check performed in :meth:`from_env` so that
+        callers can't accidentally construct an invalid configuration by
+        bypassing that factory method.
+        """
+        self._validate()
+
     @classmethod
     def from_env(cls, prefix: str = "ADAPTER_RETRY") -> "RetryConfig":
         """

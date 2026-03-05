@@ -331,6 +331,21 @@ def test_pull_sample_command_success_writes_files(tmp_path, monkeypatch, capsys)
     assert (tmp_path / "dados" / "samples" / "PETR4_dummy_sample.csv").exists()
 
 
+def test_pull_sample_command_env_override(tmp_path, monkeypatch, capsys):
+    """SAMPLES_DIR env var controls where artifacts land."""
+    dummy = DummyAdapter()
+    monkeypatch.setattr("src.adapters.factory.get_adapter", lambda name: dummy)
+    monkeypatch.setattr("src.etl.mapper.to_canonical", lambda df, **kw: df)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("SAMPLES_DIR", str(tmp_path / "foo"))
+
+    rc = pipeline.pull_sample_command("PETR4", "dummy", days=1)
+    assert rc == 0
+
+    assert (tmp_path / "foo" / "PETR4_dummy_raw.csv").exists()
+    assert (tmp_path / "foo" / "PETR4_dummy_sample.csv").exists()
+
+
 def test_pull_sample_command_invalid_provider_returns_error(capsys):
     """Provider inválido em pull_sample_command retorna código de erro."""
     rc = pipeline.pull_sample_command("PETR4", "no_such_provider")

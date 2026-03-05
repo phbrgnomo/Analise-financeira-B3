@@ -58,7 +58,7 @@ def test_sha256_file_and_bytes(tmp_path):
     assert file_digest == bytes_digest
 
 
-def test_serialize_df_warnings_only_once(caplog):
+def test_serialize_df_warnings_only_once(caplog, monkeypatch):
     """When serialize_df_bytes encounters problems it should warn just once.
 
     This prevents log spam when the function is called repeatedly in loops.
@@ -73,10 +73,7 @@ def test_serialize_df_warnings_only_once(caplog):
     # helper to clear the global warning state between sub-exercises
     def reset_guard():
         checksums._non_deterministic_checksum_warned = False
-        # keep the old flags around too so existing assertions still work
-        checksums._warned_unsortable_columns = False
-        checksums._warned_reindex_failure = False
-        checksums._warned_sort_index_failure = False
+        # legacy flags were removed; retain this helper for clarity
 
     # craft a DataFrame with mixed-type column labels to trigger a
     # TypeError during sorting (str vs int).  pandas happily accepts mixed
@@ -103,20 +100,19 @@ def test_serialize_df_warnings_only_once(caplog):
     checksums.serialize_df_bytes(df2)
     assert caplog.text.count("reindexar colunas") == 1
 
-    # sort_index failure case: patch the method on DataFrame to guarantee
-    # an exception rather than relying on subclass dispatch quirks.
+    # sort_index failure case: use monkeypatch to raise an error so the
+    # warning path is exercised.  monkeypatch automatically restores the
+    # original attribute at test end.
     caplog.clear()
     caplog.set_level("WARNING")
     reset_guard()
-    orig_sort = pd.DataFrame.sort_index
-    pd.DataFrame.sort_index = lambda self, *args, **kwargs: (_ for _ in ()).throw(
-        RuntimeError("nope")
-    )
-    try:
-        checksums.serialize_df_bytes(pd.DataFrame([[1]]))
-        checksums.serialize_df_bytes(pd.DataFrame([[1]]))
-    finally:
-        pd.DataFrame.sort_index = orig_sort
+
+    def _raise_sort(self, *args, **kwargs):
+        raise RuntimeError("nope")
+
+    monkeypatch.setattr(pd.DataFrame, "sort_index", _raise_sort)
+    checksums.serialize_df_bytes(pd.DataFrame([[1]]))
+    checksums.serialize_df_bytes(pd.DataFrame([[1]]))
     assert "ordenar DataFrame por índice" in caplog.text
 
     # finally, ensure the global guard suppresses warnings across different

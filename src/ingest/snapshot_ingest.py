@@ -174,11 +174,166 @@ def rows_to_ingest(
 
 
 # ---------------------------------------------------------------------------
+# Private helpers for ingest_from_snapshot
+# ---------------------------------------------------------------------------
+
+
+def _resolve_ingest_params(
+    snapshot_dir: Optional[Union[str, Path]],
+    ttl: Optional[float],
+    force: Optional[bool],
+) -> tuple[Path, float, bool]:
+    """Resolve snapshot pipeline parameters from arguments or environment."""
+    if snapshot_dir is None:
+        snapshot_dir = get_snapshot_dir()
+    resolved_dir = Path(snapshot_dir)
+    resolved_dir.mkdir(parents=True, exist_ok=True)
+    resolved_ttl = get_snapshot_ttl() if ttl is None else ttl
+    resolved_force = force_refresh_flag() if force is None else force
+    return resolved_dir, resolved_ttl, resolved_force
+
+
+def _load_last_snapshot_meta(
+    ticker: str, db_path: Optional[str]
+) -> Optional[Dict[str, Any]]:
+    """Read and deserialise the last snapshot metadata for *ticker* from the DB."""
+    import src.db as _db
+
+    try:
+        payload_str = _db.get_last_snapshot_payload(ticker, db_path=db_path)
+        if payload_str is not None:
+            try:
+                return json.loads(payload_str)
+            except json.JSONDecodeError as exc:
+                logger.warning(
+                    "invalid snapshot metadata JSON for %s: %s", ticker, exc
+                )
+    except (OSError, sqlite3.DatabaseError) as exc:
+        logger.warning(
+            "snapshot metadata cache fallback; failed to read metadata for"
+            " %s: %s",
+            ticker,
+            exc,
+        )
+        try:
+            from src import metrics
+
+            metrics.increment_counter("snapshot_metadata_cache_fallback")
+        except Exception:  # pragma: no cover — metrics optional
+            logger.debug("metrics increment failed", exc_info=True)
+    return None
+
+
+def _evaluate_cache_hit(
+    last_meta: Optional[Dict[str, Any]],
+    checksum: str,
+    ttl: float,
+    force: bool,
+    ticker: str,
+) -> Optional[Dict[str, Any]]:
+    """Return a cache-hit result dict, or ``None`` when a refresh is needed."""
+    if not last_meta or force or last_meta.get("sha256") != checksum:
+        return None
+
+    _cache_result: Dict[str, Any] = {
+        "status": "success",
+        "cached": True,
+        "rows_processed": 0,
+    }
+
+    if ttl <= 0:
+        logger.info("snapshot cache hit for %s (ttl=no-expiry)", ticker)
+        return _cache_result
+
+    last_ts_str = last_meta.get("generated_at")
+    if not last_ts_str:
+        logger.debug(
+            "snapshot metadata for %s missing 'generated_at';"
+            " treating as cache miss",
+            ticker,
+        )
+        return None
+
+    try:
+        last_ts = datetime.fromisoformat(last_ts_str.replace("Z", "+00:00"))
+        age = (datetime.now(timezone.utc) - last_ts).total_seconds()
+        if age < ttl:
+            logger.info(
+                "snapshot cache hit for %s (age=%.1fs < ttl=%.1fs)",
+                ticker,
+                age,
+                ttl,
+            )
+            return _cache_result
+    except Exception:
+        logger.warning(
+            "invalid 'generated_at' in snapshot metadata for %s: %r;"
+            " treating as cache miss",
+            ticker,
+            last_ts_str,
+        )
+    return None
+
+
+def _write_and_record_snapshot(
+    df: pd.DataFrame,
+    ticker: str,
+    snapshot_dir: Path,
+    db_path: Optional[str],
+) -> tuple[str, Path]:
+    """Write a versioned snapshot CSV to disk and record metadata in the DB."""
+    import src.db as _db
+    from src.etl.snapshot import write_snapshot
+
+    now = datetime.now(timezone.utc)
+    ts = now.strftime("%Y%m%dT%H%M%SZ")
+    filename = f"{ticker.replace('.', '_')}-{ts}.csv"
+    out_path = snapshot_dir / filename
+
+    # write_snapshot also handles pruning old files via _prune_old_snapshots
+    sha = write_snapshot(df, out_path)
+
+    snapshot_meta: Dict[str, Any] = {
+        "snapshot_id": filename,
+        "ticker": ticker,
+        "generated_at": now.isoformat().replace("+00:00", "Z"),
+        "rows_count": len(df),
+        "sha256": sha,
+    }
+    try:
+        _db.record_snapshot_metadata(snapshot_meta, db_path=db_path)
+    except Exception as exc:
+        logger.warning("failed to record snapshot metadata: %s", exc)
+
+    return sha, out_path
+
+
+def _run_incremental_ingest(
+    df: pd.DataFrame,
+    ticker: str,
+    db_path: Optional[str],
+) -> int:
+    """Diff *df* against existing DB rows and persist only new/changed rows."""
+    import src.db as _db
+
+    try:
+        existing = _db.read_prices(ticker, db_path=db_path)
+    except Exception:
+        existing = None
+
+    rows_subset = rows_to_ingest(df, existing)
+    rows_processed = len(rows_subset)
+    if rows_processed > 0:
+        _db.write_prices(rows_subset.reset_index(), ticker, db_path=db_path)
+    return rows_processed
+
+
+# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
 
-def ingest_from_snapshot(  # noqa: C901
+def ingest_from_snapshot(
     df: pd.DataFrame,
     ticker: str,
     *,
@@ -218,150 +373,38 @@ def ingest_from_snapshot(  # noqa: C901
         Note
         ----
         Most error conditions are handled gracefully by returning a dict with
-        ``status=='error'`` (the returned dictionary will contain an
-        ``error_message`` field describing what went wrong).  However, if an
-        underlying database write fails (for example, due to a locked file or
-        corrupted database), the function will propagate the exception rather
-        than returning a status dict; callers that do not wrap the call may
-        see the exception bubble up.  The CLI wrapper and ``pipeline.ingest``
-        already catch such exceptions and convert them to an error status for
-        the caller.
+        ``status=='error'``.  However, underlying database write failures may
+        propagate as exceptions; the CLI wrapper and ``pipeline.ingest``
+        already handle these cases.
     """
-    # Resolve parameters ---------------------------------------------------
-    if db_path is not None:
-        db_path = str(db_path)
+    resolved_db = str(db_path) if db_path is not None else None
+    resolved_dir, resolved_ttl, resolved_force = _resolve_ingest_params(
+        snapshot_dir, ttl, force
+    )
 
-    if snapshot_dir is None:
-        snapshot_dir = get_snapshot_dir()
-    snapshot_dir = Path(snapshot_dir)
-    snapshot_dir.mkdir(parents=True, exist_ok=True)
-
-    if ttl is None:
-        ttl = get_snapshot_ttl()
-    if force is None:
-        force = force_refresh_flag()
-
-    # Compute incoming checksum using shared exporter helper.
-    # this centralises the serialization logic so the cache check and the
-    # subsequent write (which also serialises the DataFrame) remain in sync.
     from src.etl.snapshot import snapshot_checksum
 
     checksum = snapshot_checksum(df)
 
-    # Serialize ingestion by ticker within this process. This protects the
-    # read-cache -> write-snapshot -> diff -> DB upsert critical section.
+    # Serialize ingestion by ticker within this process so the
+    # read-cache → write-snapshot → diff → DB upsert critical section
+    # is safe under concurrent callers.
     with lock_ticker(ticker):
-        # Read last snapshot metadata from DB (best-effort) ----------------
-        import src.db as _db  # deferred to avoid circular imports at module load
+        last_meta = _load_last_snapshot_meta(ticker, resolved_db)
+        cache_result = _evaluate_cache_hit(
+            last_meta, checksum, resolved_ttl, resolved_force, ticker
+        )
+        if cache_result is not None:
+            return cache_result
 
-        last_meta: Optional[Dict[str, Any]] = None
-        try:
-            payload_str = _db.get_last_snapshot_payload(
-                ticker, db_path=db_path
-            )
-            if payload_str is not None:
-                try:
-                    last_meta = json.loads(payload_str)
-                except json.JSONDecodeError as exc:
-                    logger.warning(
-                        "invalid snapshot metadata JSON for %s: %s", ticker, exc
-                    )
-        except (OSError, sqlite3.DatabaseError) as exc:
-            logger.warning(
-                "snapshot metadata cache fallback; failed to read metadata for %s: %s",
-                ticker,
-                exc,
-            )
-            try:
-                from src import metrics
-
-                metrics.increment_counter("snapshot_metadata_cache_fallback")
-            except Exception:  # pragma: no cover — metrics optional
-                logger.debug("metrics increment failed", exc_info=True)
-
-        # Cache hit check ---------------------------------------------------
-        if last_meta and not force:
-            last_sha = last_meta.get("sha256")
-            if last_sha == checksum:
-                if ttl <= 0:
-                    logger.info("snapshot cache hit for %s (ttl=no-expiry)", ticker)
-                    return {
-                        "status": "success",
-                        "cached": True,
-                        "rows_processed": 0,
-                    }
-                if last_ts_str := last_meta.get("generated_at"):
-                    try:
-                        last_ts = datetime.fromisoformat(
-                            last_ts_str.replace("Z", "+00:00")
-                        )
-                        age = (datetime.now(timezone.utc) - last_ts).total_seconds()
-                        if age < ttl:
-                            logger.info(
-                                "snapshot cache hit for %s (age=%.1fs < ttl=%.1fs)",
-                                ticker,
-                                age,
-                                ttl,
-                            )
-                            return {
-                                "status": "success",
-                                "cached": True,
-                                "rows_processed": 0,
-                            }
-                    except Exception:
-                        logger.warning(
-                            "invalid 'generated_at' in snapshot metadata for %s: %r;"
-                            " treating as cache miss",
-                            ticker,
-                            last_ts_str,
-                        )
-                else:
-                    logger.debug(
-                        "snapshot metadata for %s missing 'generated_at';"
-                        " treating as cache miss",
-                        ticker,
-                    )
-
-        # Write fresh snapshot ---------------------------------------------
-        now = datetime.now(timezone.utc)
-        ts = now.strftime("%Y%m%dT%H%M%SZ")
-        filename = f"{ticker.replace('.', '_')}-{ts}.csv"
-        out_path = snapshot_dir / filename
-
-        from src.etl.snapshot import write_snapshot
-
-        # write_snapshot already handles pruning of old files; the earlier
-        # incarnation of this function implemented its own regex-based cleanup
-        # here which diverged from the logic in :mod:`src.etl.snapshot`.  we
-        # now delegate entirely to the exporter helper to eliminate duplication
-        # and reduce the risk of drifts between the two codepaths.
-        sha = write_snapshot(df, out_path)
-
-        snapshot_meta: Dict[str, Any] = {
-            "snapshot_id": filename,
-            "ticker": ticker,
-            "generated_at": now.isoformat().replace("+00:00", "Z"),
-            "rows_count": len(df),
-            "sha256": sha,
-        }
-        try:
-            _db.record_snapshot_metadata(snapshot_meta, db_path=db_path)
-        except Exception as exc:
-            logger.warning("failed to record snapshot metadata: %s", exc)
-
-        # Incremental ingestion --------------------------------------------
-        try:
-            existing = _db.read_prices(ticker, db_path=db_path)
-        except Exception:
-            existing = None
-
-        rows_subset = rows_to_ingest(df, existing)
-        rows_processed = len(rows_subset)
-        if rows_processed > 0:
-            _db.write_prices(rows_subset.reset_index(), ticker, db_path=db_path)
+        sha, out_path = _write_and_record_snapshot(
+            df, ticker, resolved_dir, resolved_db
+        )
+        rows_processed = _run_incremental_ingest(df, ticker, resolved_db)
 
         logger.info(
-            "ingest_from_snapshot complete for %s: rows_processed=%d, cached=False",
+            "ingest_from_snapshot complete for %s:"
+            " rows_processed=%d, cached=False",
             ticker,
             rows_processed,
         )

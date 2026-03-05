@@ -121,6 +121,11 @@ def _prune_old_snapshots(out_path: Path) -> None:
         for path in out_path.parent.glob("*-*.csv"):
             m = _SNAPSHOT_FILENAME_RE.match(path.name)
             if not m:
+                # log non-matching names so we can detect stale files
+                logger.debug(
+                    "_prune_old_snapshots: arquivo ignorado (formato inválido) %s",
+                    path.name,
+                )
                 continue
             if m.group("ticker") != target_ticker:
                 continue
