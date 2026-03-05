@@ -14,10 +14,10 @@ Resumo curto das convenções usadas no projeto para cálculo e persistência de
   - Exemplo SQL (preferido):
 
 ```sql
-INSERT INTO returns (ticker, date, return, return_type, created_at)
+INSERT INTO returns (ticker, date, return_value, return_type, created_at)
 VALUES (?, ?, ?, ?, ?)
 ON CONFLICT(ticker, date, return_type) DO UPDATE SET
-  return = excluded.return,
+  return_value = excluded.return_value,
   created_at = COALESCE(returns.created_at, excluded.created_at);
 ```
 
@@ -26,7 +26,7 @@ ON CONFLICT(ticker, date, return_type) DO UPDATE SET
 - Schema esperado da tabela `returns` (mínimo):
   - `ticker` TEXT
   - `date` TEXT (YYYY-MM-DD)
-  - `return` REAL
+  - `return_value` REAL
   - `return_type` TEXT
   - `created_at` TEXT (ISO 8601 UTC)
   - UNIQUE(ticker, date, return_type)
@@ -44,7 +44,7 @@ from datetime import datetime, timezone
 import src.db as db  # ou: from src.db import write_returns
 
 returns = prices_series.pct_change().dropna()
-out = returns.rename('return').to_frame()
+out = returns.rename('return_value').to_frame()
 out['ticker'] = ticker
 out['return_type'] = 'daily'
 out['created_at'] = datetime.now(timezone.utc).isoformat()

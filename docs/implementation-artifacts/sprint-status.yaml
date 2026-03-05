@@ -16,7 +16,7 @@ development_status:
   0-8-playbooks-quickstart-e-ux-minimal-docs-playbooks-quickstart-ticker-md-docs-playbooks-ux-md: completed
   epic-0-retrospective: completed
 
-  epic-1: in-progress
+  epic-1: completed
   1-1-implementar-interface-de-adapter-e-adaptador-yfinance-minimo: completed
   1-2-implementar-canonical-mapper-provider-schema-canonico: completed
   1-3-implementar-comando-pipeline-ingest-orquestrador-basico: completed
@@ -28,7 +28,7 @@ development_status:
   1-9-garantir-execucao-concorrente-segura-por-ticker-lock-simples: completed
   1-10-cache-de-snapshots-e-ingestao-incremental: completed
   1-11-definir-esquema-canonico-de-dados-e-documentacao-do-modelo-schema-examples: completed
-  epic-1-retrospective: done
+  epic-1-retrospective: completed
 
   epic-2: in-progress
   2-1-gerar-snapshot-csv-a-partir-de-dados-persistidos: ready-for-dev
