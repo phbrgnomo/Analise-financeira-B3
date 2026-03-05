@@ -15,18 +15,18 @@ O que foi implementado
 
 - Criado `docs/schema.json` com `schema_version: 1` e notas semânticas por coluna.
 - Adicionada documentação em `docs/schema.md` explicando campos, versionamento e migrações.
-- Inclusão de `dados/samples/ticker_example.csv` como exemplo referenciado pela documentação.
+- Inclusão de `tests/fixtures/ticker_example.csv` como exemplo referenciado pela documentação.
 - Adicionado teste unitário `tests/test_schema.py` que valida ordem das colunas e formatos essenciais (date, fetched_at, raw_checksum).
 - Adicionada referência ao esquema em `docs/implementation-artifacts/1-1-implementar-interface-de-adapter-e-adaptador-yfinance-minimo.md`.
 - Atualizado `docs/implementation-artifacts/sprint-status.yaml` com o status desta story (ready-for-review).
 
 Observação sobre caminhos reais:
 - O artefato de esquema presente no repositório está em `docs/schema.json` (não `docs/schema.yaml`).
-- O arquivo de exemplo de dados está em `dados/samples/ticker_example.csv`.
-- O teste `tests/test_schema.py` referencia `docs/schema.json` e `dados/samples/ticker_example.csv` (teste passou).
+- O arquivo de exemplo de dados está em `tests/fixtures/ticker_example.csv`.
+- O teste `tests/test_schema.py` referencia `docs/schema.json` e `tests/fixtures/ticker_example.csv` (teste passou).
 
 Ações tomadas para consistência:
-- Normalizada a documentação e os relatos da story para apontar para `docs/schema.json` e `dados/samples/ticker_example.csv`.
+- Normalizada a documentação e os relatos da story para apontar para `docs/schema.json` e `tests/fixtures/ticker_example.csv`.
 - Atualizada a seção de File List da story para refletir os caminhos reais presentes no repositório.
 
 Resultados de testes
@@ -36,7 +36,7 @@ Resultados de testes
 
 Verificações adicionais executadas
 - `git status --porcelain` e `git diff --name-only` para identificar mudanças locais e commits relacionados.
-- Conferido que os arquivos existem em HEAD: `docs/schema.json`, `docs/schema.md`, `dados/samples/ticker_example.csv`, `tests/test_schema.py`, `docs/implementation-artifacts/sprint-status.yaml`, `docs/sprint-reports/1-11-implantacao.md`.
+- Conferido que os arquivos existem em HEAD: `docs/schema.json`, `docs/schema.md`, `tests/fixtures/ticker_example.csv`, `tests/test_schema.py`, `docs/implementation-artifacts/sprint-status.yaml`, `docs/sprint-reports/1-11-implantacao.md`.
 
 Recomendações pós-implantação
 

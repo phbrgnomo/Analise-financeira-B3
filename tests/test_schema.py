@@ -38,7 +38,7 @@ def test_example_matches_schema_header() -> None:
     """Afirma que o cabeçalho do exemplo corresponde à ordem de colunas do schema."""
 
     root = _project_root()
-    example_path = root / "dados" / "samples" / "ticker_example.csv"
+    example_path = root / "tests" / "fixtures" / "ticker_example.csv"
     expected = _schema_columns()
     with example_path.open(newline="") as f:
         reader = csv.reader(f)
@@ -56,7 +56,7 @@ def test_example_matches_schema() -> None:
 
     root = Path(__file__).resolve().parent.parent
     schema_path = root / "docs" / "schema.json"
-    example_path = root / "dados" / "samples" / "ticker_example.csv"
+    example_path = root / "tests" / "fixtures" / "ticker_example.csv"
 
     schema = json.loads(schema_path.read_text())
 

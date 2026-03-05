@@ -77,3 +77,63 @@ def ingest_cmd(
         force_refresh=_as_bool(force_refresh),
     )
     raise typer.Exit(code=exit_code)
+
+
+@app.command("pull-sample")
+def pull_sample_cmd(
+    source: str = typer.Option(
+        "",
+        "--source",
+        help=(
+            "Provider adapter to use. Quando omitido, mostra fontes "
+            "disponíveis e usa yfinance."
+        ),
+    ),
+    ticker: str = typer.Argument(
+        ..., help="Ticker B3 para amostra visual, ex.: PETR4, VALE3, BOVA11"
+    ),
+    days: int = typer.Option(
+        10,
+        "--days",
+        min=1,
+        help="Janela em dias quando --start não for informado",
+    ),
+    start: str | None = typer.Option(None, "--start", help="Data inicial YYYY-MM-DD"),
+    end: str | None = typer.Option(None, "--end", help="Data final YYYY-MM-DD"),
+    output: str | None = typer.Option(
+        None,
+        "--output",
+        help=(
+            "CSV canônico de saída (padrão: dados/samples/<ticker>_sample.csv)"
+        ),
+    ),
+) -> None:
+    """Gera artefatos raw/canônico de amostra via adapter sem persistir no DB."""
+    from src.ingest.pipeline import pull_sample_command
+
+    provs = available_providers()
+    prov_map = {p.lower(): p for p in provs}
+
+    raw_source = source.strip()
+    if not raw_source:
+        typer.echo(f"Fontes disponíveis: {', '.join(provs)}")
+        src_name = "yfinance"
+        typer.echo(f"Usando fonte padrão: {src_name}")
+    else:
+        src_key = raw_source.lower()
+        if src_key not in prov_map:
+            raise typer.BadParameter(
+                "unknown provider %r, choose from %s"
+                % (source, ", ".join(provs)),
+            )
+        src_name = prov_map[src_key]
+
+    exit_code = pull_sample_command(
+        ticker,
+        src_name,
+        days=days,
+        start=start,
+        end=end,
+        output=output,
+    )
+    raise typer.Exit(code=exit_code)

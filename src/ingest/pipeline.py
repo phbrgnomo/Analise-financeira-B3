@@ -13,9 +13,11 @@ Snapshot caching and incremental diff logic live in
 from __future__ import annotations
 
 import logging
+import re
 import time
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Any, Dict
 
 import typer  # used by ingest_command error handling
@@ -45,6 +47,179 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 logger = logging.getLogger(__name__)
+
+
+def _safe_filename_token(value: str) -> str:
+    """Return a filesystem-safe token preserving common ticker characters."""
+    return re.sub(r"[^A-Za-z0-9._-]", "_", value)
+
+
+def _resolve_sample_window(
+    days: int,
+    start: str | None,
+    end: str | None,
+) -> tuple[str, str]:
+    """Resolve date window for sample pulls using UTC calendar dates."""
+    now = datetime.now(timezone.utc).date()
+
+    if end is None:
+        end_date = now.strftime("%Y-%m-%d")
+    else:
+        end_date = end
+
+    if start is not None:
+        return start, end_date
+
+    safe_days = max(1, int(days))
+    start_date = (now - timedelta(days=safe_days)).strftime("%Y-%m-%d")
+    return start_date, end_date
+
+
+def pull_sample(
+    ticker: str,
+    source: str = "yfinance",
+    *,
+    days: int = 10,
+    start: str | None = None,
+    end: str | None = None,
+    output: str | None = None,
+) -> Dict[str, Any]:
+    """Fetch provider data and export raw/canonical CSV sample artifacts.
+
+    This command is intended as a visual smoke-test helper for adapter output,
+    canonical mapping, and schema validation, without any database persistence.
+    """
+    try:
+        canonical_ticker = normalize_b3_ticker(ticker)
+    except ValueError:
+        canonical_ticker = ticker.strip().upper()
+
+    job_id = str(uuid.uuid4())
+    started_at = _now_iso()
+
+    try:
+        from src.adapters.factory import get_adapter
+        from src.etl.mapper import to_canonical
+
+        adapter = get_adapter(source)
+        start_date, end_date = _resolve_sample_window(days, start, end)
+        raw_df = adapter.fetch(
+            canonical_ticker,
+            start_date=start_date,
+            end_date=end_date,
+        )
+
+        if raw_df.empty:
+            msg = (
+                f"provider returned empty DataFrame for {canonical_ticker} "
+                f"in range {start_date}..{end_date}"
+            )
+            metadata = {
+                "job_id": job_id,
+                "ticker": canonical_ticker,
+                "source": source,
+                "status": "error",
+                "error_message": msg,
+                "started_at": started_at,
+                "finished_at": _now_iso(),
+            }
+            _record_ingest_metadata(metadata)
+            return {"job_id": job_id, "status": "error", "error_message": msg}
+
+        canonical_df = to_canonical(
+            raw_df,
+            provider_name=source,
+            ticker=canonical_ticker,
+        )
+
+        safe_ticker = _safe_filename_token(canonical_ticker)
+        safe_source = _safe_filename_token(source)
+        samples_dir = Path("dados") / "samples"
+        samples_dir.mkdir(parents=True, exist_ok=True)
+
+        raw_out = samples_dir / f"{safe_ticker}_{safe_source}_raw.csv"
+        raw_to_write = raw_df
+        if "Date" not in raw_to_write.columns and "date" not in raw_to_write.columns:
+            raw_to_write = raw_to_write.reset_index()
+        raw_to_write.to_csv(raw_out, index=False)
+
+        canonical_out = (
+            Path(output)
+            if output
+            else samples_dir / f"{safe_ticker}_{safe_source}_sample.csv"
+        )
+        canonical_out.parent.mkdir(parents=True, exist_ok=True)
+        canonical_df.to_csv(canonical_out, index=False)
+
+        metadata = {
+            "job_id": job_id,
+            "ticker": canonical_ticker,
+            "source": source,
+            "status": "success",
+            "rows": len(canonical_df),
+            "raw_output": str(raw_out),
+            "canonical_output": str(canonical_out),
+            "started_at": started_at,
+            "finished_at": _now_iso(),
+        }
+        _record_ingest_metadata(metadata)
+
+        return {
+            "job_id": job_id,
+            "status": "success",
+            "rows": len(canonical_df),
+            "raw_output": str(raw_out),
+            "canonical_output": str(canonical_out),
+        }
+    except Exception as exc:  # pragma: no cover - defensive orchestration
+        msg = f"pull_sample failed: {exc}"
+        logger.exception(msg)
+        metadata = {
+            "job_id": job_id,
+            "ticker": canonical_ticker,
+            "source": source,
+            "status": "error",
+            "error_message": msg,
+            "started_at": started_at,
+            "finished_at": _now_iso(),
+        }
+        _record_ingest_metadata(metadata)
+        return {"job_id": job_id, "status": "error", "error_message": msg}
+
+
+def pull_sample_command(
+    ticker: str,
+    source: str = "yfinance",
+    *,
+    days: int = 10,
+    start: str | None = None,
+    end: str | None = None,
+    output: str | None = None,
+) -> int:
+    """CLI-friendly wrapper for sample pulling with adapter/mapper pipeline."""
+    result = pull_sample(
+        ticker,
+        source,
+        days=days,
+        start=start,
+        end=end,
+        output=output,
+    )
+
+    job_id = result.get("job_id")
+    if result.get("status") == "success":
+        if job_id:
+            print(f"job_id={job_id}")
+        print(f"raw: {result.get('raw_output')}")
+        print(f"canonical: {result.get('canonical_output')}")
+        print(f"rows: {result.get('rows')}")
+        return 0
+
+    err = result.get("error_message", "unknown error")
+    typer.secho(err, err=True)
+    if job_id:
+        typer.secho(f"job_id={job_id}", err=True)
+    return 1
 
 
 # ---------------------------------------------------------------------------

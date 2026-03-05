@@ -53,7 +53,7 @@ Thumbs.db
 # Logs and databases
 *.log
 *.sqlite3
-.dados/
+dados/
 
 # Editor temporary files
 *~

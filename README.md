@@ -135,41 +135,7 @@ As instruções completas e o playbook estão em `docs/playbooks/testing-network
 
 ### Comandos principais da CLI
 
-- Executar ETL padrão (ingestão + retornos):
-
-```bash
-poetry run main run
-```
-
-- Executar ETL para um ticker:
-
-```bash
-poetry run main run --ticker PETR4
-```
-
-- Calcular retornos para ticker específico:
-
-```bash
-poetry run main compute-returns --ticker PETR4
-```
-
-- Calcular retornos para todos os tickers existentes no banco:
-
-```bash
-poetry run main compute-returns
-```
-
-- Ingerir CSV local no banco (incremental + cache/checksum):
-
-```bash
-poetry run main ingest-snapshot snapshots/PETR4_snapshot.csv --ticker PETR4
-```
-
-- Exportar dados do SQLite para CSV:
-
-```bash
-poetry run main export-csv --ticker PETR4
-```
+Para principais comandos do CLI e seus parâmetros, consulte `poetry run main --help` ou o playbook detalhado em `docs/playbooks/quickstart-cli.md`.
 
 ## Estrutura do repositório (resumo)
 - `src/` — código principal

@@ -311,3 +311,109 @@ def test_ingest_cmd_validates_provider(monkeypatch):
     with pytest.raises(click.exceptions.Exit):
         ingest_cmd("YFINANCE", "PETR4")
     # catching Exit is sufficient; absence of BadParameter shows validation passed
+
+
+def test_pull_sample_command_success_writes_files(tmp_path, monkeypatch, capsys):
+    """pull_sample_command gera CSV raw e canônico em dados/samples."""
+    dummy = DummyAdapter()
+    monkeypatch.setattr("src.adapters.factory.get_adapter", lambda name: dummy)
+    monkeypatch.setattr("src.etl.mapper.to_canonical", lambda df, **kw: df)
+    monkeypatch.chdir(tmp_path)
+
+    rc = pipeline.pull_sample_command("PETR4", "dummy", days=5)
+    assert rc == 0
+
+    captured = capsys.readouterr()
+    assert "raw:" in captured.out
+    assert "canonical:" in captured.out
+
+    assert (tmp_path / "dados" / "samples" / "PETR4_dummy_raw.csv").exists()
+    assert (tmp_path / "dados" / "samples" / "PETR4_dummy_sample.csv").exists()
+
+
+def test_pull_sample_command_invalid_provider_returns_error(capsys):
+    """Provider inválido em pull_sample_command retorna código de erro."""
+    rc = pipeline.pull_sample_command("PETR4", "no_such_provider")
+    assert rc == 1
+    captured = capsys.readouterr()
+    assert "unknown adapter provider" in captured.err
+
+
+def test_pull_sample_cmd_validates_provider(monkeypatch):
+    """Wrapper Typer do pull-sample valida provider e normaliza casing."""
+    import click
+    import typer
+
+    from src.pipeline import pull_sample_cmd
+
+    with pytest.raises(typer.BadParameter):
+        pull_sample_cmd("no_such_provider", "PETR4")
+
+    seen = {}
+
+    def fake_pull_sample_command(
+        ticker,
+        source,
+        *,
+        days=10,
+        start=None,
+        end=None,
+        output=None,
+    ):
+        seen["ticker"] = ticker
+        seen["source"] = source
+        seen["days"] = days
+        seen["start"] = start
+        seen["end"] = end
+        seen["output"] = output
+        return 0
+
+    monkeypatch.setattr(
+        "src.ingest.pipeline.pull_sample_command",
+        fake_pull_sample_command,
+    )
+
+    with pytest.raises(click.exceptions.Exit):
+        pull_sample_cmd("YFINANCE", "PETR4", 7, "2026-01-01", "2026-01-07", None)
+
+    assert seen["ticker"] == "PETR4"
+    assert seen["source"] == "yfinance"
+    assert seen["days"] == 7
+    assert seen["start"] == "2026-01-01"
+    assert seen["end"] == "2026-01-07"
+
+
+def test_pull_sample_cmd_without_source_lists_available(monkeypatch, capsys):
+    """Sem --source, o comando lista fontes e usa yfinance como padrão."""
+    import click
+
+    from src.pipeline import pull_sample_cmd
+
+    seen = {}
+
+    def fake_pull_sample_command(
+        ticker,
+        source,
+        *,
+        days=10,
+        start=None,
+        end=None,
+        output=None,
+    ):
+        seen["ticker"] = ticker
+        seen["source"] = source
+        return 0
+
+    monkeypatch.setattr(
+        "src.ingest.pipeline.pull_sample_command",
+        fake_pull_sample_command,
+    )
+
+    with pytest.raises(click.exceptions.Exit):
+        pull_sample_cmd("", "PETR4")
+
+    captured = capsys.readouterr()
+    assert "Fontes disponíveis:" in captured.out
+    assert "Usando fonte padrão: yfinance" in captured.out
+    assert seen["ticker"] == "PETR4"
+    assert seen["source"] == "yfinance"

@@ -35,7 +35,7 @@
 - Ensure tests pass: `poetry run pytest`.
 
 ## Project Conventions
-- Data files: small example CSVs are kept in `dados/` and `snapshots/` for tests—avoid committing large raw datasets. Place additional sample files under `dados/samples` or `snapshots/` and add a corresponding checksum entry in `snapshots/checksums.json` when needed.
+- Data files: small example CSVs are kept in `dados/` and `snapshots/` for tests—avoid committing large raw datasets. Place additional sample files under `dados/samples` or `snapshots/` and add a corresponding checksum entry in `snapshots/checksums.json` when needed. The schema validation fixture `ticker_example.csv` lives in `tests/fixtures/`.
 - O helper legado de coleta foi removido; utilize apenas a adapter factory.
 - DB path default: `dados/data.db`. Tests typically inject a temporary `conn` or override `db_path` via fixtures; follow patterns in `tests/conftest.py`.
 - Idempotency: `src/db.py` computes a `raw_checksum` to avoid unnecessary upserts—respect this behavior when writing adapters or ETL scripts.

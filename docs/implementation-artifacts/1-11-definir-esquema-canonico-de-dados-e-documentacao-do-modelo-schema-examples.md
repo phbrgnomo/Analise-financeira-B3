@@ -12,15 +12,15 @@ so that downstream consumers (notebooks, metrics) have a stable contract.
 ## Acceptance Criteria
 
 - A `docs/schema.json` defines column names, types, nullable flags and semantic notes.
-- An example CSV `dados/samples/ticker_example.csv` is included and referenced by `docs/schema.md` explaining column meanings and versioning strategy.
+- An example CSV `tests/fixtures/ticker_example.csv` is included and referenced by `docs/schema.md` explaining column meanings and versioning strategy.
 - Migration notes for schema changes are documented (minor vs breaking changes) and versioned using `schema_version` in snapshot metadata.
 
 ## Tasks / Subtasks
 
 - [x] Create `docs/schema.json` with canonical column definitions and `schema_version: 1`.
 - [x] Add `docs/schema.md` describing the schema, versioning policy and migration guidance.
-- [x] Add example CSV `dados/samples/ticker_example.csv` with representative rows and header.
-- [x] Add unit test `tests/test_schema.py` to validate `dados/samples/ticker_example.csv` against `docs/schema.json` using `pandera` or lightweight validator.
+- [x] Add example CSV `tests/fixtures/ticker_example.csv` with representative rows and header.
+- [x] Add unit test `tests/test_schema.py` to validate `tests/fixtures/ticker_example.csv` against `docs/schema.json` using `pandera` or lightweight validator.
 - [x] Reference schema in `docs/implementation-artifacts/1-1-implementar-interface-de-adapter-e-adaptador-yfinance-minimo.md` and adapter mappings (adicionado referência em 1-1).
 - [x] Update `docs/implementation-artifacts/sprint-status.yaml` status for this story to `ready-for-dev` (persisted).
 - [x] Documentar o que foi implantado nessa etapa em `docs/sprint-reports` conforme definido no FR28 (`docs/planning-artifacts/prd.md`) (arquivo docs/sprint-reports/1-11-implantacao.md adicionado).
@@ -39,7 +39,7 @@ so that downstream consumers (notebooks, metrics) have a stable contract.
 
 - `docs/schema.json` — canonical schema definition and semantic notes.
 - `docs/schema.md` — human-friendly explanation, migration policy and examples.
-- `dados/samples/ticker_example.csv` — example CSV referenced by docs and tests.
+- `tests/fixtures/ticker_example.csv` — example CSV referenced by docs and tests.
 
 ### Testing Requirements
 
@@ -60,7 +60,7 @@ GPT-5 mini
 ### Completion Notes List
 
 - Created canonical schema and example artifacts; updated sprint status.
-- Implemented artifacts: docs/schema.json, docs/schema.md, dados/samples/ticker_example.csv, tests/test_schema.py; added unit test validating schema vs example CSV (tests/test_schema.py). New test executed locally and passed.
+- Implemented artifacts: docs/schema.json, docs/schema.md, tests/fixtures/ticker_example.csv, tests/test_schema.py; added unit test validating schema vs example CSV (tests/test_schema.py). New test executed locally and passed.
 - Adicionada referência ao schema em `docs/implementation-artifacts/1-1-implementar-interface-de-adapter-e-adaptador-yfinance-minimo.md`.
 - Criado `docs/implementation-artifacts/sprint-status.yaml` e `docs/sprint-reports/1-11-implantacao.md` documentando a implantação.
 
@@ -69,7 +69,7 @@ GPT-5 mini
 
 - `docs/schema.json` (novo)
 - `docs/schema.md` (novo)
-- `dados/samples/ticker_example.csv` (novo)
+- `tests/fixtures/ticker_example.csv` (novo)
 - `tests/test_schema.py` (novo)
 - `docs/implementation-artifacts/sprint-status.yaml` (novo)
 - `docs/sprint-reports/1-11-implantacao.md` (novo)
@@ -79,7 +79,7 @@ GPT-5 mini
 
 ### Change Log
 
-- 2026-02-19 17:32:34 -0300 — 514f81b — phbr — story 1-11: mark tasks done, add schema/docs/examples/tests (fix lint) — adiciona schema (docs/schema.json), docs (docs/schema.md), exemplo CSV (dados/samples/ticker_example.csv) e teste (tests/test_schema.py).
+- 2026-02-19 17:32:34 -0300 — 514f81b — phbr — story 1-11: mark tasks done, add schema/docs/examples/tests (fix lint) — adiciona schema (docs/schema.json), docs (docs/schema.md), exemplo CSV (tests/fixtures/ticker_example.csv) e teste (tests/test_schema.py).
 
 ### Tests Executed
 
@@ -90,7 +90,7 @@ GPT-5 mini
 
 - Criado o esquema canônico em `docs/schema.json` com `schema_version: 1` e notas semânticas para cada coluna.
 - Adicionada documentação em `docs/schema.md` explicando campos, a política de versionamento e orientações de migração (minor vs breaking).
-- Incluído exemplo CSV em `dados/samples/ticker_example.csv` com linhas representativas e colunas de metadados (`fetched_at`, `raw_checksum`).
+- Incluído exemplo CSV em `tests/fixtures/ticker_example.csv` com linhas representativas e colunas de metadados (`fetched_at`, `raw_checksum`).
 - Adicionado teste unitário `tests/test_schema.py` que valida a ordem das colunas e formatos essenciais (date, fetched_at, raw_checksum).
 
 ### Pendências

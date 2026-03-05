@@ -47,6 +47,14 @@ poetry run main pipeline ingest PETR4 --force-refresh
 poetry run main pipeline ingest --source yfinance PETR4 --force-refresh
 ```
 
+Gerar amostra visual (raw + canônico) via adapter, sem persistir no DB:
+
+```bash
+poetry run main pipeline pull-sample PETR4
+# provider explícito e janela customizada
+poetry run main pipeline pull-sample --source yfinance PETR4 --days 7
+```
+
 Calcular retornos:
 
 ```bash
