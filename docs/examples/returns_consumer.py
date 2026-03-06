@@ -50,6 +50,9 @@ def main(db_path: str = "dados/data.db", ticker: str = "PETR4.SA"):
             logger.warning(msg)
             raise ValueError(msg)
 
+        # calcula retorno acumulado: transforma cada retorno em fator de
+        # crescimento (1 + return_value), aplica produto acumulado e subtrai 1
+        # para converter de volta em porcentagem acumulada.
         df["cumulative_return"] = (1 + df["return_value"]).cumprod() - 1
         print(df.tail())
 

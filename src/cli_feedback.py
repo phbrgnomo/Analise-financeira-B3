@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
+from typing import Literal
 
 import typer
 
@@ -35,6 +36,9 @@ def format_duration(seconds: float) -> str:
     hours, remaining_minutes = divmod(int(minutes), 60)
     return f"{hours}h {remaining_minutes}m"
 
+
+
+StepStatus = Literal["success", "error", "warning", "skip"]
 
 class CliFeedback:
     """Helper simples para exibir progresso, etapas e resumos na CLI."""
@@ -78,7 +82,7 @@ class CliFeedback:
         self,
         handle: StepHandle,
         *,
-        status: str = "success",
+        status: StepStatus = "success",
         detail: str | None = None,
     ) -> None:
         """Finaliza uma etapa com status, detalhe e duração formatada."""

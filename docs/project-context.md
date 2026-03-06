@@ -43,7 +43,96 @@ Nota: documente e justifique qualquer mudança de versão em `pyproject.toml`; c
 
 - CLI: o projeto usa `typer` para a CLI (`src/main.py`). Mantenha comandos leves; evite imports pesados no topo do módulo da CLI — importe dentro da função do comando quando necessário.
 - Adapter Factory: siga a fábrica de adapters em `src/adapters/factory.py`. Sempre obter instâncias via `get_adapter()` ou `register_adapter()`; não introduza caminhos alternativos de criação de adapters sem atualizar `docs/modules/adapter-guidelines.md`.
+
+  ```python
+  # exemplo mínimo de uso
+  from src.adapters.factory import get_adapter, register_adapter
+
+  # pegar um adapter já registrado (yfinance é um adapter builtin)
+  yf = get_adapter("yfinance")
+  df = yf.fetch("PETR4.SA", start="2020-01-01")
+
+  # registrar um adapter customizado (veja docs/modules/adapter-guidelines.md
+  # para a assinatura de BaseAdapter e requisitos de retorno)
+  class MyAdapter(BaseAdapter):
+      def fetch(self, ticker: str, **kwargs) -> pandas.DataFrame:
+          ...
+
+  register_adapter("mykey", MyAdapter)  # disponibiliza get_adapter("mykey")
+  ```
+
+
+- **Testes de exemplo**: aqui está um padrão de fixtures que você pode copiar
+  para `tests/conftest.py` e reutilizar nos seus `test_*.py`.
+
+  ```python
+  # tests/conftest.py
+  import pytest
+  import sqlite3
+  from unittest.mock import patch
+  import pandas as pd
+
+  @pytest.fixture
+  def yf_mock():
+      """Simula a chamada a yfinance.download usada por adapters builtin."""
+      with patch("yfinance.download") as mock:
+          # configure um DataFrame de exemplo retornado pelo mock
+          mock.return_value = pd.DataFrame({"date": ["2020-01-01"], "close": [100]})
+          yield mock
+
+  @pytest.fixture
+  def tmp_db():
+      """Conexão SQLite in-memory que pode ser injetada nos helpers."""
+      conn = sqlite3.connect(":memory:")
+      yield conn
+      conn.close()
+  ```
+
+  Um teste concreto usando essas fixtures poderia ser:
+
+  ```python
+  # tests/test_etl.py
+  def test_process_etl_with_mock(yf_mock, tmp_db):
+      from src.adapters.factory import get_adapter
+      from src.db import write_prices, compute_raw_checksum
+
+      adapter = get_adapter("yfinance")
+      df = adapter.fetch("PETR4")  # yfinance.download interceptado pelo yf_mock
+      assert not df.empty
+
+      # passe a conexão in-memory ao seu código
+      # supondo uma função process_etl(ticker, conn)
+      process_etl("PETR4", conn=tmp_db)
+      cur = tmp_db.cursor()
+      cur.execute("SELECT COUNT(*) FROM prices")
+      assert cur.fetchone()[0] >= 0
+  ```
+
+
 - ETL/Adapters: módulos em `src/etl/` e `src/adapters/` devem aceitar injeção de `conn`/dependências para facilitar testes. Preserve a lógica de `raw_checksum` e idempotência ao gravar no DB.
+
+  ```python
+  import sqlite3
+  from contextlib import contextmanager
+  from src.adapters.factory import get_adapter
+  from src.db import write_prices, compute_raw_checksum
+
+  def process_etl(ticker: str, conn: sqlite3.Connection):
+      # conn é injetado pelo chamador (tests, CLI, etc.)
+      with conn:  # começa/commita transação automáticamente
+          adapter = get_adapter("yfinance")
+          df = adapter.fetch(ticker)
+
+          raw_checksum = compute_raw_checksum(df)
+          # write_prices é idempotente e utiliza raw_checksum internamente
+          write_prices(df, conn=conn, raw_checksum=raw_checksum)
+  ```
+
+  A documentação em `docs/modules/adapter-guidelines.md` descreve o contrato
+  que cada adapter deve seguir (métodos obrigatórios, tratamento de erros,
+  exemplos de teste), o que garante que `get_adapter` sempre retorne um objeto
+  com a interface esperada.
+
 - SQLite/DB: a persistência canônica é `sqlite3` (arquivo padrão `dados/data.db`). Use context managers para transações e permita sobrepor `conn` em testes/fixtures.
 - SQLAlchemy: presente como dependência em alguns lugares; verifique uso antes de introduzir sessões globais — prefira sessões explícitas e injeção de engine.
 - Sem servidor web: não adicione frameworks web (Flask/FastAPI) a menos que haja justificativa clara e documentação de compatibilidade e testes.
@@ -76,6 +165,19 @@ Nota: documente e justifique qualquer mudança de versão em `pyproject.toml`; c
 - Pequenas funções: prefira funções pequenas e puras quando possível; evite aninhamento profundo e efeitos colaterais.
 - Exceções: capture exceções específicas e evite `bare except`. Use `raise from` para manter contexto de erros.
 - Logging: utilize `src/logging_config.py` para logging estruturado; não use `print()` em produção e não logue dados sensíveis.
+
+  Exemplo rápido de uso:
+
+  ```python
+  from src.logging_config import get_logger
+
+  logger = get_logger(__name__)
+  logger.info("iniciando processamento", extra={"ticker": "PETR4", "period": "1y"})
+  ```
+
+  o factory `get_logger` retorna um logger configurado com o formatter
+  JSON do projeto; o parâmetro `extra` permite anexar campos estruturados
+  que aparecem no log final.
 - Gerenciamento de recursos: sempre usar context managers (`with`) para arquivos, conexões e transações; injete `conn`/engine para facilitar testes.
 - Dependências: registre novas dependências em `pyproject.toml` e justifique mudanças em `docs/sprint-reports/`.
 - Revisões: faça PRs pequenos, com descrição clara e checklist; execute `poetry run pytest -q` e linters antes de pedir revisão.

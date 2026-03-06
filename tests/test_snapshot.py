@@ -1,32 +1,38 @@
 import logging
+import os
 from pathlib import Path
+from typing import Optional
 
 from src.etl import snapshot as snapshot_module
 
-# module-level helper counter to ensure deterministic mtimes when no
-# explicit timestamp is provided.
-_make_file_counter = 0
+# contador auxiliar a nível de módulo para garantir mtimes determinísticos
+# quando nenhum timestamp explícito é fornecido.
+_contador_arquivos = 0
 
-def _make_file(path: Path, mtime: float | None = None):
-    """Create an empty file and set its modification time.
+def _make_file(path: Path, mtime: Optional[float] = None) -> Path:
+    """Cria um arquivo vazio e ajusta seu tempo de modificação.
 
-    The helper is used by snapshot tests to produce files with predictable
-    mtimes so pruning logic can rely on chronological ordering.  If
-    ``mtime`` is provided (a POSIX timestamp), it will be applied; otherwise
-    an internal counter is used to guarantee each call gets a distinct time.
+    O auxiliar é usado pelos testes de snapshot para produzir arquivos com
+    mtimes previsíveis, de modo que a lógica de pruning possa confiar na
+    ordenação cronológica. Se ``mtime`` for fornecido (timestamp POSIX), será
+    aplicado; caso contrário, um contador interno garante que cada chamada
+    receba um horário distinto.
 
     Args:
-        path: target path for the new file
-        mtime: optional timestamp to assign as both access and modification
-            time.  When omitted, an incrementing counter ensures determinism.
+        path: caminho alvo para o novo arquivo
+        mtime: timestamp opcional a ser atribuído como tempo de acesso e
+            modificação. Quando omitido, um contador incremental assegura
+            determinismo.
+
+    Returns:
+        o mesmo caminho passado, para conveniência.
     """
     path.write_text("")
     if mtime is None:
-        # use module-level counter instead of function attribute
-        global _make_file_counter
-        _make_file_counter += 1
-        mtime = _make_file_counter
-    import os
+        # usa contador a nível de módulo em vez de atributo da função
+        global _contador_arquivos
+        _contador_arquivos += 1
+        mtime = _contador_arquivos
 
     os.utime(path, (mtime, mtime))
     return path

@@ -271,8 +271,19 @@ def _make_metadata(
     """
     # guard against callers passing reserved keys again via **extras;
     # remove them silently so they cannot clobber the canonical values.
+    # we also want to surface the fact that extras contained those keys so
+    # callers can diagnose unexpected duplicates.
+    removed: list[str] = []
     for key in ("job_id", "ticker", "source", "status", "started_at", "finished_at"):
-        extras.pop(key, None)
+        if key in extras:
+            removed.append(key)
+            extras.pop(key, None)
+    if removed:
+        logger.debug(
+            "removendo chaves reservadas de extras em _make_metadata: %s",
+            ", ".join(removed),
+            extra={"job_id": job_id, "ticker": ticker},
+        )
 
     out: Dict[str, Any] = {
         "job_id": job_id,
@@ -574,11 +585,9 @@ def ingest_command(
             feedback.info("dry run completed; no data written")
         # surface duration and reason for the run when available
         duration = result.get("duration")
-        reason = None
-        try:
-            reason = result.get("persist", {}).get("reason")
-        except Exception:
-            reason = None
+        # obter motivo de persistência de maneira segura: encadeamento de
+        # chamadas get já retorna None se qualquer chave estiver ausente.
+        reason = result.get("persist", {}).get("reason")
         if duration or reason:
             parts = []
             if duration:

@@ -250,10 +250,12 @@ def test_incremental_ingest_only_new_and_changed_rows(tmp_path, monkeypatch):
     mp, snap_dir = setup_env(tmp_path, ttl="100000")
 
     ingest_only_new_and_changed_rows_helper(
-        "2026-01-02", 20, db_path, 2
+        date="2026-01-02", value=20, db_path=db_path,
+        expected_rows_processed=2,
     )
     ingest_only_new_and_changed_rows_helper(
-        "2026-01-03", 30, db_path, 1
+        date="2026-01-03", value=30, db_path=db_path,
+        expected_rows_processed=1,
     )
     # verify that the database contains three rows now
     out = db.read_prices("BAR", db_path=str(db_path))
@@ -265,12 +267,23 @@ def test_incremental_ingest_only_new_and_changed_rows(tmp_path, monkeypatch):
 # helper for incremental ingest tests, called from
 # ``test_incremental_ingest_only_new_and_changed_rows``
 
-def ingest_only_new_and_changed_rows_helper(arg0, arg1, db_path, arg3):
-    """Create a two-row snapshot, ingest it, and assert results."""
-    df1 = make_sample_df(["2026-01-01", arg0], values=[10, arg1])
+def ingest_only_new_and_changed_rows_helper(
+    date: str,
+    value: int,
+    db_path,
+    expected_rows_processed: int,
+):
+    """Cria um snapshot com duas datas e ingere, verificando resultados.
+
+    O argumento ``date`` representa a segunda linha do snapshot (a primeira é
+    fixa em 2026-01-01). ``value`` é o valor associado à segunda data e
+    ``expected_rows_processed`` indica quantas linhas devem ser processadas
+    pelo ingest. ``db_path`` é usado para conectar ao banco.
+    """
+    df1 = make_sample_df(["2026-01-01", date], values=[10, value])
     r1 = ingest_from_snapshot(df1, "BAR", db_path=str(db_path))
     assert not r1["cached"]
-    assert r1["rows_processed"] == arg3
+    assert r1["rows_processed"] == expected_rows_processed
 
 
 def test_snapshot_metadata_cache_fallback(tmp_path, monkeypatch, caplog):

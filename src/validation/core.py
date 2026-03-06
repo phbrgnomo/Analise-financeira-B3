@@ -124,7 +124,7 @@ def _heuristic_high_low_violations(
     try:
         if "high" in df.columns and "low" in df.columns:
             # marca violações apenas quando ambos os valores estiverem presentes _e_
-            # high is strictly less than low; equality is permitted.
+            # high é estritamente menor que low; igualdade é permitida.
             mask_violation = (
                 df["high"].notna()
                 & df["low"].notna()
@@ -134,22 +134,27 @@ def _heuristic_high_low_violations(
             vio_idx = df.index[positions]
             if len(vio_idx) > 0:
                 reason_code = "CONSTRAINT_VIOLATION"
-                for idx in vio_idx:
+                # para evitar acessos linha-a-linha via ``df.at`` que são
+                # lentos, extraímos os valores de uma vez usando .loc. Isso
+                # preserva a mesma ordem enquanto reduz múltiplas buscas.
+
+                sub_df = df.loc[vio_idx, ["high", "low"]]
+                for idx, row in sub_df.iterrows():
                     invalid_indices.add(idx)
                     error_records.append(
                         {
                             "row_index": idx,
                             "column": "high,low",
                             "reason_code": reason_code,
-                            "reason_message": (
-                                "Constraint failed: high < low"
-                            ),
-                            "failure_value": {
-                                "high": df.at[idx, "high"],
-                                "low": df.at[idx, "low"],
-                            },
-                        }
-                    )
+                        "reason_message": (
+                            "Falha na restrição: preço máximo < preço mínimo"
+                        ),
+                        "failure_value": {
+                            "high": row["high"],
+                            "low": row["low"],
+                        },
+                    }
+                )
     except Exception as exc:
         logger.debug(
             "Heuristic high/low check failed: %s", exc, exc_info=True

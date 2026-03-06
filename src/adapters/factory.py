@@ -20,9 +20,9 @@ from src.adapters.yfinance_adapter import YFinanceAdapter
 # dictionary of provider name (lowercase) -> Adapter class
 _ADAPTER_REGISTRY: Dict[str, Type[Adapter]] = {
     "yfinance": YFinanceAdapter,
-    # "yahoo" alias removed – use "yfinance" only.  This is a breaking
-    # change; any scripts or integrations that previously referenced
-    # "yahoo" should migrate.
+    # alias "yahoo" removido – use apenas "yfinance". Esta é uma mudança
+    # incompatível (breaking change); quaisquer scripts ou integrações que
+    # referenciavam "yahoo" anteriormente devem migrar.
     "dummy": DummyAdapter,  # synthetic provider used for smoke tests
 }
 

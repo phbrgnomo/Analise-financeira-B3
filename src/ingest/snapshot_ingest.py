@@ -1,26 +1,29 @@
-"""Snapshot ingestion layer: cache, incremental diff and DB persistence.
+"""Camada de ingestão de snapshot: cache, diff incremental e persistência no BD.
 
-This module is one of the central pieces of the ingest workflow.  The
-high-level flow is:
+Este módulo é uma das peças centrais do fluxo de ingestão. O fluxo de alto
+nível é:
 
-1. acquire a ticker-specific lock via :func:`src.locks.acquire_lock` to
-   serialize concurrent invocations in the same process.
-2. load the most recent snapshot metadata from the DB cache.
-3. compute a checksum and evaluate whether the cache is still valid
-   (TTL + matching sha256) unless a force refresh is requested.
-4. when a refresh is required, write a new snapshot CSV and its checksum,
-   then perform an incremental upsert into the ``prices`` table.
+1. adquirir um bloqueio específico por ticker via :func:`src.locks.acquire_lock`
+   para serializar invocações concorrentes no mesmo processo.
+2. carregar os metadados do snapshot mais recente do cache no banco.
+3. calcular um checksum e avaliar se o cache ainda é válido (TTL + sha256
+   coincidente) a menos que um refresh for forçado.
+4. quando um refresh é necessário, gravar um novo CSV de snapshot e seu
+   checksum, então executar um upsert incremental na tabela ``prices``.
 
-Separating these concerns across ``locks.py``, ``snapshot_ingest.py`` and
-``db.*`` keeps each module small, but the above comment helps future
-contributors understand how they interact.  See ``locks`` for the
-locking implementation and ``db`` for the low-level read/write helpers.
+Separar essas preocupações entre ``locks.py``, ``snapshot_ingest.py`` e
+``db.*`` mantém cada módulo pequeno, mas o comentário acima ajuda futuros
+colaboradores a entender como eles interagem. Veja ``locks`` para a
+implementação de bloqueio e ``db`` para os helpers de leitura/gravação
+de baixo nível.
 
-Environment variables
+Variáveis de ambiente
 ---------------------
-``SNAPSHOT_DIR``       - override default snapshot directory (``dados/snapshots``)
-``SNAPSHOT_TTL``       — cache TTL in seconds (float, default 0 → no expiry)
-``FORCE_REFRESH``      — when truthy, bypass cache and always re-ingest
+``SNAPSHOT_DIR``       - sobrescreve o diretório padrão de snapshots
+                         (``dados/snapshots``)
+``SNAPSHOT_TTL``       — TTL de cache em segundos (float, padrão 0 → sem
+                         expiração)
+``FORCE_REFRESH``      — quando truthy, ignora o cache e reinveste sempre
 """
 
 from __future__ import annotations
@@ -277,12 +280,14 @@ def _evaluate_cache_hit(
             )
             _cache_result["reason"] = "within_ttl"
             return _cache_result
-    except Exception:
+    except ValueError as exc:  # parse errors only
+        # keep original message but include the exception text for clarity
         logger.warning(
-            "invalid 'generated_at' in snapshot metadata for %s: %r; "
+            "invalid 'generated_at' in snapshot metadata for %s: %r (%s); "
             "treating as cache miss",
             ticker,
             last_ts_str,
+            exc,
         )
     return None
 
@@ -299,8 +304,21 @@ def _write_and_record_snapshot(
 
     now = datetime.now(timezone.utc)
     ts = now.strftime("%Y%m%dT%H%M%SZ")
-    filename = f"{ticker.replace('.', '_')}-{ts}.csv"
-    out_path = snapshot_dir / filename
+
+    # sanitize ticker so that it cannot escape the snapshot directory or
+    # introduce confusing characters.  Allow alphanumerics, hyphen and
+    # underscore only; everything else becomes underscore.  Also map dots to
+    # underscore for consistency with earlier behaviour.
+    import re
+
+    safe_ticker = re.sub(r"[^A-Za-z0-9_-]", "_", ticker) or "ticker"
+
+    filename = f"{safe_ticker}-{ts}.csv"
+    snapshot_dir_res = snapshot_dir.resolve()
+    out_path = (snapshot_dir_res / filename).resolve()
+    # ensure the resolved output path is inside the snapshot directory
+    if not out_path.is_relative_to(snapshot_dir_res):
+        raise ValueError("sanitized filename escapes snapshot_dir")
 
     # write_snapshot also handles pruning old files via _prune_old_snapshots
     sha = write_snapshot(df, out_path)
@@ -330,8 +348,11 @@ def _run_incremental_ingest(
 
     try:
         existing = _db.read_prices(ticker, db_path=db_path)
-    except Exception:
+    except (sqlite3.DatabaseError, FileNotFoundError):
+        # common benign failures: missing DB file or corrupted database
         existing = None
+    except Exception:  # pragma: no cover - propagate unexpected errors
+        raise
 
     rows_subset = rows_to_ingest(df, existing)
     rows_processed = len(rows_subset)

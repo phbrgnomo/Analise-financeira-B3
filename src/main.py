@@ -6,12 +6,17 @@ comandos para ingestão, ETL e exportação de dados.
 Use ``poetry run main --help`` para ver todos os comandos disponíveis.
 """
 
+import json
+import logging
 import os
 from contextlib import suppress
 from pathlib import Path
-from typing import Optional, TypedDict
+from typing import TYPE_CHECKING, Optional, TypedDict
 
 import typer
+
+if TYPE_CHECKING:
+    import pandas as pd
 from dotenv import load_dotenv
 
 # load any local .env file early so calls to os.getenv work below; this
@@ -89,7 +94,7 @@ def _normalize_cli_ticker(value: str) -> str:
 class _ComputeResult(TypedDict):
     rows: int
     persisted: bool
-    sample_df: object | None  # pandas.DataFrame or None
+    sample_df: "pd.DataFrame | None"  # pandas.DataFrame or None
 
 
 
@@ -155,7 +160,8 @@ def run_cmd(
     """Executa fluxo ETL principal (ingestão + cálculo de retornos)."""
     from src.ingest.pipeline import ingest
 
-    feedback = CliFeedback("run")
+    # label shown in CLI output; localized to Portuguese
+    feedback = CliFeedback("executar")
 
     effective_ticker = ticker or ticker_arg or None
     effective_provider = provider or provider_arg or "yfinance"
@@ -165,14 +171,14 @@ def run_cmd(
     if effective_ticker is None:
         tickers = list(DEFAULT_TICKERS)
         feedback.start(
-            f"executando tickers padrão com provider={effective_provider}"
+            f"processando tickers padrão com provider={effective_provider}"
         )
         feedback.info(f"Tickers: {', '.join(tickers)}")
         feedback.info("Para ticker específico, execute: main run --ticker <ticker>")
     else:
         tickers = [_normalize_cli_ticker(effective_ticker)]
         feedback.start(
-            f"executando ticker={tickers[0]} com provider={effective_provider}"
+            f"processando ticker={tickers[0]} com provider={effective_provider}"
         )
 
     ok = 0
@@ -226,7 +232,7 @@ def run_cmd(
             detail=f"{rows} retorno(s) persistidos",
         )
 
-    summary = f"Resumo run: sucesso={ok}, falhas={failed}"
+    summary = f"Resumo: sucesso={ok}, falhas={failed}"
     if warnings:
         summary += f", avisos={warnings}"
     feedback.summary(summary)
@@ -400,7 +406,8 @@ def ingest_snapshot_cmd(
         )
 
     feedback.summary("Ingestão de snapshot concluída")
-    typer.echo(result)
+    # exibir resultado em JSON formatado para legibilidade humana
+    typer.echo(json.dumps(result, indent=2, ensure_ascii=False))
 
 
 @app.command("export-csv")
@@ -480,12 +487,33 @@ def export_csv_cmd(
 
 
 if __name__ == "__main__":
-    with suppress(Exception):
+    # configuração de logging deve ser tentada, mas qualquer erro deve
+    # ser reportado em vez de silenciosamente ignorado.
+    try:
         configure_logging()
+    except Exception as e:  # pragma: no cover - very unlikely, but safe
+        # usar logger disponível, mesmo que básico
+        logging.getLogger(__name__).exception(
+            "falha ao configurar logging: %s", e
+        )
 
     if os.getenv("PROMETHEUS_METRICS"):
-        with suppress(Exception):
-            port = int(os.getenv("PROMETHEUS_METRICS_PORT", "8000"))
-            metrics.start_metrics_server(port)
+        raw_port = os.getenv("PROMETHEUS_METRICS_PORT", "8000")
+        try:
+            port = int(raw_port)
+        except ValueError:
+            logging.getLogger(__name__).error(
+                "porta de métricas inválida %r; ignorando inicialização",
+                raw_port,
+            )
+        else:
+            try:
+                metrics.start_metrics_server(port)
+            except Exception as e:  # include OSError and others
+                logging.getLogger(__name__).exception(
+                    "falha ao iniciar servidor de métricas na porta %s: %s",
+                    port,
+                    e,
+                )
 
     app()

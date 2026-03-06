@@ -150,6 +150,14 @@ class TestValidateDataFrame:
         # At least one row should fail the high > low check
         assert summary.rows_invalid >= 1
         assert summary.rows_valid <= 2
+        # reason_message should now be Portuguese per core validation rule
+        recs = invalid_df.to_dict(orient="records")
+        # errors are stored in the special _validation_errors column
+        assert any(
+            err.get("reason_message", "").startswith("Falha na restrição")
+            for r in recs
+            for err in r.get("_validation_errors", [])
+        )
 
     def test_validate_dataframe_under_threshold(self):
         """Given <10% invalid rows, should pass threshold check."""

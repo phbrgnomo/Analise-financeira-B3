@@ -13,7 +13,10 @@ def test_factory_returns_adapter_and_provider_override(monkeypatch):
         def fetch(self, ticker, start_date=None, end_date=None, **kwargs):
             return pd.DataFrame({'a': [1]})
 
-    monkeypatch.setattr('src.adapters.factory._ADAPTER_REGISTRY', {'yfinance': Dummy})
+    registry = {'yfinance': Dummy}
+    monkeypatch.setattr(
+        'src.adapters.factory._ADAPTER_REGISTRY', registry
+    )
 
     adapter = get_adapter('yfinance')
     assert isinstance(adapter, Dummy)
@@ -22,11 +25,12 @@ def test_factory_returns_adapter_and_provider_override(monkeypatch):
 
 
 def test_register_adapter_and_get(monkeypatch):
-    # isolate the global registry so other tests aren't affected
+    """Verifica o registro de um adapter customizado e sua recuperação."""
+    # isolar o registro global para que outros testes não sejam afetados
     monkeypatch.setattr('src.adapters.factory._ADAPTER_REGISTRY', {})
 
     class Dummy(YFinanceAdapter):
-        # match base class signature to keep type checkers happy
+        # assina igual à classe-base para agradar ao type checker
         def fetch(
             self,
             ticker: str,
@@ -42,22 +46,28 @@ def test_register_adapter_and_get(monkeypatch):
 
 
 def test_register_adapter_raises_for_invalid_classes():
-    # ensure we don't accidentally register things that aren't proper adapters
+    """Garante que registrar classes inválidas dispara TypeError.
+
+    O teste tenta registrar um objeto simples, uma classe sem herança e
+    até uma instância para confirmar que apenas subclasses de Adapter são
+    aceitas.
+    """
+    # garantimos que não registramos coisas que não são adapters válidos
     with pytest.raises(TypeError):
-        # intentional misuse for test; Pylance complains about type mismatch
+        # uso intencionalmente incorreto para o teste; o Pylance reclama
         register_adapter(
             'notaclass',
-            object,  # wrong type entirely  # type: ignore[arg-type]
+            object,  # tipo totalmente errado  # type: ignore[arg-type]
         )
 
     class NotAnAdapter:
         pass
 
     with pytest.raises(TypeError):
-        register_adapter('notanadapter', NotAnAdapter) # type: ignore
+        register_adapter('notanadapter', NotAnAdapter)  # type: ignore
 
-    # also make sure instances are rejected
+    # também asseguramos que instâncias são rejeitadas
     adapter_instance = YFinanceAdapter()
     with pytest.raises(TypeError):
-        # passing an object rather than a class; type checker complains
+        # passando um objeto em vez de uma classe; o type checker reclama
         register_adapter('instance', adapter_instance)  # type: ignore[arg-type]

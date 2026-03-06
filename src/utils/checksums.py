@@ -6,18 +6,19 @@ Small helpers to compute SHA256 checksums for files and bytes.
 import hashlib
 import logging
 from pathlib import Path
-from typing import Union
+from typing import List, Optional, Union
 
 import pandas as pd
 
 logger = logging.getLogger(__name__)
 
 
-# Guard to ensure we emit at most one checksum-related warning per process.
-# Historical versions tracked multiple flags (_warned_unsortable_columns,
-# _warned_reindex_failure, _warned_sort_index_failure) but the logic was
-# consolidated; we keep a single boolean and expose legacy names briefly in
-# tests for backwards compatibility.
+# Guarda para garantir que emitimos no máximo um aviso relacionado a
+# checksum por processo. Versões antigas rastreavam vários flags
+# (_warned_unsortable_columns, _warned_reindex_failure,
+# _warned_sort_index_failure), mas a lógica foi consolidada; mantemos um
+# booleano único e expomos os nomes legados de forma sucinta nos testes para
+# compatibilidade retroativa.
 _non_deterministic_checksum_warned = False
 
 
@@ -51,7 +52,7 @@ def serialize_df_bytes(
     date_format: str = "%Y-%m-%dT%H:%M:%S",
     float_format: str = "%.10g",
     na_rep: str = "",
-    columns: list | None = None,
+    columns: Optional[List[str]] = None,
 ) -> bytes:
     """Serialize a DataFrame to bytes deterministically.
 
@@ -64,23 +65,23 @@ def serialize_df_bytes(
     warning for the entire process using ``_non_deterministic_checksum_warned``
     so users aren't spammed by subsequent calls.
     """
-    # declare global once for the entire function so subsequent assignments
-    # aren't treated as local by the parser
+    # declarar global uma vez para toda a função para que atribuições
+    # subsequentes não sejam tratadas como locais pelo interpretador
     global _non_deterministic_checksum_warned
 
     df_to_serialize = df
-    # Default to deterministic alphabetical column ordering unless caller
-    # provided explicit `columns` ordering.  When any of our helpers fail we
-    # scribble a warning; however such warnings tend to happen repeatedly in
-    # loops so we guard with a global flag so the user only sees one message
-    # per process.
+    # Por padrão usamos ordenação alfabética determinística das colunas
+    # a menos que o chamador forneça `columns` explicitamente. Quando algum
+    # de nossos auxiliares falha geramos um aviso; porém avisos assim tendem a
+    # ocorrer repetidamente em loops, então protegemos com uma flag global
+    # para que o usuário veja apenas uma mensagem por processo.
     if columns is None:
         try:
             columns = sorted(df_to_serialize.columns)
         except (TypeError, ValueError):
-            # Only catch errors we expect from attempting to sort non-sortable
-            # column labels; other exceptions should propagate so the caller
-            # can debug unexpected failures.
+            # Capturamos apenas os erros que esperamos ao tentar ordenar
+            # rótulos de coluna não ordenáveis; outras exceções devem
+            # propagarem para que o chamador possa depurar falhas inesperadas.
             if not _non_deterministic_checksum_warned:
                 logger.warning(
                     "Não foi possível ordenar colunas do DataFrame; "
@@ -93,7 +94,9 @@ def serialize_df_bytes(
     if columns is not None:
         try:
             df_to_serialize = df_to_serialize.reindex(columns=columns)
-        except Exception:
+        except (ValueError, TypeError, IndexError):
+            # estes são os erros prováveis ao reindexar com rótulos de
+            # coluna inválidos; outras exceções devem borbulhar para cima.
             if not _non_deterministic_checksum_warned:
                 logger.warning(
                     "Não foi possível reindexar colunas do DataFrame; "
@@ -102,7 +105,7 @@ def serialize_df_bytes(
                 _non_deterministic_checksum_warned = True
             df_to_serialize = df_to_serialize.copy()
 
-    # Sort by index to make output deterministic across runs
+    # Ordenar pelo índice para tornar a saída determinística entre execuções
     try:
         csv_str = df_to_serialize.sort_index().to_csv(
             index=index,
@@ -110,7 +113,10 @@ def serialize_df_bytes(
             float_format=float_format,
             na_rep=na_rep,
         )
-    except Exception:
+    except (TypeError, ValueError):
+        # these are the common errors raised by sort_index when the index
+        # contains unorderable or invalid values; other exceptions should
+        # propagate normally.
         if not _non_deterministic_checksum_warned:
             logger.warning(
                 "Falha ao ordenar DataFrame por índice; "

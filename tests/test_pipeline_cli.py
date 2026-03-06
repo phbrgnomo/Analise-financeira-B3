@@ -325,7 +325,7 @@ def test_pull_sample_command_success_writes_files(tmp_path, monkeypatch, capsys)
     assert rc == 0
 
     captured = capsys.readouterr()
-    # feedback header should be present
+    # cabeçalho de feedback deve estar presente
     assert "pipeline pull-sample" in captured.out.lower()
     assert "raw:" in captured.out
     assert "canonical:" in captured.out
@@ -335,7 +335,7 @@ def test_pull_sample_command_success_writes_files(tmp_path, monkeypatch, capsys)
 
 
 def test_pull_sample_command_env_override(tmp_path, monkeypatch, capsys):
-    """SAMPLES_DIR env var controls where artifacts land."""
+    """Variável de ambiente SAMPLES_DIR controla onde os artefatos são salvos."""
     dummy = DummyAdapter()
     monkeypatch.setattr("src.adapters.factory.get_adapter", lambda name: dummy)
     monkeypatch.setattr("src.etl.mapper.to_canonical", lambda df, **kw: df)
@@ -345,7 +345,7 @@ def test_pull_sample_command_env_override(tmp_path, monkeypatch, capsys):
     rc = pipeline.pull_sample_command("PETR4", "dummy", days=1)
     assert rc == 0
 
-    # header feedback still included even with env override
+    # cabeçalho de feedback ainda aparece mesmo com override da variável
     captured = capsys.readouterr()
     assert "pipeline pull-sample" in captured.out.lower()
 

@@ -102,24 +102,24 @@ def apply_migrations(
                 semicolons = stripped.count(";")
                 if semicolons == 0:
                     logger.warning(
-                        "sqlparse unavailable and migration appears to be a "
-                        "single statement without terminator. Executing as-is; "
-                        "for complex migrations, install 'sqlparse'."
+                        "sqlparse indisponível e a migração parece ser uma "
+                        "única instrução sem terminador. Executando como está; "
+                        "para migrações complexas, instale 'sqlparse'."
                     )
                     statements = [stripped]
                 elif semicolons == 1 and stripped.endswith(";"):
                     logger.warning(
-                        "sqlparse unavailable; migration appears to be a "
-                        "single statement. Executing as single statement; "
-                        "for complex migrations, install 'sqlparse'."
+                        "sqlparse indisponível; a migração parece ser uma "
+                        "única instrução. Executando como única instrução; "
+                        "para migrações complexas, instale 'sqlparse'."
                     )
                     statements = [stripped[:-1].strip()]
                 else:
                     raise RuntimeError(
-                        "Cannot safely split migration SQL without 'sqlparse'. "
-                        "This migration appears to contain multiple or complex "
-                        "statements. Please install 'sqlparse' to run "
-                        "migrations safely."
+                        "Não é possível dividir o SQL da migração com segurança "
+                        "sem 'sqlparse'. Esta migração parece conter múltiplas "
+                        "ou instruções complexas. Instale 'sqlparse' para executar "
+                        "migrações com segurança."
                     )
             for stmt in statements:
                 cur.execute(stmt)

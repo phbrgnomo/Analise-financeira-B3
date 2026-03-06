@@ -316,7 +316,7 @@ analise-financeira-b3/
 ### Gap Analysis
 
 - **Crítico (ação recomendada antes da implementação ampla):** fixar ou verificar versões estáveis dos pacotes no `pyproject.toml` e criar o arquivo `pyproject.toml` mínimo (starter). Criar configuração mínima do `alembic` (migrations) e roteiro de migração inicial.
--- **Importante:** adicionar `pre-commit` config, `pytest` conftest fixtures exemplo, e CI workflow `ci.yml` que roda `poetry install`, `pytest`, `ruff` (black optional) e checks de geração de snapshot mockada.
+- **Importante:** adicionar `pre-commit` config, `pytest` conftest fixtures exemplo, e CI workflow `ci.yml` que roda `poetry install`, `pytest`, `ruff` (black optional) e checks de geração de snapshot mockada.
 - **Nice-to-have:** exemplos de dados de teste (small sample CSV), PR/issue templates, e documentação de monitoramento local (ex.: healthcheck CLI).
 
 ### Validation Issues Addressed

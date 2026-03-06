@@ -179,18 +179,45 @@ def _warn_if_db_path_deprecated(db_path: Union[str, Path]) -> None:
         "The db_path parameter to save_raw_csv is deprecated and has no effect; "
         "it will be removed in a future release.",
         DeprecationWarning,
-        stacklevel=2,
+        # original stacklevel=2 pointed at save_raw_csv itself; bump to 3 so
+        # the warning references the external caller.  See issue/PR context.
+        stacklevel=3,
     )
     _DB_PATH_DEPRECATION_WARNED = True
 
 
 def _resolve_timestamp_str(ts: Optional[Union[str, datetime]]) -> str:
-    """Normalize timestamp input to the canonical raw filename format."""
+    """Normalize timestamp input to the canonical raw filename format.
+
+    The format is ``YYYYMMDDTHHMMSSZ`` in UTC.  The helper is stricter than
+    before:
+
+    * ``None`` -> current UTC timestamp.
+    * ``datetime`` objects **must** be timezone-aware.  Naive datetimes raise
+      ``ValueError`` rather than being silently interpreted as UTC.
+    * Strings are validated against the expected pattern; a mismatch raises
+      ``ValueError`` instead of blindly returning whatever was provided.
+    * Any other type triggers a ``TypeError`` for clearer feedback.
+    """
     if ts is None:
         return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+
     if isinstance(ts, datetime):
+        if ts.tzinfo is None:
+            raise ValueError("datetime timestamp must be timezone-aware (UTC)")
         return ts.astimezone(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    return str(ts)
+
+    if isinstance(ts, str):
+        # enforce format exactly; Z suffix indicates UTC
+        import re
+
+        if not re.match(r"^\d{8}T\d{6}Z$", ts):
+            raise ValueError(
+                "timestamp string must be in YYYYMMDDTHHMMSSZ format"
+            )
+        return ts
+
+    raise TypeError("ts must be a str, datetime, or None")
 
 
 def _attach_orchestrator_job_id(

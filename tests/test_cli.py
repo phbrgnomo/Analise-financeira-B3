@@ -19,6 +19,9 @@ def test_cli_help():
     assert "Usage:" in result.output
 
 def test_ingest_snapshot_help():
+    """Verifica que a ajuda do subcomando `ingest-snapshot` inclui novos
+    flags como --force-refresh, --ttl e --cache-file e retorna exit code 0.
+    """
     runner = CliRunner()
     result = runner.invoke(app, ["ingest-snapshot", "--help"])
     assert result.exit_code == 0, (
