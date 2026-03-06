@@ -1,11 +1,32 @@
 {
-  "snapshots/BBDC4-20260306T013425Z.csv": "c9b172e88bc158e64cb3c17bca513ef606edca5a476368f64360e0f7418ac973",
-  "snapshots/BOVA11-20260305T222927Z.csv": "f18fae4702c1e3b3afca3450bb45f9f7a1e55ef0d45c6a82f2569c813ed3e5b7",
-  "snapshots/ITSA4-20260306T013425Z.csv": "763d4c223a83692309035f5118a07e4c96352956251ad93e1f58ec96d1848995",
-  "snapshots/ITUB3-20260306T013424Z.csv": "ca7692754a35e5815b6e596f3cfe5cd7422358f36cdba0364c1bf3f85bc7e827",
-  "snapshots/IVVB11-20260306T013504Z.csv": "5dfb723401a32ff4daae9d69b8d7649c69f9547473d6ae40ff2e335be59ade78",
-  "snapshots/PETR4-20260306T013424Z.csv": "a792d82e4a4b0bb9ee7d710fc62beda39c435299f855aaed30ec6654c4460c31",
-  "snapshots/SAPR4-20260306T165727Z.csv": "0b2693182d0890f0f1309ded431fc3b59b5ac3a17fb037936866d6325a3744b4",
-  "snapshots/TEST-20260306T155003Z.csv": "ffe84a998e9738c1014c3d73bf64ed46966fce95413b8aaeb3fc4ed30b9bce77",
-  "snapshots/VALE3-20260306T013426Z.csv": "873a849c948bbe9c64b87f2e6007d367f2787cbabbe96891861bf88c2bc99ab7"
+  "generated_at": "2026-03-06T23:25:42.133191Z",
+  "files": {
+    "snapshots/BBDC4-20260306T013425Z.csv": {
+      "sha256": "c9b172e88bc158e64cb3c17bca513ef606edca5a476368f64360e0f7418ac973"
+    },
+    "snapshots/BOVA11-20260305T222927Z.csv": {
+      "sha256": "f18fae4702c1e3b3afca3450bb45f9f7a1e55ef0d45c6a82f2569c813ed3e5b7"
+    },
+    "snapshots/ITSA4-20260306T013425Z.csv": {
+      "sha256": "763d4c223a83692309035f5118a07e4c96352956251ad93e1f58ec96d1848995"
+    },
+    "snapshots/ITUB3-20260306T013424Z.csv": {
+      "sha256": "ca7692754a35e5815b6e596f3cfe5cd7422358f36cdba0364c1bf3f85bc7e827"
+    },
+    "snapshots/IVVB11-20260306T013504Z.csv": {
+      "sha256": "5dfb723401a32ff4daae9d69b8d7649c69f9547473d6ae40ff2e335be59ade78"
+    },
+    "snapshots/PETR4-20260306T013424Z.csv": {
+      "sha256": "a792d82e4a4b0bb9ee7d710fc62beda39c435299f855aaed30ec6654c4460c31"
+    },
+    "snapshots/SAPR4-20260306T165727Z.csv": {
+      "sha256": "0b2693182d0890f0f1309ded431fc3b59b5ac3a17fb037936866d6325a3744b4"
+    },
+    "snapshots/TEST-20260306T155003Z.csv": {
+      "sha256": "ffe84a998e9738c1014c3d73bf64ed46966fce95413b8aaeb3fc4ed30b9bce77"
+    },
+    "snapshots/VALE3-20260306T013426Z.csv": {
+      "sha256": "873a849c948bbe9c64b87f2e6007d367f2787cbabbe96891861bf88c2bc99ab7"
+    }
+  }
 }
