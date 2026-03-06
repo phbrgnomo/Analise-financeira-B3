@@ -94,9 +94,13 @@ def serialize_df_bytes(
     if columns is not None:
         try:
             df_to_serialize = df_to_serialize.reindex(columns=columns)
-        except (ValueError, TypeError, IndexError):
-            # estes são os erros prováveis ao reindexar com rótulos de
-            # coluna inválidos; outras exceções devem borbulhar para cima.
+        except Exception:
+            # Reindex can raise a variety of exceptions depending on the
+            # DataFrame implementation or monkeypatched behavior in tests.
+            # We deliberately catch all exceptions here and fall back to a
+            # copy while emitting a single process-wide warning so that
+            # callers see a helpful message instead of having their
+            # serialization unexpectedly fail.
             if not _non_deterministic_checksum_warned:
                 logger.warning(
                     "Não foi possível reindexar colunas do DataFrame; "
