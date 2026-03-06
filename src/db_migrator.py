@@ -87,18 +87,40 @@ def apply_migrations(
             # schema_migrations, then commit.  This keeps failures scoped to a
             # single migration rather than bundling everything.
             # split the migration text into individual statements
+            # ``sqlparse`` is now a required dependency (see pyproject.toml),
+            # but we keep a defensive fallback here.  The fallback logic is
+            # deliberately conservative: it only succeeds for trivially simple
+            # scripts (0 or 1 semicolon) and raises if the migration looks
+            # more complex.  This avoids the risk of mis-splitting SQL when
+            # semantic semicolons appear in strings or procedural blocks.
             if sqlparse:
                 statements = [s.strip() for s in sqlparse.split(sql) if s.strip()]
             else:
-                # fallback: naive split on semicolon.  This may break when
-                # semicolons appear in strings/comments, so installing
-                # `sqlparse` is strongly recommended for real migrations.
-                logger.warning(
-                    "sqlparse unavailable; using naive ';' splitter. "
-                    "This may mis-handle semicolons in strings/comments; "
-                    "install 'sqlparse' for safer migrations."
-                )
-                statements = [s.strip() for s in sql.split(";") if s.strip()]
+                # naive split -- only allowed when migration is single-
+                # statement.  see above comment for rationale.
+                stripped = sql.strip()
+                semicolons = stripped.count(";")
+                if semicolons == 0:
+                    logger.warning(
+                        "sqlparse unavailable and migration appears to be a "
+                        "single statement without terminator. Executing as-is; "
+                        "for complex migrations, install 'sqlparse'."
+                    )
+                    statements = [stripped]
+                elif semicolons == 1 and stripped.endswith(";"):
+                    logger.warning(
+                        "sqlparse unavailable; migration appears to be a "
+                        "single statement. Executing as single statement; "
+                        "for complex migrations, install 'sqlparse'."
+                    )
+                    statements = [stripped[:-1].strip()]
+                else:
+                    raise RuntimeError(
+                        "Cannot safely split migration SQL without 'sqlparse'. "
+                        "This migration appears to contain multiple or complex "
+                        "statements. Please install 'sqlparse' to run "
+                        "migrations safely."
+                    )
             for stmt in statements:
                 cur.execute(stmt)
 

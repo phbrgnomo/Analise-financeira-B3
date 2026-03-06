@@ -44,7 +44,7 @@ Nota: documente e justifique qualquer mudança de versão em `pyproject.toml`; c
 - CLI: o projeto usa `typer` para a CLI (`src/main.py`). Mantenha comandos leves; evite imports pesados no topo do módulo da CLI — importe dentro da função do comando quando necessário.
 - Adapter Factory: siga a fábrica de adapters em `src/adapters/factory.py`. Sempre obter instâncias via `get_adapter()` ou `register_adapter()`; não introduza caminhos alternativos de criação de adapters sem atualizar `docs/modules/adapter-guidelines.md`.
 - ETL/Adapters: módulos em `src/etl/` e `src/adapters/` devem aceitar injeção de `conn`/dependências para facilitar testes. Preserve a lógica de `raw_checksum` e idempotência ao gravar no DB.
-- SQLite/DB: a persistência canonical é `sqlite3` (arquivo padrão `dados/data.db`). Use context managers para transações e permita sobrepor `conn` em testes/fixtures.
+- SQLite/DB: a persistência canônica é `sqlite3` (arquivo padrão `dados/data.db`). Use context managers para transações e permita sobrepor `conn` em testes/fixtures.
 - SQLAlchemy: presente como dependência em alguns lugares; verifique uso antes de introduzir sessões globais — prefira sessões explícitas e injeção de engine.
 - Sem servidor web: não adicione frameworks web (Flask/FastAPI) a menos que haja justificativa clara e documentação de compatibilidade e testes.
 - Testes de integração de adapters: ao usar `yfinance` ou APIs externas, mocke as chamadas em `tests/` usando as fixtures disponíveis; documente alterações no comportamento em `docs/sprint-reports/`.

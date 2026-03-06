@@ -251,6 +251,41 @@ def pull_sample_command(
 _record_ingest_metadata = record_ingest_metadata
 
 
+# helper for building metadata dictionaries used in ingest()
+
+def _make_metadata(
+    job_id: str,
+    ticker: str,
+    source: str,
+    status: str,
+    started_at: str,
+    finished_at: str | None = None,
+    **extras: Any,
+) -> Dict[str, Any]:
+    """Return a metadata dict populated with common ingest fields.
+
+    Accepts arbitrary ``extras`` which are merged into the result.  This
+    reduces duplication and ensures all branches record the same base set of
+    keys (``job_id``, ``ticker``, ``source``, ``status``, ``started_at``,
+    ``finished_at``) before any specialized values are added.
+    """
+    # guard against callers passing reserved keys again via **extras;
+    # remove them silently so they cannot clobber the canonical values.
+    for key in ("job_id", "ticker", "source", "status", "started_at", "finished_at"):
+        extras.pop(key, None)
+
+    out: Dict[str, Any] = {
+        "job_id": job_id,
+        "ticker": ticker,
+        "source": source,
+        "status": status,
+        "started_at": started_at,
+    }
+    out["finished_at"] = finished_at or _now_iso()
+    out.update(extras)
+    return out
+
+
 def ingest(  # noqa: C901 - function is intentionally orchestrator-style
     ticker: str,
     source: str = "yfinance",
@@ -340,15 +375,14 @@ def ingest(  # noqa: C901 - function is intentionally orchestrator-style
             except Exception as exc:  # fetch failure
                 msg = f"adapter.fetch failed: {exc}"
                 logger.exception(msg)
-                metadata = {
-                    "job_id": job_id,
-                    "ticker": ticker,
-                    "source": source,
-                    "status": "error",
-                    "error_message": msg,
-                    "started_at": started_at,
-                    "finished_at": _now_iso(),
-                }
+                metadata = _make_metadata(
+                    job_id,
+                    ticker,
+                    source,
+                    "error",
+                    started_at,
+                    error_message=msg,
+                )
                 _record_ingest_metadata(metadata)
                 return {"job_id": job_id, "status": "error", "error_message": msg}
 
@@ -360,15 +394,14 @@ def ingest(  # noqa: C901 - function is intentionally orchestrator-style
             except Exception as exc:  # mapper failure
                 msg = f"mapper failed: {exc}"
                 logger.exception(msg)
-                metadata = {
-                    "job_id": job_id,
-                    "ticker": ticker,
-                    "source": source,
-                    "status": "error",
-                    "error_message": msg,
-                    "started_at": started_at,
-                    "finished_at": _now_iso(),
-                }
+                metadata = _make_metadata(
+                    job_id,
+                    ticker,
+                    source,
+                    "error",
+                    started_at,
+                    error_message=msg,
+                )
                 _record_ingest_metadata(metadata)
                 return {"job_id": job_id, "status": "error", "error_message": msg}
 
@@ -388,10 +421,17 @@ def ingest(  # noqa: C901 - function is intentionally orchestrator-style
                     **lock_meta,
                 }
                 # record metadata even for dry runs to make lock activity visible
-                metadata = result.copy()
-                metadata["started_at"] = started_at
-                metadata["finished_at"] = _now_iso()
-                metadata["duration"] = f"{(time.monotonic() - t0):.2f}s"
+                metadata = _make_metadata(
+                    job_id,
+                    ticker,
+                    source,
+                    "success",
+                    started_at,
+                    duration=f"{(time.monotonic() - t0):.2f}s",
+                    dry_run=True,
+                    rows=len(canonical),
+                    **lock_meta,
+                )
                 _record_ingest_metadata(metadata)
                 return result
 
@@ -404,13 +444,14 @@ def ingest(  # noqa: C901 - function is intentionally orchestrator-style
             except Exception as exc:
                 msg = f"failed to save raw CSV: {exc}"
                 logger.exception(msg)
-                metadata = {
-                    "job_id": job_id,
-                    "ticker": ticker,
-                    "source": source,
-                    "status": "error",
-                    "error_message": msg,
-                }
+                metadata = _make_metadata(
+                    job_id,
+                    ticker,
+                    source,
+                    "error",
+                    started_at,
+                    error_message=msg,
+                )
                 _record_ingest_metadata(metadata)
                 return {"job_id": job_id, "status": "error", "error_message": msg}
 
@@ -485,17 +526,16 @@ def ingest(  # noqa: C901 - function is intentionally orchestrator-style
                 waited = lock_timeout
         msg = f"could not obtain lock for ticker {ticker}: {exc}"
         logger.warning(msg)
-        metadata = {
-            "job_id": job_id,
-            "ticker": ticker,
-            "source": source,
-            "status": "error",
-            "error_message": msg,
-            "lock_action": action,
-            "lock_waited_seconds": waited,
-            "started_at": started_at,
-            "finished_at": _now_iso(),
-        }
+        metadata = _make_metadata(
+            job_id,
+            ticker,
+            source,
+            "error",
+            started_at,
+            lock_action=action,
+            lock_waited_seconds=waited,
+            error_message=msg,
+        )
         _record_ingest_metadata(metadata)
         return {"job_id": job_id, "status": "error", "error_message": msg}
 

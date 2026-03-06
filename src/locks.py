@@ -1,5 +1,12 @@
 """Utilitário simples de bloqueio de arquivo multiplataforma para ingestão por ticker.
 
+Este módulo é usado pelo pipeline de ingestão para garantir que apenas um
+processo do mesmo ticker execute a parte de download/ETL/cache/cache/write
+(see :mod:`src.ingest.snapshot_ingest` for o fluxo completo).  O bloqueio é
+adquirido antes da avaliação de cache e liberado imediatamente após a fase
+crítica de escrita, permitindo que o restante do pipeline (e.g. cálculo de
+retornos) prossiga em paralelo.
+
 Este módulo fornece um gerenciador de contexto mínimo que serializa o acesso a
 um arquivo chamado ``{LOCK_DIR}/{ticker}.lock``. A implementação dá preferência
 à biblioteca ``portalocker`` (agora dependência direta do projeto), mas mantém
@@ -34,6 +41,8 @@ import time
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Dict, Iterator
+
+from src.tickers import normalize_b3_ticker
 
 logger = logging.getLogger(__name__)
 
@@ -179,7 +188,23 @@ def acquire_lock(
     # para um caminho absoluto
     lock_dir = _resolve_lock_dir(os.environ.get("LOCK_DIR"))
     lock_dir.mkdir(parents=True, exist_ok=True)
-    lock_path = lock_dir / f"{ticker}.lock"
+    # normalize ticker for filesystem: try canonical B3 form first
+    try:
+        norm = normalize_b3_ticker(ticker)
+    except Exception:
+        # non-B3 or invalid symbol; fall back to uppercase
+        norm = ticker.strip().upper()
+    import re
+
+    safe = re.sub(r"[^A-Z0-9._-]", "_", norm)
+    if not safe or safe.lower() != norm.lower():
+        # if normalization removed too much or changed case, hash to avoid
+        # collisions and keep filename reasonable length
+        import hashlib
+
+        h = hashlib.sha256(norm.encode("utf-8")).hexdigest()[:8]
+        safe = f"{safe or 'T'}_{h}"
+    lock_path = lock_dir / f"{safe}.lock"
 
     # abre o descritor de arquivo agora para que ele permaneça válido até o
     # fim do contexto ou até desistirmos de adquirir o bloqueio. Se a

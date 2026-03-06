@@ -1,17 +1,24 @@
 """Snapshot ingestion layer: cache, incremental diff and DB persistence.
 
-Implements the red/green requirements of Story 1-10:
+This module is one of the central pieces of the ingest workflow.  The
+high-level flow is:
 
-* Write a versioned snapshot to disk with an accompanying SHA256 checksum and
-  metadata record.
-* Skip re-processing when the snapshot checksum is unchanged and the cache
-  has not expired (*ttl*).
-* When processing is required, ingest *only* new or changed rows into the
-  canonical ``prices`` table via ``src.db.write_prices`` (idempotent upsert).
+1. acquire a ticker-specific lock via :func:`src.locks.acquire_lock` to
+   serialize concurrent invocations in the same process.
+2. load the most recent snapshot metadata from the DB cache.
+3. compute a checksum and evaluate whether the cache is still valid
+   (TTL + matching sha256) unless a force refresh is requested.
+4. when a refresh is required, write a new snapshot CSV and its checksum,
+   then perform an incremental upsert into the ``prices`` table.
+
+Separating these concerns across ``locks.py``, ``snapshot_ingest.py`` and
+``db.*`` keeps each module small, but the above comment helps future
+contributors understand how they interact.  See ``locks`` for the
+locking implementation and ``db`` for the low-level read/write helpers.
 
 Environment variables
 ---------------------
-``SNAPSHOT_DIR``       — override default snapshot directory (``dados/snapshots``)
+``SNAPSHOT_DIR``       - override default snapshot directory (``dados/snapshots``)
 ``SNAPSHOT_TTL``       — cache TTL in seconds (float, default 0 → no expiry)
 ``FORCE_REFRESH``      — when truthy, bypass cache and always re-ingest
 """

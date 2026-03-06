@@ -135,7 +135,7 @@ As instruções completas e o playbook estão em `docs/playbooks/testing-network
 
 ### Comandos principais da CLI
 
-Para principais comandos do CLI e seus parâmetros, consulte `poetry run main --help` ou o playbook detalhado em `docs/playbooks/quickstart-cli.md`.
+Para os principais comandos da CLI e seus parâmetros, consulte `poetry run main --help` ou o playbook detalhado em `docs/playbooks/quickstart-cli.md`.
 
 ## Estrutura do repositório (resumo)
 - `src/` — código principal
