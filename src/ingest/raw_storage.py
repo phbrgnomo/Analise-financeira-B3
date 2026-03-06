@@ -167,6 +167,41 @@ def _apply_posix_permissions(paths: list[Union[str, Path]]) -> None:
         logger.exception("Failed to apply permissions to files")
 
 
+def _warn_if_db_path_deprecated(db_path: Union[str, Path]) -> None:
+    """Emit a single deprecation warning for the legacy ``db_path`` arg."""
+    global _DB_PATH_DEPRECATION_WARNED
+    if Path(db_path) == DEFAULT_DB or _DB_PATH_DEPRECATION_WARNED:
+        return
+
+    import warnings
+
+    warnings.warn(
+        "The db_path parameter to save_raw_csv is deprecated and has no effect; "
+        "it will be removed in a future release.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    _DB_PATH_DEPRECATION_WARNED = True
+
+
+def _resolve_timestamp_str(ts: Optional[Union[str, datetime]]) -> str:
+    """Normalize timestamp input to the canonical raw filename format."""
+    if ts is None:
+        return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    if isinstance(ts, datetime):
+        return ts.astimezone(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    return str(ts)
+
+
+def _attach_orchestrator_job_id(
+    metadata: Dict[str, Any],
+    orchestrator_job_id: Optional[str],
+) -> None:
+    """Attach parent job correlation id when provided by the caller."""
+    if orchestrator_job_id:
+        metadata["orchestrator_job_id"] = orchestrator_job_id
+
+
 # ---------------------------------------------------------------------------
 # Metadata recording helper (used by orchestration layer)
 # ---------------------------------------------------------------------------
@@ -198,6 +233,7 @@ def save_raw_csv(
     db_path: Union[str, Path] = DEFAULT_DB,
     metadata_path: Union[str, Path] = DEFAULT_METADATA,
     set_permissions: bool = False,
+    orchestrator_job_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Save *df* to ``raw/<provider>/<ticker>-<ts>.csv`` and register metadata.
 
@@ -240,26 +276,8 @@ def save_raw_csv(
         Metadata dict with keys: ``job_id``, ``source``, ``fetched_at``,
         ``raw_checksum``, ``rows``, ``filepath``, ``status``.
     """
-    # db_path is a no-op; warn when callers provide a non-default value.
-    # convert to Path first to avoid spurious warnings when a str is passed.
-    global _DB_PATH_DEPRECATION_WARNED
-    if Path(db_path) != DEFAULT_DB and not _DB_PATH_DEPRECATION_WARNED:
-        import warnings
-
-        warnings.warn(
-            "The db_path parameter to save_raw_csv is deprecated and has no effect; "
-            "it will be removed in a future release.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        _DB_PATH_DEPRECATION_WARNED = True
-
-    if ts is None:
-        ts_str = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    elif isinstance(ts, datetime):
-        ts_str = ts.astimezone(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    else:
-        ts_str = str(ts)
+    _warn_if_db_path_deprecated(db_path)
+    ts_str = _resolve_timestamp_str(ts)
 
     raw_root = Path(raw_root)
     provider_dir = raw_root / provider
@@ -301,6 +319,7 @@ def save_raw_csv(
             "status": "success",
             "created_at": fetched_at,
         }
+        _attach_orchestrator_job_id(metadata, orchestrator_job_id)
         try:
             _persist_metadata(metadata, metadata_path)
         except Exception as e_meta:
@@ -321,6 +340,7 @@ def save_raw_csv(
             "created_at": fetched_at,
             "metadata_recorded": False,
         }
+        _attach_orchestrator_job_id(metadata, orchestrator_job_id)
         try:
             _persist_metadata(metadata, metadata_path)
         except Exception as e_meta:

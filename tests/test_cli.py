@@ -87,6 +87,7 @@ def test_run_uses_ingest_pipeline(monkeypatch):
     result = runner.invoke(app, ["run"])
     assert result.exit_code == 0
     assert calls, "esperávamos que ingest fosse chamado"
+    assert "Resumo run:" in result.output
     assert calls[0]["ticker"] == "PETR4"
     assert calls[0]["source"] == "yfinance"
 
@@ -129,6 +130,7 @@ def test_compute_returns_single_ticker(monkeypatch):
     runner = CliRunner()
     result = runner.invoke(app, ["compute-returns", "--ticker", "PETR4"])
     assert result.exit_code == 0
+    assert "compute-returns" in result.output
     assert "retornos" in result.output
     assert called == [("PETR4", None, None, False)]
 
@@ -198,6 +200,7 @@ def test_export_csv_success(tmp_path, monkeypatch):
     assert result.exit_code == 0
     out = tmp_path / "PETR4.csv"
     assert out.exists(), "arquivo de saída deveria ser criado"
+    assert "export-csv" in result.output
     assert "linha" in result.output
 
 
@@ -254,4 +257,5 @@ def test_ingest_snapshot_command(monkeypatch, tmp_path):
     # CLI provides numeric ttl which is converted to float
     assert called[0][3] == 123.0
     assert called[0][4] == "foo.json"
+    assert "ingest-snapshot" in result.output
     assert "Ingestão de snapshot concluída" in result.output

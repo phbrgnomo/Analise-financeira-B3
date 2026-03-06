@@ -43,6 +43,7 @@ def test_pipeline_ingest_dry_run(monkeypatch, capsys):
     # CLI prints the job_id on success; we also emit a dry-run notification.
     assert "job_id=" in captured.out
     assert "dry run completed" in captured.out.lower()
+    assert "pipeline ingest" in captured.out.lower()
 
     # also exercise the underlying helper directly to confirm the dry_run
     # flag is propagated and returned value contains the expected key
@@ -79,7 +80,7 @@ def test_pipeline_ingest_error_logging(monkeypatch, capsys):
 
     # job_id should be printed to stderr not stdout
     captured = capsys.readouterr()
-    assert captured.out == ""
+    assert "pipeline ingest" in captured.out.lower()
     assert "job_id=" in captured.err
 
 
@@ -222,7 +223,7 @@ def test_mapper_failure_propagates(monkeypatch, capsys):
 
     captured = capsys.readouterr()
     # CLI prints both error message and job_id on stderr for failures
-    assert captured.out == ""
+    assert "pipeline ingest" in captured.out.lower()
     assert "job_id=" in captured.err
 
 
@@ -324,6 +325,8 @@ def test_pull_sample_command_success_writes_files(tmp_path, monkeypatch, capsys)
     assert rc == 0
 
     captured = capsys.readouterr()
+    # feedback header should be present
+    assert "pipeline pull-sample" in captured.out.lower()
     assert "raw:" in captured.out
     assert "canonical:" in captured.out
 
@@ -342,6 +345,10 @@ def test_pull_sample_command_env_override(tmp_path, monkeypatch, capsys):
     rc = pipeline.pull_sample_command("PETR4", "dummy", days=1)
     assert rc == 0
 
+    # header feedback still included even with env override
+    captured = capsys.readouterr()
+    assert "pipeline pull-sample" in captured.out.lower()
+
     assert (tmp_path / "foo" / "PETR4_dummy_raw.csv").exists()
     assert (tmp_path / "foo" / "PETR4_dummy_sample.csv").exists()
 
@@ -351,6 +358,7 @@ def test_pull_sample_command_invalid_provider_returns_error(capsys):
     rc = pipeline.pull_sample_command("PETR4", "no_such_provider")
     assert rc == 1
     captured = capsys.readouterr()
+    assert "pipeline pull-sample" in captured.out.lower()
     assert "unknown adapter provider" in captured.err
 
 

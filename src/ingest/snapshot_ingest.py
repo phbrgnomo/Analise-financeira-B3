@@ -22,6 +22,7 @@ import json
 import logging
 import os
 import sqlite3
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional, Union
@@ -232,13 +233,20 @@ def _evaluate_cache_hit(
     ticker: str,
 ) -> Optional[Dict[str, Any]]:
     """Return a cache-hit result dict, or ``None`` when a refresh is needed."""
-    if not last_meta or force or last_meta.get("sha256") != checksum:
+    # Explicitly bypass cache when forced so callers can see the reason in logs
+    if force:
+        logger.info("force refresh requested for %s; bypassing snapshot cache", ticker)
+        return None
+
+    if not last_meta or last_meta.get("sha256") != checksum:
+        # no previous snapshot or checksum mismatch -> miss
         return None
 
     _cache_result: Dict[str, Any] = {
         "status": "success",
         "cached": True,
         "rows_processed": 0,
+        "reason": "checksum_match",
     }
 
     if ttl <= 0:
@@ -248,8 +256,7 @@ def _evaluate_cache_hit(
     last_ts_str = last_meta.get("generated_at")
     if not last_ts_str:
         logger.debug(
-            "snapshot metadata for %s missing 'generated_at';"
-            " treating as cache miss",
+            "snapshot metadata for %s missing 'generated_at'; treating as cache miss",
             ticker,
         )
         return None
@@ -259,16 +266,14 @@ def _evaluate_cache_hit(
         age = (datetime.now(timezone.utc) - last_ts).total_seconds()
         if age < ttl:
             logger.info(
-                "snapshot cache hit for %s (age=%.1fs < ttl=%.1fs)",
-                ticker,
-                age,
-                ttl,
+                "snapshot cache hit for %s (age=%.1fs < ttl=%.1fs)", ticker, age, ttl
             )
+            _cache_result["reason"] = "within_ttl"
             return _cache_result
     except Exception:
         logger.warning(
-            "invalid 'generated_at' in snapshot metadata for %s: %r;"
-            " treating as cache miss",
+            "invalid 'generated_at' in snapshot metadata for %s: %r; "
+            "treating as cache miss",
             ticker,
             last_ts_str,
         )
@@ -385,6 +390,7 @@ def ingest_from_snapshot(
     from src.etl.snapshot import snapshot_checksum
 
     checksum = snapshot_checksum(df)
+    start = time.monotonic()
 
     # Serialize ingestion by ticker within this process so the
     # read-cache → write-snapshot → diff → DB upsert critical section
@@ -395,6 +401,9 @@ def ingest_from_snapshot(
             last_meta, checksum, resolved_ttl, resolved_force, ticker
         )
         if cache_result is not None:
+            # include duration for the quick-cached path
+            elapsed = time.monotonic() - start
+            cache_result["duration"] = f"{elapsed:.2f}s"
             return cache_result
 
         sha, out_path = _write_and_record_snapshot(
@@ -402,11 +411,13 @@ def ingest_from_snapshot(
         )
         rows_processed = _run_incremental_ingest(df, ticker, resolved_db)
 
+        elapsed = time.monotonic() - start
         logger.info(
-            "ingest_from_snapshot complete for %s:"
-            " rows_processed=%d, cached=False",
+            "ingest_from_snapshot complete for %s: rows_processed=%d, "
+            "cached=False, elapsed=%.2fs",
             ticker,
             rows_processed,
+            elapsed,
         )
         return {
             "status": "success",
@@ -414,4 +425,5 @@ def ingest_from_snapshot(
             "rows_processed": rows_processed,
             "snapshot_path": str(out_path),
             "checksum": sha,
+            "duration": f"{elapsed:.2f}s",
         }

@@ -40,6 +40,7 @@
 - DB path default: `dados/data.db`. Tests typically inject a temporary `conn` or override `db_path` via fixtures; follow patterns in `tests/conftest.py`.
 - Idempotency: `src/db.py` computes a `raw_checksum` to avoid unnecessary upserts—respect this behavior when writing adapters or ETL scripts.
 - CLI helpers: many scripts in `scripts/` (e.g. `validate_snapshots.py`, `init_ingest_db.py`) exist for one-off tasks; read their headers when extending.
+- Para feedback visual da CLI, reutilize `src/cli_feedback.py` em vez de espalhar `typer.echo()`/`print()` ad hoc pelos comandos.
 
 ## Integration Points
 - External APIs: `yfinance` (see `pyproject.toml`)—mock network calls in unit tests using fixtures in `tests/fixtures`.

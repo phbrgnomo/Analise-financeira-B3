@@ -23,6 +23,8 @@ from typing import Any, Dict
 
 import typer
 
+from src.cli_feedback import CliFeedback, format_duration
+
 # Re-export constants and helpers so existing callers keep working without
 # updating their import paths.
 from src.ingest.raw_storage import (  # noqa: F401
@@ -68,15 +70,12 @@ def _resolve_sample_window(
     """Resolve date window for sample pulls using UTC calendar dates."""
     now = datetime.now(timezone.utc).date()
 
-    if end is None:
-        end_date = now.strftime("%Y-%m-%d")
-    else:
-        end_date = end
+    end_date = now.strftime("%Y-%m-%d") if end is None else end
 
     if start is not None:
         return start, end_date
 
-    safe_days = max(1, int(days))
+    safe_days = max(1, days)
     start_date = (now - timedelta(days=safe_days)).strftime("%Y-%m-%d")
     return start_date, end_date
 
@@ -209,6 +208,13 @@ def pull_sample_command(
     output: str | None = None,
 ) -> int:
     """CLI-friendly wrapper for sample pulling with adapter/mapper pipeline."""
+    feedback = CliFeedback("pipeline pull-sample")
+    feedback.start(
+        f"ticker={ticker} | source={source} | days={days} | "
+        f"start={start or '-'} | end={end or '-'}"
+    )
+    t0 = time.monotonic()
+
     result = pull_sample(
         ticker,
         source,
@@ -222,13 +228,15 @@ def pull_sample_command(
     if result.get("status") == "success":
         if job_id:
             print(f"job_id={job_id}")
-        print(f"raw: {result.get('raw_output')}")
-        print(f"canonical: {result.get('canonical_output')}")
-        print(f"rows: {result.get('rows')}")
+        feedback.info(f"raw: {result.get('raw_output')}")
+        feedback.info(f"canonical: {result.get('canonical_output')}")
+        feedback.info(f"rows: {result.get('rows')}")
+        elapsed = time.monotonic() - t0
+        feedback.summary(f"completed in {format_duration(elapsed)}")
         return 0
 
     err = result.get("error_message", "unknown error")
-    typer.secho(err, err=True)
+    feedback.error(err)
     if job_id:
         typer.secho(f"job_id={job_id}", err=True)
     return 1
@@ -278,6 +286,7 @@ def ingest(  # noqa: C901 - function is intentionally orchestrator-style
 
     job_id = str(uuid.uuid4())
     started_at = _now_iso()
+    t0 = time.monotonic()
     logger.info(
         "pipeline.ingest start",
         extra={
@@ -382,13 +391,16 @@ def ingest(  # noqa: C901 - function is intentionally orchestrator-style
                 metadata = result.copy()
                 metadata["started_at"] = started_at
                 metadata["finished_at"] = _now_iso()
+                metadata["duration"] = f"{(time.monotonic() - t0):.2f}s"
                 _record_ingest_metadata(metadata)
                 return result
 
             # persist raw CSV (Story 1.4)
             ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
             try:
-                save_meta = save_raw_csv(df, source, ticker, ts)
+                save_meta = save_raw_csv(
+                    df, source, ticker, ts, orchestrator_job_id=job_id
+                )
             except Exception as exc:
                 msg = f"failed to save raw CSV: {exc}"
                 logger.exception(msg)
@@ -425,6 +437,7 @@ def ingest(  # noqa: C901 - function is intentionally orchestrator-style
                 top_status = "success" if pers_status == "success" else "error"
 
             # final metadata entry for the orchestrator run
+            duration_str = f"{(time.monotonic() - t0):.2f}s"
             metadata = {
                 "job_id": job_id,
                 "ticker": ticker,
@@ -434,13 +447,18 @@ def ingest(  # noqa: C901 - function is intentionally orchestrator-style
                 "persist": persist_result,
                 "started_at": started_at,
                 "finished_at": _now_iso(),
+                "duration": duration_str,
                 **lock_meta,
             }
             _record_ingest_metadata(metadata)
-
             logger.info(
                 "pipeline.ingest completed",
-                extra={"job_id": job_id, "rows": len(canonical)},
+                extra={
+                    "job_id": job_id,
+                    "rows": len(canonical),
+                    "duration": duration_str,
+                    "force_refresh": force_refresh,
+                },
             )
 
             return {
@@ -448,6 +466,7 @@ def ingest(  # noqa: C901 - function is intentionally orchestrator-style
                 "status": top_status,
                 "save_meta": save_meta,
                 "persist": persist_result,
+                "duration": duration_str,
                 **lock_meta,
             }
     except locks.LockTimeout as exc:
@@ -494,10 +513,16 @@ def ingest_command(
     propagate the exception when running programmatically (e.g. tests can
     assert via ``with pytest.raises``).
     """
+    feedback = CliFeedback("pipeline ingest")
+    feedback.start(
+        f"ticker={ticker} | source={source} | dry_run={dry_run} | "
+        f"force_refresh={force_refresh}"
+    )
+
     try:
         result = ingest(ticker, source, dry_run=dry_run, force_refresh=force_refresh)
     except Exception as exc:  # pragma: no cover - defensive
-        typer.secho(f"fatal error: {exc}", err=True)
+        feedback.error(f"fatal error: {exc}")
         return 1
 
     job_id = result.get("job_id")
@@ -506,12 +531,28 @@ def ingest_command(
         if job_id:
             print(f"job_id={job_id}")
         if dry_run:
-            print("dry run completed; no data written")
+            feedback.info("dry run completed; no data written")
+        # surface duration and reason for the run when available
+        duration = result.get("duration")
+        reason = None
+        try:
+            reason = result.get("persist", {}).get("reason")
+        except Exception:
+            reason = None
+        if duration or reason:
+            parts = []
+            if duration:
+                parts.append(f"Completed in {duration}")
+            if reason:
+                parts.append(f"reason: {reason}")
+            feedback.success(" — ".join(parts))
+        else:
+            feedback.success("completed")
         return 0
 
     # failure path: log to stderr so stdout remains parsable
     err = result.get("error_message", "unknown error")
-    typer.secho(err, err=True)
+    feedback.error(err)
     if job_id:
         typer.secho(f"job_id={job_id}", err=True)
     return 1

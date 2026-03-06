@@ -16,6 +16,8 @@ completedAt: 2026-02-16
 
 # Architecture Decision Document
 
+<!-- Conteúdo de implementação integrado diretamente nas seções abaixo. -->
+
 ## Project Context Analysis
 
 ### Requirements Overview
@@ -99,10 +101,25 @@ completedAt: 2026-02-16
 
 ### Developer Next Steps (sugestão imediata)
 
-- Criar esqueleto de adaptador em `src/adapters/` e expor via fábrica (`src.adapters.factory`).
-- Implementar `src/db.py` com `write_prices(df, ticker)` garantindo upsert por `(ticker, date)`.
-- Adicionar testes: `tests/test_ingest.py` (mock adapters) e `tests/test_db_upsert.py` (fixture SQLite temporário) para validar idempotência e integridade dos snapshots.
-- Adicionar `docs/planning-artifacts/adapter-mappings.md` com exemplos de mapeamento por provedor.
+- Esqueleto de adaptadores e fábrica: presente em `src/adapters/` e
+  exposto via `src.adapters.factory` (ex.: `YFinanceAdapter` já
+  implementado em `src/adapters/yfinance_adapter.py`).
+- Persistência canônica: helpers de escrita existem em
+  `src/db/prices.py` e `src/db_client.py` e expõem `write_prices` com
+  comportamento de upsert por `(ticker, date)`.
+- Pipeline e CLI: fluxo de ingestão orquestrado em
+  `src/ingest/pipeline.py` com comandos CLI em `src/pipeline.py`
+  (`ingest`, `pull-sample`) implementados.
+- Testes: há suítes iniciais cobrindo CLI e ingest (`tests/test_pipeline_cli.py`,
+  `tests/test_ingest_cache_incremental.py`). Recomenda-se adicionar
+  testes de contrato para novos adaptadores e um teste dedicado de
+  upsert (`tests/test_db_upsert.py`) usando fixtures de SQLite temporário.
+- Documentação de mapeamentos: criar/atualizar
+  `docs/planning-artifacts/adapter-mappings.md` com exemplos por
+  provedor (yfinance → canonical) e anexar aos PRs de novos adaptadores.
+- Operacional / Governança: fixar versões no `pyproject.toml`, adicionar
+  `pre-commit` com `ruff` e criar um CI mínimo (`.github/workflows/ci.yml`) que
+  rode `poetry install`, `pytest` e lint.
 
 ## Starter Template Evaluation (Step 03)
 
@@ -330,9 +347,16 @@ analise-financeira-b3/
 - Registrar quaisquer desvios no PR e anexar justificativa.
 
 **First Implementation Priority (primeiros passos):**
-1. Inicializar projeto (`poetry init -n`) e adicionar dependências iniciais (veja exemplo do Step 03).
-2. Criar esqueleto: `src/adapters/`, `src/ingest/pipeline.py`, `src/etl/mapper.py`, `src/db/db.py`, `tests/conftest.py`.
-3. Adicionar `pre-commit` e CI `ci.yml` básico com `pytest` e lint.
+1. Fixar versões e criar um `pyproject.toml` mínimo com dependências
+  estáveis (ex.: `pandas`, `sqlalchemy`, `typer`, `yfinance`) e dev-deps
+  (`pytest`, `ruff`, `pre-commit`).
+2. Adicionar `pre-commit` e configuração de lint (`ruff`) para o repositório
+  e hooks básicos (format, lint).
+3. Criar CI mínimo em `.github/workflows/ci.yml` que execute `poetry install`,
+  `pytest` e `ruff` (falhar o pipeline em caso de erros).
+4. Completar documentação operativa: `docs/planning-artifacts/adapter-mappings.md`
+  e exemplos de fixtures em `tests/conftest.py` para validação de upsert
+  e ingest mockada.
 
 **Comando inicial sugerido:**
 ```bash

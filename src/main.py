@@ -21,6 +21,7 @@ load_dotenv()
 import src.db as _db  # noqa: E402
 import src.retorno as _retorno  # noqa: E402
 from src import metrics  # noqa: E402
+from src.cli_feedback import CliFeedback  # noqa: E402
 from src.logging_config import configure_logging  # noqa: E402
 from src.paths import DATA_DIR  # noqa: E402
 from src.tickers import normalize_b3_ticker, ticker_variants  # noqa: E402
@@ -154,6 +155,8 @@ def run_cmd(
     """Executa fluxo ETL principal (ingestão + cálculo de retornos)."""
     from src.ingest.pipeline import ingest
 
+    feedback = CliFeedback("run")
+
     effective_ticker = ticker or ticker_arg or None
     effective_provider = provider or provider_arg or "yfinance"
     effective_force_refresh = as_bool(force_refresh)
@@ -161,15 +164,26 @@ def run_cmd(
     tickers: list[str]
     if effective_ticker is None:
         tickers = list(DEFAULT_TICKERS)
-        typer.echo(f"Executando tickers padrão: {', '.join(tickers)}")
-        typer.echo("Para ticker específico, execute: main run --ticker <ticker>")
+        feedback.start(
+            f"executando tickers padrão com provider={effective_provider}"
+        )
+        feedback.info(f"Tickers: {', '.join(tickers)}")
+        feedback.info("Para ticker específico, execute: main run --ticker <ticker>")
     else:
         tickers = [_normalize_cli_ticker(effective_ticker)]
+        feedback.start(
+            f"executando ticker={tickers[0]} com provider={effective_provider}"
+        )
 
     ok = 0
     failed = 0
     warnings = 0
-    for tk in tickers:
+    for idx, tk in enumerate(tickers, start=1):
+        feedback.item(tk, idx, len(tickers))
+        ingest_step = feedback.start_step(
+            "ingestão",
+            detail=f"ticker={tk} | force_refresh={effective_force_refresh}",
+        )
         result = ingest(
             ticker=tk,
             source=effective_provider,
@@ -178,27 +192,44 @@ def run_cmd(
         )
         if result.get("status") != "success":
             failed += 1
-            typer.echo(
-                f"Falha no ingest para {tk}: "
-                f"{result.get('error_message', 'erro desconhecido')}"
+            feedback.finish_step(
+                ingest_step,
+                status="error",
+                detail=result.get("error_message", "erro desconhecido"),
             )
             continue
+        ingest_detail = []
+        if result.get("duration"):
+            ingest_detail.append(f"total={result['duration']}")
+        if persist_reason := result.get("persist", {}).get("reason"):
+            ingest_detail.append(f"reason={persist_reason}")
+        feedback.finish_step(
+            ingest_step,
+            detail=" | ".join(ingest_detail) if ingest_detail else None,
+        )
 
+        returns_step = feedback.start_step("cálculo de retornos", detail=tk)
         compute_info = _compute_returns_for_ticker(tk, None, None, False)
         rows = compute_info.get("rows", 0)
         if rows == 0:
             # zero rows is not necessarily an error; could mean no new data
             warnings += 1
-            typer.echo(
-                f"{tk}: ingest concluído, mas sem retornos calculados (aviso)"
+            feedback.finish_step(
+                returns_step,
+                status="warning",
+                detail="nenhum retorno calculado",
             )
             continue
         ok += 1
+        feedback.finish_step(
+            returns_step,
+            detail=f"{rows} retorno(s) persistidos",
+        )
 
     summary = f"Resumo run: sucesso={ok}, falhas={failed}"
     if warnings:
         summary += f", avisos={warnings}"
-    typer.echo(summary)
+    feedback.summary(summary)
 
 
 @app.command("compute-returns")
@@ -227,6 +258,7 @@ def compute_returns_cmd(
     ticker_arg: Optional[str] = typer.Argument(None, hidden=True),
 ) -> None:
     """Calcula retornos diários para um ticker (ou todos) e persiste no DB."""
+    feedback = CliFeedback("compute-returns")
     effective_ticker = ticker or ticker_arg or None
     effective_dry_run = as_bool(dry_run)
 
@@ -238,37 +270,56 @@ def compute_returns_cmd(
     if effective_ticker is not None:
         normalized = _normalize_cli_ticker(effective_ticker)
         targets = [_db.resolve_existing_ticker(normalized) or normalized]
+        feedback.start(
+            f"ticker={targets[0]} | dry_run={effective_dry_run} | "
+            f"start={start or '-'} | end={end or '-'}"
+        )
     else:
         targets = _db.list_price_tickers()
         if not targets:
-            typer.echo("Nenhum ticker encontrado na tabela prices")
+            feedback.start("processando todos os tickers do banco")
+            feedback.warn("Nenhum ticker encontrado na tabela prices")
             return
-        typer.echo(
-            "--ticker não informado; calculando retornos para todos os "
-            f"tickers no banco ({len(targets)})"
+        feedback.start(
+            f"processando todos os tickers do banco ({len(targets)}) | "
+            f"dry_run={effective_dry_run}"
         )
 
     total_rows = 0
     processed = 0
-    for target in targets:
+    for idx, target in enumerate(targets, start=1):
+        feedback.item(target, idx, len(targets))
+        step = feedback.start_step(
+            "cálculo de retornos",
+            detail=f"start={start or '-'} | end={end or '-'}",
+        )
         compute_info = _compute_returns_for_ticker(
             target, start, end, effective_dry_run
         )
         rows = compute_info.get("rows", 0)
         if rows == 0:
-            typer.echo(f"{target}: nenhum retorno calculado")
+            feedback.finish_step(
+                step,
+                status="warning",
+                detail="nenhum retorno calculado",
+            )
             continue
         processed += 1
         total_rows += rows
+        mode = "calculados" if effective_dry_run else "persistidos"
+        feedback.finish_step(
+            step,
+            detail=f"{rows} retorno(s) {mode}",
+        )
 
     if processed == 0:
-        typer.echo("Nenhum retorno calculado para os parâmetros fornecidos")
+        feedback.warn("Nenhum retorno calculado para os parâmetros fornecidos")
         return
 
     if effective_dry_run:
-        typer.echo(f"Dry-run concluído: {total_rows} retornos calculados")
+        feedback.summary(f"Dry-run concluído: {total_rows} retornos calculados")
     else:
-        typer.echo(
+        feedback.summary(
             "Cálculo concluído: "
             f"{total_rows} retornos persistidos para {processed} ticker(s)"
         )
@@ -302,6 +353,8 @@ def ingest_snapshot_cmd(
     """Importa CSV local no SQLite com cache/checksum e ingestão incremental."""
     from src import ingest_cli
 
+    feedback = CliFeedback("ingest-snapshot")
+
     effective_ticker = ticker or ticker_arg
     normalized_ticker = (
         _normalize_cli_ticker(effective_ticker) if effective_ticker else None
@@ -310,6 +363,16 @@ def ingest_snapshot_cmd(
     # translate CLI defaults back to None semantics for the helper
     ttl_arg = None if ttl < 0 else ttl
     cache_arg = cache_file or None
+    feedback.start(
+        f"snapshot={snapshot_path} | ticker={normalized_ticker or '-'} | "
+        "force_refresh="
+        f"{effective_force_refresh} | "
+        f"ttl={ttl_arg if ttl_arg is not None else 'env'}"
+    )
+    step = feedback.start_step(
+        "processamento do snapshot",
+        detail=Path(snapshot_path).name,
+    )
     try:
         result = ingest_cli.ingest_snapshot(
             snapshot_path,
@@ -319,10 +382,24 @@ def ingest_snapshot_cmd(
             cache_file=cache_arg,
         )
     except Exception as e:
-        typer.echo(f"Falha ao ingerir snapshot: {e}")
+        feedback.finish_step(step, status="error", detail=str(e))
         raise
+    if result.get("cached"):
+        feedback.finish_step(
+            step,
+            status="skip",
+            detail="cache hit; nenhum processamento necessário",
+        )
+    else:
+        feedback.finish_step(
+            step,
+            detail=(
+                f"processed_rows={result.get('processed_rows', 0)} | "
+                f"skipped_rows={result.get('skipped_rows', 0)}"
+            ),
+        )
 
-    typer.echo("Ingestão de snapshot concluída")
+    feedback.summary("Ingestão de snapshot concluída")
     typer.echo(result)
 
 
@@ -355,11 +432,16 @@ def export_csv_cmd(
     ),
 ) -> None:
     """Exporta preços da base SQLite para CSV local."""
+    feedback = CliFeedback("export-csv")
     effective_ticker = ticker or ticker_arg
     if effective_ticker is None:
         raise typer.BadParameter("ticker é obrigatório")
 
     normalized = _normalize_cli_ticker(effective_ticker)
+    feedback.start(
+        f"ticker={normalized} | output={output or DATA_DIR / f'{normalized}.csv'} | "
+        f"start={start or '-'} | end={end or '-'}"
+    )
     resolved = _db.resolve_existing_ticker(normalized)
     if resolved is None:
         # try the provider-specific variant (e.g. add .SA)
@@ -367,7 +449,7 @@ def export_csv_cmd(
         alt = _db.resolve_existing_ticker(provider_variant)
         if alt is not None:
             resolved = alt
-            typer.echo(
+            feedback.warn(
                 "Ticker não encontrado com nome base no banco; "
                 f"usando variante {provider_variant}"
             )
@@ -376,16 +458,25 @@ def export_csv_cmd(
                 f"Ticker {normalized} não encontrado no banco (base ou variante)"
             )
 
+    read_step = feedback.start_step("leitura no banco", detail=resolved)
     df = _db.read_prices(resolved, start=start, end=end)
     if df.empty:
-        typer.echo(f"Nenhum dado encontrado para {normalized}")
+        feedback.finish_step(
+            read_step,
+            status="warning",
+            detail="nenhum dado encontrado",
+        )
+        feedback.warn(f"Nenhum dado encontrado para {normalized}")
         return
+    feedback.finish_step(read_step, detail=f"{len(df)} linha(s) lidas")
 
     if output is None:
         output = DATA_DIR / f"{normalized}.csv"
     output.parent.mkdir(parents=True, exist_ok=True)
+    write_step = feedback.start_step("gravação do CSV", detail=str(output))
     df.to_csv(output, index_label="date")
-    typer.echo(f"CSV exportado com {len(df)} linha(s): {output}")
+    feedback.finish_step(write_step, detail=f"{len(df)} linha(s) gravadas")
+    feedback.summary(f"CSV exportado com {len(df)} linha(s): {output}")
 
 
 if __name__ == "__main__":

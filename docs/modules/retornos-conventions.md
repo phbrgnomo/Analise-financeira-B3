@@ -77,28 +77,3 @@ CREATE VIEW IF NOT EXISTS returns_compat AS
 SELECT ticker, date, return_value AS "return", return_type, created_at
 FROM returns;
 ```
-
-- Migração de coluna no SQLite (padrão seguro): criar nova tabela, copiar e
-  renomear. Exemplo para renomear `return_value` → `return` (ou o inverso):
-
-```sql
-BEGIN TRANSACTION;
-CREATE TABLE returns_new (
-  ticker TEXT,
-  date TEXT,
-  "return" REAL,
-  return_type TEXT,
-  created_at TEXT,
-  UNIQUE(ticker, date, return_type)
-);
-INSERT INTO returns_new (ticker, date, "return", return_type, created_at)
-  SELECT ticker, date, return_value, return_type, created_at FROM returns;
-DROP TABLE returns;
-ALTER TABLE returns_new RENAME TO returns;
-COMMIT;
-```
-
-Aviso: a migração destrói a tabela anterior — faça backup/export antes de
-executar em produção. Em muitos casos preferimos criar uma `view` de
-compatibilidade até que consumidores externos migrem para o campo
-`return_value`.

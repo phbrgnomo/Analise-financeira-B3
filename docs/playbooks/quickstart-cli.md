@@ -27,6 +27,13 @@ poetry install
 
 Uso básico
 
+Observação sobre feedback visual
+
+- Os comandos principais da CLI exibem progresso por etapa, duração e resumo
+  final por padrão.
+- O identificador `job_id=...` continua sendo emitido nos fluxos de ingestão
+  para manter compatibilidade com automações e troubleshooting.
+
 Executar fluxo principal ETL (ingestão + cálculo de retornos):
 
 ```bash
@@ -39,6 +46,16 @@ Executar para ticker específico (padrão B3):
 poetry run main run --ticker PETR4
 ```
 
+Saída esperada, em alto nível:
+
+```text
+▶ run: executando ticker=PETR4 com provider=yfinance
+→ [1/1] PETR4
+… ingestão — ticker=PETR4 | force_refresh=False
+… cálculo de retornos — PETR4
+■ Resumo run: sucesso=1, falhas=0 (1.23s)
+```
+
 Executar ingestão pontual via subcomando `pipeline ingest`:
 
 ```bash
@@ -46,6 +63,9 @@ poetry run main pipeline ingest PETR4 --force-refresh
 # ou com provider explícito
 poetry run main pipeline ingest --source yfinance PETR4 --force-refresh
 ```
+
+Esse comando também exibe duração e o motivo do processamento quando
+disponível, por exemplo `reason: checksum_match` ou `reason: forced_refresh`.
 
 Gerar amostra visual (raw + canônico) via adapter, sem persistir no DB:
 
@@ -65,6 +85,8 @@ poetry run main compute-returns --ticker PETR4
 poetry run main compute-returns
 ```
 
+O comando informa ticker atual, etapa em execução e resumo final com duração.
+
 Exemplos rápidos
 
 - Importar CSV local para o banco com ingestão incremental (caso você já
@@ -75,12 +97,17 @@ Exemplos rápidos
  ```
 
 O comando também calcula checksum e evita reprocessar arquivos idênticos.
+Quando houver cache válido, a CLI mostra explicitamente que a etapa foi
+reutilizada.
 
 - Exportar dados para CSV:
 
 ```bash
 poetry run main export-csv --ticker PETR4
 ```
+
+Durante a exportação, a CLI mostra leitura do banco, gravação do arquivo e o
+local final do CSV.
 
 Verificação de snapshots
 
