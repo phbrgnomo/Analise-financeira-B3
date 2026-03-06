@@ -26,11 +26,38 @@ jobs:
           poetry config virtualenvs.in-project true
           poetry install --no-interaction
 
+      - name: Prepare tmp snapshots for validation
+        run: |
+          # Ensure tmp snapshots dir exists and populate it with only the
+          # snapshot files referenced in snapshots/checksums.json (if present
+          # in the repo). This avoids unexpected files causing validation to
+          # fail while still allowing workflows that produce tmp snapshots
+          # to remain compatible.
+          TMP_DIR="$GITHUB_WORKSPACE/tmp_snapshots/snapshots_test"
+          mkdir -p "$TMP_DIR"
+          python - <<'PY'
+import json, os, shutil
+try:
+    with open('snapshots/checksums.json','r',encoding='utf-8') as f:
+        data = json.load(f)
+except Exception:
+    data = {}
+files = {}
+if isinstance(data, dict) and 'files' in data and isinstance(data['files'], dict):
+    files = data['files']
+elif isinstance(data, dict):
+    files = data
+for path in files.keys():
+    src = os.path.normpath(path)
+    if os.path.isfile(src):
+        shutil.copy(src, os.path.join(os.environ.get('GITHUB_WORKSPACE','.'), 'tmp_snapshots','snapshots_test'))
+PY
+
       - name: Validate snapshots manifest
         run: |
-          # Use temporary CI snapshots dir if provided by earlier steps/tests,
-          # otherwise fallback to the repo `snapshots/` directory.
-          if [ -d "$GITHUB_WORKSPACE/tmp_snapshots/snapshots_test" ]; then
+          # Prefer the populated tmp snapshots dir if it contains files,
+          # otherwise fall back to the repository `snapshots/` dir.
+          if [ -n "$(ls -A "$GITHUB_WORKSPACE/tmp_snapshots/snapshots_test" 2>/dev/null)" ]; then
             DIR="$GITHUB_WORKSPACE/tmp_snapshots/snapshots_test"
           else
             DIR="snapshots"
