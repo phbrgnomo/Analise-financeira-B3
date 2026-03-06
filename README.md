@@ -181,6 +181,31 @@ python examples/checksums_example.py
 
 O script calcula o SHA256 do arquivo de exemplo `snapshots/PETR4_snapshot_test.csv` e grava um arquivo `*.checksum` ao lado do CSV.
 
+## Manifesto de snapshots
+
+- O arquivo canônico de integridade é [snapshots/checksums.json](snapshots/checksums.json).
+- Sempre que um snapshot versionado em [snapshots](snapshots) for criado, removido
+  ou alterado, atualize também o manifesto e os sidecars `*.checksum`.
+- O comando recomendado para regenerar o manifesto localmente é:
+
+```bash
+poetry run python scripts/validate_snapshots.py \
+  --dir snapshots \
+  --manifest snapshots/checksums.json \
+  --update
+```
+
+- Para validar antes de abrir PR:
+
+```bash
+poetry run python scripts/validate_snapshots.py \
+  --dir snapshots \
+  --manifest snapshots/checksums.json
+```
+
+- O workflow [checks-snapshots.yml](.github/workflows/checks-snapshots.yml) usa o
+  mesmo contrato e deve falhar quando houver drift entre CSVs e manifesto.
+
 ## Onde ler mais
 - Documentação e planejamento do projeto em `docs/`.
 - Para entender o fluxo de ingestão e esquema canônico, veja [docs/implementation-artifacts/1-11-definir-esquema-canonico-de-dados-e-documentacao-do-modelo-schema-examples.md](docs/implementation-artifacts/1-11-definir-esquema-canonico-de-dados-e-documentacao-do-modelo-schema-examples.md).

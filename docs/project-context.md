@@ -143,6 +143,9 @@ Nota: documente e justifique qualquer mudança de versão em `pyproject.toml`; c
 - Cada ativo tem CSV em `dados/`; a coluna `Return` é obrigatória para consumidores.
 - Nunca alterar esquema de CSV/snapshots sem atualizar leitores e testes associados.
 - Snapshots em `snapshots/` exigem checksum SHA256 (`<file>.checksum`); CI deve validar.
+- Qualquer PR que altere arquivos versionados em `snapshots/` deve atualizar
+  também `snapshots/checksums.json` usando `scripts/validate_snapshots.py --update`
+  e registrar a justificativa no PR.
 - Scripts utilitários vivem em `scripts/` e servem como helpers de linha de comando (ex.: `validate_snapshots.py`, `init_ingest_db.py`). Leia o cabeçalho antes de alterar ou reutilizar.
 
 ### Testing
@@ -216,6 +219,8 @@ Nota: documente e justifique qualquer mudança de versão em `pyproject.toml`; c
 - Pipeline mínimo: `poetry install` + `poetry run pytest -q` + linters.
 - Pre-commit: `poetry run pre-commit run --all-files`.
 - Validar checksums de snapshots; falhar pipeline se divergirem.
+- Manter paridade de runtime entre CI e `pyproject.toml`; hoje o baseline
+  esperado é Python 3.12.
 
 ### Critical Don't-Miss Rules
 

@@ -232,7 +232,7 @@ def run_cmd(
             detail=f"{rows} retorno(s) persistidos",
         )
 
-    summary = f"Resumo: sucesso={ok}, falhas={failed}"
+    summary = f"Resumo run: sucesso={ok}, falhas={failed}"
     if warnings:
         summary += f", avisos={warnings}"
     feedback.summary(summary)
