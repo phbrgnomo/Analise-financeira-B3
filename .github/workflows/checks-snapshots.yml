@@ -28,7 +28,14 @@ jobs:
 
       - name: Validate snapshots manifest
         run: |
-          poetry run python scripts/validate_snapshots.py --dir snapshots --manifest snapshots/checksums.json
+          # Use temporary CI snapshots dir if provided by earlier steps/tests,
+          # otherwise fallback to the repo `snapshots/` directory.
+          if [ -d "$GITHUB_WORKSPACE/tmp_snapshots/snapshots_test" ]; then
+            DIR="$GITHUB_WORKSPACE/tmp_snapshots/snapshots_test"
+          else
+            DIR="snapshots"
+          fi
+          poetry run python scripts/validate_snapshots.py --dir "$DIR" --manifest snapshots/checksums.json --allow-external
 
       - name: Run tests
         run: |
