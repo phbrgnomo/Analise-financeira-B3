@@ -29,11 +29,11 @@ poetry run python scripts/validate_snapshots.py --dir snapshots_test --manifest 
 poetry run python scripts/verify_snapshot.py --dir snapshots_test --manifest snapshots/checksums.json --allow-external
 ```
 
-Se você atualizou snapshots versionados em `snapshots/`, regenere o manifesto
+Se você alterou o snapshot determinístico de referência, regenere o manifesto
 canônico antes de abrir PR:
 
 ```bash
-poetry run python scripts/validate_snapshots.py --dir snapshots --manifest snapshots/checksums.json --update
+poetry run python scripts/validate_snapshots.py --dir snapshots_test --manifest snapshots/checksums.json --update --allow-external
 ```
 
 5. Rodar teste E2E localmente (opcional):

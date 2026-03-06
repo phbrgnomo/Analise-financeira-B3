@@ -71,7 +71,10 @@ jobs:
           poetry install --no-interaction
       - run: |
           mkdir -p "$RUNNER_TEMP/snapshots_test"
+          export SNAPSHOT_DIR="$RUNNER_TEMP/snapshots_test"
           NETWORK_MODE=playback poetry run pytest -q tests/integration -k quickstart_mocked --maxfail=1
+          poetry run python scripts/generate_ci_snapshot.py
+          poetry run python scripts/validate_snapshots.py --dir "$SNAPSHOT_DIR" --manifest snapshots/checksums.json --allow-external
       - id: snapshot_dir
         run: echo "snapshot_dir=$RUNNER_TEMP/snapshots_test" >> $GITHUB_OUTPUT
       - uses: actions/upload-artifact@v4

@@ -2,12 +2,13 @@
 set -euo pipefail
 
 # Run snapshot validation script for CI and local use.
-# Uses SNAPSHOT_DIR if set, otherwise falls back to repository `snapshots`.
+# Uses SNAPSHOT_DIR if set, otherwise falls back to `snapshots_test`.
+# The canonical manifest remains versioned at `snapshots/checksums.json`.
 
 cd "$(dirname "$0")/../.."
 
-SNAPSHOT_DIR="${SNAPSHOT_DIR:-snapshots}"
-MANIFEST_PATH="${SNAPSHOT_DIR}/checksums.json"
+SNAPSHOT_DIR="${SNAPSHOT_DIR:-snapshots_test}"
+MANIFEST_PATH="${MANIFEST_PATH:-snapshots/checksums.json}"
 
 # If validating snapshots outside the repository `snapshots/` folder, allow external
 # paths so the validation script doesn't refuse to write/resolve manifest paths.
