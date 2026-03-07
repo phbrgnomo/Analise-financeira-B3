@@ -165,10 +165,16 @@ def test_snapshot_index_created(tmp_path):
     """
 
     db_path = tmp_path / "dados" / "data.db"
-    # no need to call init_db; record_snapshot_metadata will create table
-    metadata = {"ticker": "X", "created_at": "2026-01-01T00:00:00Z"}
+    # Schema now managed by migrations; init_db + apply_migrations required
     from src import db as _db
+    from src.db_migrator import apply_migrations
 
+    _db.init_db(db_path=str(db_path))  # Creates 0000 schema
+    conn = _db.connect(db_path=str(db_path))
+    apply_migrations(conn)  # Applies 0001, 0002
+    conn.close()
+
+    metadata = {"ticker": "X", "created_at": "2026-01-01T00:00:00Z"}
     _db.record_snapshot_metadata(metadata, db_path=str(db_path))
     conn = sqlite3.connect(str(db_path))
     cur = conn.cursor()

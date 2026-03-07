@@ -34,7 +34,12 @@ from src.db.returns import write_returns
 
 # -- snapshots ----------------------------------------------------------
 from src.db.snapshots import (
+    delete_snapshots,
     get_last_snapshot_payload,
+    get_snapshot_by_path,
+    get_snapshot_metadata,
+    list_snapshots,
+    mark_snapshots_archived,
     record_snapshot_metadata,
 )
 
@@ -51,6 +56,11 @@ __all__ = [
     # returns
     "write_returns",
     # snapshots
+    "delete_snapshots",
     "get_last_snapshot_payload",
+    "get_snapshot_by_path",
+    "get_snapshot_metadata",
+    "list_snapshots",
+    "mark_snapshots_archived",
     "record_snapshot_metadata",
 ]

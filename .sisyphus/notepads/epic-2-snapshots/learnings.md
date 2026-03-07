@@ -51,3 +51,43 @@
 - `db_migrator.apply_migrations()` requires sqlparse to safely parse complex SQL files
 - Poetry dependency installation works correctly; no environment reconstruction needed
 - ALTER TABLE approach (7 statements) is correct for SQLite; migration applies in alphabetical order (0000 → 0001 → 0002)
+
+## [2026-03-07T02:00:00Z] Task 2: DB Query Functions
+
+### Implementation Patterns
+- **Connection handling**: All 5 functions follow exact pattern from `src/db/prices.py:read_prices()` — `conn or connect(db_path)`, cleanup in `finally` block only if we created connection
+- **Row-to-dict conversion**: Used `dict(zip([col[0] for col in cur.description], row, strict=False))` pattern — `strict=False` required by ruff B905 (descriptor/row length mismatch possible with ALTER TABLE operations)
+- **SQL parameterization**: Variable-length `IN` clause via `placeholders = ",".join("?" * len(snapshot_ids))` + unpacking (*snapshot_ids)
+- **Archived timestamp**: `datetime.utcnow().isoformat()` for `archived_at` column when `mark_snapshots_archived()` runs
+
+### Function Signatures Added
+1. `get_snapshot_metadata(snapshot_id: str, *, conn=None, db_path=None) -> dict | None` — SELECT by ID
+2. `list_snapshots(ticker: str | None = None, *, archived: bool = False, conn=None, db_path=None) -> list[dict]` — SELECT with optional ticker filter, ORDER BY created_at DESC
+3. `mark_snapshots_archived(snapshot_ids: list[str], *, conn=None, db_path=None) -> int` — UPDATE archived=1, archived_at=timestamp, returns rowcount
+4. `delete_snapshots(snapshot_ids: list[str], *, conn=None, db_path=None) -> int` — DELETE by ID list, returns rowcount
+5. `get_snapshot_by_path(snapshot_path: str, *, conn=None, db_path=None) -> dict | None` — SELECT by snapshot_path column
+
+### Code Changes to snapshots.py
+- **Updated** `_upsert_snapshot_metadata()`: Added 5 columns to INSERT statement (`snapshot_path`, `rows`, `checksum`, `job_id`, `size_bytes`) from metadata dict via `.get()` calls
+- **Added** `from datetime import datetime` import for archived_at timestamp generation
+- **Added** 5 public functions to module (lines 137-316 in final file)
+
+### Export Changes to src/db/__init__.py
+- **Added** imports: `delete_snapshots`, `get_snapshot_by_path`, `get_snapshot_metadata`, `list_snapshots`, `mark_snapshots_archived`
+- **Updated** `__all__` list to include 5 new functions (total 7 snapshot functions exported now)
+
+### QA Test Results
+- **Import test**: PASS — all 5 functions importable from `src.db` package
+- **CRUD test**: PASS — full lifecycle verified (insert → read → list → archive → verify archived state)
+- Evidence saved to `.sisyphus/evidence/task-2-imports.txt` and `task-2-crud-ops.txt`
+
+### Critical Gotchas
+- **Empty list handling**: Both `mark_snapshots_archived()` and `delete_snapshots()` return `0` immediately if `snapshot_ids` list is empty — avoids invalid SQL syntax
+- **Ticker filter**: `list_snapshots()` accepts `ticker=None` to return ALL snapshots (only filtered by archived status)
+- **Connection cleanup**: Pattern is `conn is None` check (NOT `close_conn` flag) — cleaner than legacy pattern in `get_last_snapshot_payload()`
+- **Ruff B905**: `zip()` requires explicit `strict=` parameter — we use `strict=False` because SQL result sets from migrations might have mismatched lengths in edge cases
+
+### Key Learning
+- SQLite cursor.description returns list of 7-tuples `(name, type, display_size, internal_size, precision, scale, null_ok)` — we only need `col[0]` for column names
+- UPDATE/DELETE operations require `.commit()` call before `cursor.rowcount` is accurate
+- Variable-length parameter binding via f-string placeholders + tuple unpacking is safe (placeholders are literal `?` characters, not interpolated values)
