@@ -1,0 +1,7 @@
+▶ snapshots export: Exporting snapshot for PETR4
+✓ Snapshot exported (csv, 3 rows, checksum=c9606efecf624d6bbee21b751a77484c6cb6c53b28eb88c566cac209f3f368ab) to stdout
+close,date,fetched_at,high,low,open,raw_checksum,source,ticker,volume
+1.0,2026-03-05,2026-03-07T05:36:56.950780+00:00,1.1,1.0,1.0,68812daa8266f2243a0ba4812160830ce827ab0f84952729f1200084351f9e44,dummy,PETR4,100
+1.1,2026-03-06,2026-03-07T05:36:56.950873+00:00,1.2,1.05,1.1,fa903eefb37c21c37b760945f92141ca992ab36c8598494ac56e5d33be533fa6,dummy,PETR4,120
+1.2,2026-03-07,2026-03-07T05:36:56.950954+00:00,1.3,1.1,1.2,186385feed2ac350aa69b3ba68a37175c6998cef76f3c52110a0e7609d7904d2,dummy,PETR4,110
+EXIT_CODE: 0

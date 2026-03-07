@@ -1,0 +1,6 @@
+Usage: python -m src.main pipeline [OPTIONS] COMMAND [ARGS]...
+Try 'python -m src.main pipeline --help' for help.
+╭─ Error ──────────────────────────────────────────────────────────────────────╮
+│ No such command 'run'.                                                       │
+╰──────────────────────────────────────────────────────────────────────────────╯
+EXIT_CODE: 2

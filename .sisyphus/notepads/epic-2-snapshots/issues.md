@@ -26,9 +26,28 @@ conn.close()
 from src import db
 from src.db_migrator import apply_migrations
 
-db.init_db(db_path=str(db_path))
-conn = db.connect(db_path=str(db_path))
-apply_migrations(conn)
-conn.close()
-# ... then use db.record_snapshot_metadata() or other snapshot DB functions
-```
+ db.init_db(db_path=str(db_path))
+ conn = db.connect(db_path=str(db_path))
+ apply_migrations(conn)
+ conn.close()
+ # ... then use db.record_snapshot_metadata() or other snapshot DB functions
+ ```
+
+## [2026-03-07T06:05:00Z] Task F4: Scope Fidelity Rejection Findings
+
+**Scope fidelity outcome**: REJECT (11/14 compliant)
+
+**Non-compliant tasks identified**:
+1. **Task 4 (partial)**: payload enrichment requirement not fully reflected in metadata population path
+2. **Task 6**: task guardrail said not to test CLI flow, but tests call CLI command directly
+3. **Task 7**: direct `typer.echo()` introduced in new CLI module (`src/snapshot_cli.py:33`)
+
+**Must-NOT violation**:
+- New CLI code still contains direct `typer.echo()` usage (`src/snapshot_cli.py:33`)
+
+**Unaccounted changes detected**:
+- `.sisyphus/plans/epic-2-snapshots.md` modified despite read-only rule
+- `.sisyphus/boulder.json`, `pyproject.toml`, `poetry.lock`, `tests/test_ingest_cache_incremental.py`, `dados/data.db` drifted outside explicit Task 1-14 deliverables
+
+**Recorded verdict artifact**:
+- `.sisyphus/evidence/final-f4-scope-fidelity.txt`
