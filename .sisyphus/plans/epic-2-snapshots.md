@@ -756,7 +756,7 @@ Max Concurrent: 6 (Wave 1)
   - Files: `tests/test_snapshot_metadata.py`
   - Pre-commit: `poetry run pre-commit run --all-files`
 
-- [ ] 7. Implement `snapshots export` CLI Command (Story 2-3)
+- [x] 7. Implement `snapshots export` CLI Command (Story 2-3)
 
   **What to do**:
   - Create `src/snapshot_cli.py` as new Typer sub-app: `app = typer.Typer()`

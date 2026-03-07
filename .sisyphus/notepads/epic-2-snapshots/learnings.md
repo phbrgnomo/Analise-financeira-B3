@@ -251,3 +251,72 @@ No regressions introduced by the `df.reset_index()` fix.
   Task 7 uses a small local subclass overriding those methods with `err=True`.
 - Needed explicit format normalization (`strip().lower()`) and ticker normalization
   (`strip().upper()`) to avoid invalid-format/ticker edge behavior.
+
+## [2026-03-07T03:29:00Z] Task 8: CI Checksum Validation Script (Story 2-4)
+
+### Implementation Decisions
+
+**Script Structure**:
+- Created `scripts/ci_validate_checksums.py` as standalone CI utility (NOT Typer command)
+- Followed `scripts/validate_snapshots.py` pattern for consistency:
+  - Shebang: `#!/usr/bin/env python3`
+  - `sys.path` manipulation for imports when run directly
+  - `main()` function with explicit return type
+  - `if __name__ == "__main__": raise SystemExit(main())`
+
+**Checksum Function Selection**:
+- Used `sha256_file()` from `src.utils.checksums` (lines 25-38)
+- CRITICAL: NOT `snapshot_checksum()` — different algorithms produce different hashes
+- Matches Story 2-2 (Task 3) implementation — validates what pipeline actually stores
+
+**DB Query Pattern**:
+- Used `db.list_snapshots(archived=False, conn=conn)` from Task 2
+- Returns list of dicts with all required fields (id, ticker, snapshot_path, checksum)
+- Connection cleanup in `finally` block (established pattern from Task 2)
+
+**Output Format**:
+- Structured text with clear PASS/FAIL markers per snapshot
+- Summary section with counts: total, passed, failed, missing
+- Exit codes: 0 = all pass, 1 = any failures
+- Explicit "Exit code: X" in output for CI transparency
+
+### Edge Cases Handled
+
+1. **No snapshots in DB**: Returns exit 0 with message "No snapshots to validate"
+2. **Incomplete metadata**: Skips snapshots without `snapshot_path` or `checksum` (lines 60-63)
+3. **Missing file**: Reports FAIL with "File not found" message, increments failure count
+4. **Checksum mismatch**: Shows expected vs computed hashes, increments failure count
+
+### Gotchas Encountered
+
+**LSP Warnings About Implicit String Concatenation**:
+- Lines 69, 79, 85: Multi-line f-strings without explicit `+` operator
+- Pattern already accepted in codebase (see `scripts/validate_snapshots.py`)
+- Warnings only, no errors — acceptable for CI scripts
+
+**Real DB Contains Mismatches**:
+- Testing revealed 4 snapshots with checksum mismatches from prior development
+- Script correctly detected and reported these (validation working as intended)
+- Demonstrates script catches real integrity issues
+
+### Key Learnings
+
+**Script vs CLI Command Decision**:
+- CI validation scripts should be standalone (NOT Typer commands)
+- Reason: Simpler to invoke in CI workflows, no CLI framework overhead
+- Pattern: Use scripts for CI-specific tasks, CLI commands for user-facing operations
+
+**Connection Handling in Scripts**:
+- Always use `try/finally` for DB connections (even in scripts)
+- Pattern established in Task 2, consistently applied in Task 8
+- Prevents connection leaks in CI environments
+
+**Exit Code Semantics**:
+- 0 = success (all validations passed OR nothing to validate)
+- 1 = failure (any checksum mismatch or missing file)
+- No warnings/partial success — binary pass/fail for CI clarity
+
+**Checksum Validation Pattern**:
+- File-based checksum (`sha256_file`) is source of truth for snapshot integrity
+- DataFrame-based checksum (`snapshot_checksum`) is for in-memory validation only
+- Never mix the two — Task 1-7 learnings remain critical
