@@ -507,3 +507,63 @@ This pattern prevents infinite recursion and ensures tests use isolated test dat
 - `poetry run python -m src.main snapshots purge --dry-run --confirm`
   retorna exit code `1` ✅
 - `poetry run pre-commit run --all-files` ✅
+
+## Task 12 - Test Coverage for Story 2-5 (Retention & Purge)
+
+### Evidence File
+- Location: `.sisyphus/evidence/task-12-tests-story-2-5.txt`
+- All 12 tests passing
+
+### Test Functions Created
+1. `test_get_retention_days_default` - env var absent returns 90
+2. `test_get_retention_days_custom` - env var set returns custom value
+3. `test_get_retention_days_invalid` - invalid value returns default 90
+4. `test_find_purge_candidates_returns_old_snapshots` - filters by date
+5. `test_find_purge_candidates_excludes_archived` - filters archived=1
+6. `test_archive_snapshots_copies_and_marks` - copies file, validates checksum, marks archived
+7. `test_archive_snapshots_checksum_mismatch` - reports checksum_ok=False
+8. `test_delete_snapshots_removes_files_and_db` - removes files + DB records
+9. `test_delete_snapshots_missing_file_no_crash` - suppresses OSError
+10. `test_purge_dryrun_no_side_effects` - CLI dry-run doesn't modify state
+11. `test_purge_confirm_deletes_candidates` - CLI confirm deletes (no archive-dir)
+12. `test_purge_confirm_archives_candidates` - CLI confirm archives (with archive-dir)
+
+### Key Implementation Patterns
+
+#### CLI Testing Monkeypatch Strategy
+For CLI commands that call `db.connect()` directly (line 178 in `snapshot_cli.py`):
+
+```python
+# Save original function to avoid recursion
+original_connect = db.connect
+
+def mock_db_connect(db_path=None):
+    return original_connect(db_path=str(metadata_db_path))
+
+monkeypatch.setattr(db, "connect", mock_db_connect)
+```
+
+**Critical Learning**: Cannot patch `snapshots._connect` because CLI uses `db.connect()` directly. Must patch `db.connect` itself while preserving original function reference to avoid infinite recursion.
+
+#### Test Database Setup Pattern
+```python
+metadata_db_path = tmp_path / "metadata.db"
+db.init_db(db_path=str(metadata_db_path))
+metadata_conn = db.connect(db_path=str(metadata_db_path))
+apply_migrations(metadata_conn)  # Applies 0001, 0002 migrations
+```
+
+#### Checksum Verification
+Always use `sha256_file()` from `src/utils/checksums`, NOT `snapshot_checksum()`:
+- `sha256_file()` - hashes raw file bytes
+- `snapshot_checksum()` - hashes DataFrame (wrong for file verification)
+
+### Coverage Verification
+- All retention module functions tested: `get_retention_days()`, `find_purge_candidates()`, `archive_snapshots()`, `delete_snapshots()`
+- CLI commands tested: `snapshots purge --dry-run`, `snapshots purge --confirm`, `snapshots purge --confirm --archive-dir`
+- Edge cases covered: invalid env vars, missing files, checksum mismatches
+
+### Linting & Pre-commit
+- ruff: 5 auto-fixed (unused imports: os, pytest, snapshots in 3 places)
+- pre-commit: all hooks passed
+- Line length: ≤88 chars throughout

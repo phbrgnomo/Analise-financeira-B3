@@ -1205,7 +1205,7 @@ Max Concurrent: 6 (Wave 1)
   - Files: `src/retention.py`, `src/snapshot_cli.py`
   - Pre-commit: `poetry run pre-commit run --all-files`
 
-- [ ] 12. Testes para Story 2-5 — Retenção e Purge
+- [x] 12. Testes para Story 2-5 — Retenção e Purge
 
   **What to do**:
   - Criar `tests/test_retention_purge.py` com os seguintes testes:
