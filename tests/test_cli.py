@@ -1,9 +1,18 @@
+import re
 import subprocess
 import sys
 
 from typer.testing import CliRunner
 
 from src.main import app
+
+
+def _strip_ansi(s: str) -> str:
+    """Remove sequências ANSI/escape para tornar asserções independentes
+    do formatter.
+    """
+    ansi = re.compile(r"\x1B\[[0-?]*[ -/]*[@-~]")
+    return ansi.sub("", s)
 
 
 def test_cli_help():
@@ -28,11 +37,12 @@ def test_ingest_snapshot_help():
         f"CLI help falhou (exit_code={result.exit_code}): "
         f"{result.exception}"
     )
-    assert "ingest-snapshot" in result.output
+    plain = _strip_ansi(result.output)
+    assert "ingest-snapshot" in plain
     # verify that the new flags appear
-    assert "--force-refresh" in result.output
-    assert "--ttl" in result.output
-    assert "--cache-file" in result.output
+    assert "--force-refresh" in plain
+    assert "--ttl" in plain
+    assert "--cache-file" in plain
 
 
 def test_main_help_exit_code_and_output():
@@ -53,8 +63,9 @@ def test_main_help_exit_code_and_output():
         timeout=10,
     )
     assert completed2.returncode == 0
-    assert "--ticker" in completed2.stdout
-    assert "--provider" in completed2.stdout
+    plain2 = _strip_ansi(completed2.stdout)
+    assert "--ticker" in plain2
+    assert "--provider" in plain2
     # Help may emit deprecation warnings to stderr in some environments.
     # Ignore stderr content in the assertions.
 
