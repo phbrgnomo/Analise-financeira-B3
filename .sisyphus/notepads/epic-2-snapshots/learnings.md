@@ -582,3 +582,115 @@ Always use `sha256_file()` from `src/utils/checksums`, NOT `snapshot_checksum()`
 - Valid snapshot: `task-13-restore-verify-pass.txt` → `overall_result=PASS`, `Exit code: 0`.
 - Missing file: `task-13-restore-verify-fail.txt` → erro `Snapshot file not found`, `Exit code: 2`.
 - Checksum mismatch: `task-13-restore-verify-warn.txt` → `checksum_match=fail`, `overall_result=WARN`, `Exit code: 1`.
+
+## [2026-03-07T05:21:00Z] Task 14: Test Suite for restore-verify CLI
+
+### Test File Overview
+- **Created**: `tests/test_restore_verify.py` (525 lines, 88-char limit)
+- **Test count**: 10 tests, all passing ✅
+- **Coverage**: Exit codes (3), integrity checks (4), JSON reporting, CLI help, edge cases
+- **Scope**: Matches required 7-12 test range
+
+### Test Execution Summary
+```
+platform linux -- Python 3.14.3, pytest-7.4.4, pluggy-1.6.0
+collected 10 items
+tests/test_restore_verify.py ..........                                  [100%]
+============================== 10 passed in 1.10s ==============================
+
+Full suite: 271 passed in 15.24s (261 baseline + 10 new)
+Linting: All checks passed!
+```
+
+### Test Structure & Patterns
+
+#### Helper Functions
+1. **`_extract_json_from_cli_output(output: str) -> dict`**
+   - Extracts JSON block from mixed CLI output (status messages + JSON)
+   - Uses regex: `re.search(r"\{.*\}", output, re.DOTALL)`
+   - Why: CLI uses `CliFeedback` which outputs status messages alongside JSON
+   - Without this, `json.loads(result.stdout)` fails on mixed output
+
+2. **`_create_test_snapshot_with_metadata(db_path, tmp_path, tamper=False)`**
+   - Sets up test CSV with metadata in DB
+   - Creates valid CSV with all required columns (date, open, high, low, close)
+   - Registers metadata in `snapshots` table
+   - Optional tamper: preserves CSV structure while changing data (avoid column validation failure)
+   - Returns `(snapshot_path, original_checksum)` tuple
+
+#### Testing Pattern
+- **CLI invocation**: `CliRunner().invoke(app, ["pipeline", "restore-verify", ...])`
+- **DB isolation**: Monkeypatch `db.connect` to use test DB (save/restore original)
+- **Migration setup**: Apply migrations in fixture for schema consistency
+- **Isolation**: Use `tmp_path` per test to avoid cross-test pollution
+
+### Critical Issue & Resolution
+
+#### Issue: JSON Parsing from Mixed Output
+**Problem**: CLI outputs status messages mixed with JSON:
+```
+Checking snapshot PETR4...
+{"status": "pass", ...}
+```
+Calling `json.loads(result.stdout)` fails with JSONDecodeError.
+
+**Solution**: Created `_extract_json_from_cli_output()`:
+```python
+json_match = re.search(r"\{.*\}", output, re.DOTALL)
+if json_match:
+    return json.loads(json_match.group())
+```
+
+#### Issue: Tamper Operation Breaking Structure
+**Problem**: Original corrupt strategy (`write_text("corrupted,data\n1,2\n")`) caused column validation to fail (exit 2) before checksum check (exit 1), making test_restore_verify_checksum_mismatch unable to verify exit 1 (WARN) behavior.
+
+**Solution**: Modified tamper to preserve CSV structure:
+```python
+tampered_df = df.copy()
+tampered_df.loc[0, "close"] = 999.99  # Change data, not structure
+tampered_df.to_csv(snapshot_path, index=False)
+```
+Result: Checksum mismatch without column validation failure → exit 1 (WARN) as expected.
+
+### Test Coverage Map
+
+#### Exit Code Scenarios (3)
+1. ✅ **Exit 0 (PASS)**: `test_restore_verify_pass` — all checks OK
+2. ✅ **Exit 1 (WARN)**: `test_restore_verify_checksum_mismatch` — metadata mismatch detected
+3. ✅ **Exit 2 (FAIL)**: Multiple tests for structural failures
+
+#### Integrity Checks (4)
+1. ✅ **row_count**: `test_restore_verify_row_count_check`
+2. ✅ **columns_present**: `test_restore_verify_missing_columns`
+3. ✅ **checksum_match**: `test_restore_verify_checksum_mismatch`
+4. ✅ **sample_row_check**: `test_restore_verify_sample_row_check`
+
+#### Edge Cases (4)
+1. ✅ Missing file: `test_restore_verify_missing_file` → exit 2
+2. ✅ Missing metadata: `test_restore_verify_missing_metadata` → exit 2
+3. ✅ Invalid CSV: `test_restore_verify_invalid_csv` → exit 2
+4. ✅ Missing columns: `test_restore_verify_missing_columns` → exit 2
+
+#### Additional Coverage
+- ✅ JSON report structure validation: `test_restore_verify_json_report_structure`
+- ✅ CLI help flag: `test_restore_verify_help`
+
+### Compliance Verification
+
+✅ **Patterns**: Follows reference test files (`test_snapshots_export.py`, `test_retention_purge.py`)
+✅ **Monkeypatch**: Saves original, restores in teardown (avoids infinite recursion)
+✅ **Migration setup**: Applied in fixtures for schema consistency
+✅ **CLI testing**: Via `CliRunner` from typer
+✅ **Isolation**: Each test uses `tmp_path` for temporary CSV
+✅ **No regressions**: Full suite 271/271 passing
+✅ **Linting**: Ruff passes (88-char limit enforced)
+✅ **Test count**: 10 tests (within 7-12 range)
+
+### Reference Files Consulted
+- `test_snapshots_export.py` (monkeypatch pattern, migration setup)
+- `test_retention_purge.py` (DB isolation, tmp_path usage)
+- `src/cli_feedback.py` (understanding CliFeedback output)
+- `src/pipeline.py` (restore-verify command structure)
+
+### Files Modified
+- **Created**: `tests/test_restore_verify.py` (525 lines)

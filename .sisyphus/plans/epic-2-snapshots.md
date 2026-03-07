@@ -1404,7 +1404,7 @@ Max Concurrent: 6 (Wave 1)
   - Files: `src/pipeline.py`
   - Pre-commit: `poetry run pre-commit run --all-files`
 
-- [ ] 14. Testes para Story 2-6 — Restore-Verify
+- [x] 14. Testes para Story 2-6 — Restore-Verify
 
   **What to do**:
   - Criar `tests/test_restore_verify.py` com os seguintes testes:
