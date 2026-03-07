@@ -17,7 +17,7 @@ python-dotenv = "^1.0.0"
 yfinance = "^1.2.0"
 pandera = "^0.29.0"
 portalocker = "^3.1.0"
-sqlparse = "^0.4.3"
+sqlparse = "^0.5.4"
 
 
 [build-system]
