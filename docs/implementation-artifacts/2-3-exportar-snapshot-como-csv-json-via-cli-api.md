@@ -22,7 +22,8 @@ para que eu possa consumir, compartilhar e comparar conjuntos de dados (backup, 
 1. Dado um ticker (ex.: PETR4.SA) e intervalo (start/end) o sistema gera um snapshot contendo todas as linhas canônicas disponíveis no período solicitado.
 2. O snapshot é exportável em `csv` e `json` via CLI (`poetry run main snapshots export`) e via API (se existir uma rota HTTP bem definida).
 3. Cada snapshot gerado é salvo em `snapshots/<ticker>/<ticker>-<YYYYMMDDTHHMMSSZ>.<ext>` e inclui metadados com `created_at`, `rows`, `checksum_sha256`.
-4. Para `csv` o arquivo inclui cabeçalho com colunas canônicas (`ticker,date,open,high,low,close,adj_close,volume,source,fetched_at`); para `json` usa NDJSON ou array (documentar comportamento).
+4. Para `csv` o arquivo inclui cabeçalho seguindo o esquema persistido definido em `docs/schema.json` (ex.: `ticker,date,open,high,low,close,volume,source,fetched_at,raw_checksum`).
+  Observação: o mapper pode emitir `adj_close` para uso interno em cálculos, mas essa coluna **não é persistida** por padrão no snapshot CSV a menos que `docs/schema.json` seja atualizada explicitamente.
 5. O checksum SHA256 do arquivo é calculado e gravado em arquivo adjunto `<filename>.checksum` e também registrado em tabela `snapshots` ou `metadata` no DB (`snapshots` table), conforme design existente (ver FR13/FR15 em docs/planning-artifacts/epics.md).
 6. A operação é idempotente para a mesma combinação (ticker, timestamp-derivation-params) — reexecuções com `--force` substituem arquivos e atualizam metadados; execuções sem `--force` não sobrescrevem por padrão.
 7. Há testes unitários e um teste de integração leve (mocked DB) que valida: geração de arquivo, conteúdo mínimo, cálculo de checksum e gravação de metadados.

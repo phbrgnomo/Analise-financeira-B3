@@ -1,8 +1,86 @@
-import os
+"""Conftest de testes global.
 
+Define fixtures úteis para integração e playback de rede.
+"""
+
+from __future__ import annotations
+
+import os
+import sys
+from typing import Callable, Generator
+
+import pandas as pd
 import pytest
 
-from tests.fixture_utils import create_prices_db_from_csv, get_or_make_snapshot_dir
+from src.adapters.retry_metrics import get_global_metrics
+
+# Ensure tests directory is importable when pytest runs the tests as a script
+sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
+from fixture_utils import create_prices_db_from_csv, get_or_make_snapshot_dir
+
+
+def _load_sample_dataframe(ticker: str, start=None, end=None, **kwargs) -> pd.DataFrame:
+    path = os.path.join(os.path.dirname(__file__), "fixtures", "sample_ticker.csv")
+    # CSV possui cabeçalho: usar nomes originais e converter 'date' para datetime
+    df = pd.read_csv(path, parse_dates=["date"])  # uses header=0 by default
+    df = df.set_index("date")
+    # Garantir que o índice é DatetimeIndex
+    df.index = pd.to_datetime(df.index, utc=False)
+
+    # Normalizar nomes de colunas para formato esperado pelo adapter (provider style)
+    col_map = {
+        "open": "Open",
+        "high": "High",
+        "low": "Low",
+        "close": "Close",
+        "volume": "Volume",
+    }
+    df = df.rename(columns=col_map)
+
+    # Garantir colunas esperadas do provedor: Open, High, Low, Close, Volume
+    for col in ["Open", "High", "Low", "Close", "Volume"]:
+        if col not in df.columns:
+            df[col] = None
+
+    # Não expor "Adj Close" nos dados de playback: DB não contém essa coluna.
+    return df[["Open", "High", "Low", "Close", "Volume"]]
+
+
+@pytest.fixture(autouse=True)
+def reset_retry_metrics():
+    """Reset the global retry-metrics singleton before every test.
+
+    Prevents retry counters from leaking between tests when the same process
+    runs the full suite, which could produce non-deterministic assertions in
+    tests that inspect retry/failure counts.
+    """
+    get_global_metrics().reset()
+    yield
+    # reset again after the test so any metric mutations don't bleed into
+    # fixtures that run during teardown.
+    get_global_metrics().reset()
+
+
+@pytest.fixture(autouse=True)
+def mock_yfinance_data(monkeypatch) -> Generator[Callable, None, None]:
+    """Monkeypatch `src.adapters.yfinance_adapter.web.DataReader` para playback.
+
+    Usa `tests/fixtures/sample_ticker.csv` como fonte determinística quando
+    `NETWORK_MODE!=record`.
+    """
+    mode = os.environ.get("NETWORK_MODE", "playback").lower()
+    if mode == "record":
+        yield lambda *a, **k: None
+        return
+
+    def _patched_datareader(ticker, data_source=None, start=None, end=None, **kwargs):
+        return _load_sample_dataframe(ticker, start=start, end=end, **kwargs)
+
+    import src.adapters.yfinance_adapter as yadapter  # type: ignore
+
+    ns = yadapter.types.SimpleNamespace(DataReader=_patched_datareader)
+    monkeypatch.setattr(yadapter, "web", ns)
+    yield _patched_datareader
 
 
 @pytest.fixture(scope="function")
@@ -18,6 +96,21 @@ def sample_db():
     finally:
         # Ensure the connection is always closed after each test
         db.close()
+
+
+@pytest.fixture(autouse=True)
+def sqlite_version_override(monkeypatch):
+    """If `SQLITE_VERSION` env var is set in CI, monkeypatch sqlite3.sqlite_version.
+
+    This allows CI to simulate different SQLite runtime versions without
+    recompiling Python. The test suite uses this to exercise upsert vs
+    fallback code paths deterministically.
+    """
+    import sqlite3
+
+    if ver := os.environ.get("SQLITE_VERSION"):
+        monkeypatch.setattr(sqlite3, "sqlite_version", ver)
+    yield
 
 
 @pytest.fixture(scope="function")

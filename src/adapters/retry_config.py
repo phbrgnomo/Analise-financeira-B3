@@ -1,0 +1,162 @@
+"""
+Configuração de retry/backoff para adaptadores.
+
+Define parâmetros configuráveis via variáveis de ambiente para
+controle granular de políticas de retry em chamadas a APIs externas.
+"""
+
+import os
+from dataclasses import dataclass, field
+from typing import List
+
+
+@dataclass
+class RetryConfig:
+    """
+    Configuração de retry com backoff exponencial.
+
+    Attributes:
+        max_attempts: Número máximo de tentativas (incluindo a primeira)
+        initial_delay_ms: Delay inicial em milissegundos
+        max_delay_ms: Delay máximo em milissegundos (cap para backoff)
+        backoff_factor: Fator multiplicativo para backoff exponencial
+        retry_on_status_codes: Lista de códigos HTTP que devem acionar retry
+        timeout_seconds: Timeout total para operação em segundos
+    """
+
+    max_attempts: int = 3
+    initial_delay_ms: int = 1000
+    max_delay_ms: int = 30000
+    backoff_factor: float = 2.0
+    retry_on_status_codes: List[int] = field(
+        default_factory=lambda: [429, 500, 502, 503, 504]
+    )
+    timeout_seconds: int = 30
+
+    def __post_init__(self) -> None:
+        """Run validation after dataclass initialization.
+
+        This mirrors the check performed in :meth:`from_env` so that
+        callers can't accidentally construct an invalid configuration by
+        bypassing that factory method.
+        """
+        self._validate()
+
+    @classmethod
+    def from_env(cls, prefix: str = "ADAPTER_RETRY") -> "RetryConfig":
+        """
+        Carrega configuração de variáveis de ambiente.
+
+        Args:
+            prefix: Prefixo das variáveis de ambiente (padrão: ADAPTER_RETRY)
+
+        Variáveis de ambiente suportadas:
+            - {prefix}_MAX_ATTEMPTS: número máximo de tentativas
+            - {prefix}_INITIAL_DELAY_MS: delay inicial em ms
+            - {prefix}_MAX_DELAY_MS: delay máximo em ms
+            - {prefix}_BACKOFF_FACTOR: fator de backoff
+            - {prefix}_ON_STATUS_CODES: códigos HTTP separados por vírgula
+            - {prefix}_TIMEOUT_SECONDS: timeout em segundos
+
+        Returns:
+            RetryConfig com valores carregados do ambiente ou padrões
+        """
+        config = cls(
+            max_attempts=int(os.getenv(f"{prefix}_MAX_ATTEMPTS", "3")),
+            initial_delay_ms=int(
+                os.getenv(f"{prefix}_INITIAL_DELAY_MS", "1000")
+            ),
+            max_delay_ms=int(
+                os.getenv(f"{prefix}_MAX_DELAY_MS", "30000")
+            ),
+            backoff_factor=float(
+                os.getenv(f"{prefix}_BACKOFF_FACTOR", "2.0")
+            ),
+            retry_on_status_codes=cls._parse_status_codes(
+                os.getenv(
+                    f"{prefix}_ON_STATUS_CODES",
+                    "429,500,502,503,504",
+                )
+            ),
+            timeout_seconds=int(
+                os.getenv(f"{prefix}_TIMEOUT_SECONDS", "30")
+            ),
+        )
+        config._validate()
+        return config
+
+    def _validate(self) -> None:
+        """Valida que os parâmetros estão em faixas aceitáveis.
+
+        Raises:
+            ValueError: Se algum parâmetro estiver fora da faixa válida.
+        """
+        if self.max_attempts < 1:
+            raise ValueError(
+                f"max_attempts deve ser >= 1, recebido: "
+                f"{self.max_attempts}"
+            )
+        if self.initial_delay_ms < 0:
+            raise ValueError(
+                f"initial_delay_ms deve ser >= 0, recebido: "
+                f"{self.initial_delay_ms}"
+            )
+        if self.max_delay_ms < 0:
+            raise ValueError(
+                f"max_delay_ms deve ser >= 0, recebido: "
+                f"{self.max_delay_ms}"
+            )
+        # ensure sane relation: maximum delay cannot be smaller than initial
+        if self.max_delay_ms < self.initial_delay_ms:
+            raise ValueError(
+                f"max_delay_ms ({self.max_delay_ms}) não pode ser menor que "
+                f"initial_delay_ms ({self.initial_delay_ms})"
+            )
+        if self.backoff_factor <= 0:
+            raise ValueError(
+                f"backoff_factor deve ser > 0, recebido: "
+                f"{self.backoff_factor}"
+            )
+        if self.timeout_seconds < 0:
+            raise ValueError(
+                f"timeout_seconds deve ser >= 0, recebido: "
+                f"{self.timeout_seconds}"
+            )
+
+    @staticmethod
+    def _parse_status_codes(codes_str: str) -> List[int]:
+        """Parse string de códigos HTTP separados por vírgula."""
+        try:
+            return [int(code.strip()) for code in codes_str.split(",") if code.strip()]
+        except ValueError:
+            # Retornar padrões seguros se parsing falhar
+            return [429, 500, 502, 503, 504]
+
+    def compute_delay_ms(self, attempt: int) -> int:
+        """
+        Calcula delay em milissegundos para uma tentativa usando backoff exponencial.
+
+        Args:
+            attempt: Número da tentativa (1, 2, 3...)
+
+        Returns:
+            Delay em milissegundos, limitado por max_delay_ms
+        """
+        if attempt <= 0:
+            return 0
+
+        # Backoff exponencial: initial_delay * (backoff_factor ^ (attempt - 1))
+        delay_ms = self.initial_delay_ms * (self.backoff_factor ** (attempt - 1))
+        return min(int(delay_ms), self.max_delay_ms)
+
+    def compute_delay_seconds(self, attempt: int) -> float:
+        """
+        Calcula delay em segundos para uma tentativa.
+
+        Args:
+            attempt: Número da tentativa (1, 2, 3...)
+
+        Returns:
+            Delay em segundos (float)
+        """
+        return self.compute_delay_ms(attempt) / 1000.0

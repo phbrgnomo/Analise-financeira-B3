@@ -16,6 +16,8 @@ completedAt: 2026-02-16
 
 # Architecture Decision Document
 
+<!-- Conteúdo de implementação integrado diretamente nas seções abaixo. -->
+
 ## Project Context Analysis
 
 ### Requirements Overview
@@ -99,16 +101,31 @@ completedAt: 2026-02-16
 
 ### Developer Next Steps (sugestão imediata)
 
-- Criar esqueleto de adaptador em `src/dados_b3.py` com interface `Adapter.fetch(ticker) -> pd.DataFrame(raw)` e `Adapter.normalize(df) -> pd.DataFrame(canonical)`.
-- Implementar `src/db.py` com `write_prices(df, ticker)` garantindo upsert por `(ticker, date)`.
-- Adicionar testes: `tests/test_ingest.py` (mock adapters) e `tests/test_db_upsert.py` (fixture SQLite temporário) para validar idempotência e integridade dos snapshots.
-- Adicionar `docs/planning-artifacts/adapter-mappings.md` com exemplos de mapeamento por provedor.
+- Esqueleto de adaptadores e fábrica: presente em `src/adapters/` e
+  exposto via `src.adapters.factory` (ex.: `YFinanceAdapter` já
+  implementado em `src/adapters/yfinance_adapter.py`).
+- Persistência canônica: helpers de escrita existem em
+  `src/db/prices.py` e `src/db_client.py` e expõem `write_prices` com
+  comportamento de upsert por `(ticker, date)`.
+- Pipeline e CLI: fluxo de ingestão orquestrado em
+  `src/ingest/pipeline.py` com comandos CLI em `src/pipeline.py`
+  (`ingest`, `pull-sample`) implementados.
+- Testes: há suítes iniciais cobrindo CLI e ingest (`tests/test_pipeline_cli.py`,
+  `tests/test_ingest_cache_incremental.py`). Recomenda-se adicionar
+  testes de contrato para novos adaptadores e um teste dedicado de
+  upsert (`tests/test_db_upsert.py`) usando fixtures de SQLite temporário.
+- Documentação de mapeamentos: criar/atualizar
+  `docs/planning-artifacts/adapter-mappings.md` com exemplos por
+  provedor (yfinance → canonical) e anexar aos PRs de novos adaptadores.
+- Operacional / Governança: fixar versões no `pyproject.toml`, adicionar
+  `pre-commit` com `ruff` e criar um CI mínimo (`.github/workflows/ci.yml`) que
+  rode `poetry install`, `pytest` e lint.
 
 ## Starter Template Evaluation (Step 03)
 
 ### Party Mode Consolidated Recommendation
 
-- **Starter escolhido:** Custom Lightweight Python starter (Poetry + Typer + pandas + SQLAlchemy + Streamlit + pytest + black/ruff + python-dotenv).
+- **Starter escolhido:** Custom Lightweight Python starter (Poetry + Typer + pandas + SQLAlchemy + Streamlit + pytest + ruff (black optional) + python-dotenv).
 - **Rationale:** leve, alinhado ao PRD, testável, facilita criação de adaptadores e não impõe complexidade desnecessária ao escopo local single-user.
 
 ### Init / Quickstart (exemplo)
@@ -121,7 +138,7 @@ poetry init -n
 poetry add pandas sqlalchemy yfinance pandas-datareader python-dotenv typer streamlit
 
 # adicionar dependências de desenvolvimento
-poetry add --dev pytest black ruff pre-commit
+poetry add --dev pytest ruff pre-commit
 
 # criar layout inicial
 mkdir -p src tests notebooks docs dados snapshots
@@ -133,15 +150,15 @@ mkdir -p src tests notebooks docs dados snapshots
 - CLI: `Typer` para comandos (`pipeline.ingest`, `db.*`, `snapshots`).
 - DB: SQLite via SQLAlchemy (camada de abstração); documentar migração/versão.
 - Testing: `pytest` com fixtures para SQLite temporário; testes de contrato para adaptadores.
-- Formatting/Linting: `black` + `ruff` + `pre-commit`.
+-- Formatting/Linting: `ruff` + `pre-commit` (black optional).
 - Dev DX: `poetry run` para comandos e `python -m src.main` como fallback.
 
 ### Party Mode Action Items (para implementação imediata)
 
-- Implementar `src/dados_b3.py` com interface `Adapter.fetch(ticker) -> pd.DataFrame(raw)` e `Adapter.normalize(df) -> pd.DataFrame(canonical)`.
+- Implementar adaptadores em `src/adapters/` (herdando de `Adapter`) e registrar na fábrica.
 - Implementar `src/db.py` com `write_prices(df, ticker)` garantindo upsert por `(ticker, date)`.
 - Criar testes iniciais: `tests/test_ingest.py` (mock adapters) e `tests/test_db_upsert.py` (fixture SQLite temporário).
-- Incluir `pre-commit` com hooks para `black` e `ruff`.
+-- Incluir `pre-commit` com hooks para `ruff` (black optional).
 - Documentar no `architecture.md` e em `docs/planning-artifacts/adapter-mappings.md` os mapeamentos e checklist por provedor.
 
 ### Notas
@@ -167,7 +184,7 @@ Resumo das convenções e padrões acordados pela revisão colaborativa:
   - Tabelas: plural, snake_case (ex.: `prices`, `ingest_logs`, `snapshots`).
   - Colunas: snake_case (`ticker`, `fetched_at`, `raw_checksum`).
   - Código Python: snake_case para funções/variáveis; PascalCase para classes.
-  - Arquivos: snake_case.py (`dados_b3.py`, `db.py`).
+  - Arquivos: snake_case.py (`db.py`, `pipeline.py`).
   - CLI: comandos kebab-like (`poetry run main ingest --ticker PETR4.SA`).
 
 - Estrutura do repositório
@@ -193,8 +210,8 @@ Resumo das convenções e padrões acordados pela revisão colaborativa:
 
 - Migrations, CI e qualidade
   - `alembic` para migrações/versão do schema (documentar limitações em SQLite).
-  - `pre-commit` com `black`, `ruff`.
-  - CI: `poetry install`, `pytest`, `ruff/black` — falhar o merge em caso de erro.
+  - `pre-commit` com `ruff` (black optional).
+  - CI: `poetry install`, `pytest`, `ruff` — falhar o merge em caso de erro. (black checks are optional)
 
 - Observabilidade e formatos
   - Logging estruturado JSON com campos: `job_id`, `ticker`, `source`, `started_at`, `finished_at`, `rows_fetched`, `status`, `error`.
@@ -299,7 +316,7 @@ analise-financeira-b3/
 ### Gap Analysis
 
 - **Crítico (ação recomendada antes da implementação ampla):** fixar ou verificar versões estáveis dos pacotes no `pyproject.toml` e criar o arquivo `pyproject.toml` mínimo (starter). Criar configuração mínima do `alembic` (migrations) e roteiro de migração inicial.
-- **Importante:** adicionar `pre-commit` config, `pytest` conftest fixtures exemplo, e CI workflow `ci.yml` que roda `poetry install`, `pytest`, `ruff`/`black` e checks de geração de snapshot mockada.
+- **Importante:** adicionar `pre-commit` config, `pytest` conftest fixtures exemplo, e CI workflow `ci.yml` que roda `poetry install`, `pytest`, `ruff` (black optional) e checks de geração de snapshot mockada.
 - **Nice-to-have:** exemplos de dados de teste (small sample CSV), PR/issue templates, e documentação de monitoramento local (ex.: healthcheck CLI).
 
 ### Validation Issues Addressed
@@ -330,15 +347,22 @@ analise-financeira-b3/
 - Registrar quaisquer desvios no PR e anexar justificativa.
 
 **First Implementation Priority (primeiros passos):**
-1. Inicializar projeto (`poetry init -n`) e adicionar dependências iniciais (veja exemplo do Step 03).
-2. Criar esqueleto: `src/adapters/`, `src/ingest/pipeline.py`, `src/etl/mapper.py`, `src/db/db.py`, `tests/conftest.py`.
-3. Adicionar `pre-commit` e CI `ci.yml` básico com `pytest` e lint.
+1. Fixar versões e criar um `pyproject.toml` mínimo com dependências
+  estáveis (ex.: `pandas`, `sqlalchemy`, `typer`, `yfinance`) e dev-deps
+  (`pytest`, `ruff`, `pre-commit`).
+2. Adicionar `pre-commit` e configuração de lint (`ruff`) para o repositório
+  e hooks básicos (format, lint).
+3. Criar CI mínimo em `.github/workflows/ci.yml` que execute `poetry install`,
+  `pytest` e `ruff` (falhar o pipeline em caso de erros).
+4. Completar documentação operativa: `docs/planning-artifacts/adapter-mappings.md`
+  e exemplos de fixtures em `tests/conftest.py` para validação de upsert
+  e ingest mockada.
 
 **Comando inicial sugerido:**
 ```bash
 poetry init -n
 poetry add pandas sqlalchemy yfinance pandas-datareader python-dotenv typer streamlit
-poetry add --dev pytest black ruff pre-commit alembic
+poetry add --dev pytest ruff pre-commit alembic  # add `black` only if you want it installed
 mkdir -p src/adapters src/ingest src/etl src/db src/apps tests dados raw snapshots notebooks
 ```
 
@@ -372,7 +396,7 @@ Parabéns — a arquitetura foi concluída colaborativamente e está pronta para
 - Inicializar o projeto com `poetry init -n` e adicionar dependências listadas no documento (veja seção Starter / Quickstart).
 - Criar o esqueleto de código (`src/adapters`, `src/ingest`, `src/etl`, `src/db`, `tests/`, `migrations/`) e os fixtures mínimos em `tests/conftest.py`.
 - Adicionar `pyproject.toml` com versões fixas após verificar as versões estáveis recomendadas.
-- Criar CI mínimo em `.github/workflows/ci.yml` que rode `poetry install`, `pytest` e linters (`ruff`/`black`).
+- Criar CI mínimo em `.github/workflows/ci.yml` que rode `poetry install`, `pytest` e linters (`ruff`). (black optional)
 
 Se quiser, eu posso: criar automaticamente o `pyproject.toml` mínimo, o esqueleto `src/` e `tests/`, um `ci.yml` básico e a configuração `pre-commit` — confirme que devo prosseguir com essas alterações.
 

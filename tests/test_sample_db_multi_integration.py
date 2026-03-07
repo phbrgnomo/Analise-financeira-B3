@@ -1,4 +1,10 @@
 def test_sample_db_multi_integration(sample_db_multi):
+    """Verifica integração básica usando o fixture `sample_db_multi`.
+
+    O banco simulado contém múltiplos tickers (incluindo vazio) e algumas
+    linhas de preços; o teste confirma a contagem esperada, normalização de
+    tickers e capacidade de consultar um valor conhecido.
+    """
     db = sample_db_multi
     cur = db.cursor()
 
@@ -10,14 +16,15 @@ def test_sample_db_multi_integration(sample_db_multi):
     # Distinct tickers (including empty ticker)
     cur.execute("SELECT DISTINCT ticker FROM prices")
     distinct = {r[0] for r in cur.fetchall()}
-    assert "PETR4.SA" in distinct
-    assert "VALE3.SA" in distinct
+    # tickers now stored in base B3 format
+    assert "PETR4" in distinct
+    assert "VALE3" in distinct
     assert "" in distinct
 
     # Query a known value
     cur.execute(
         "SELECT close FROM prices WHERE ticker = ? AND date = ?",
-        ("VALE3.SA", "2023-01-02"),
+        ("VALE3", "2023-01-02"),
     )
     val = cur.fetchone()
     assert val is not None

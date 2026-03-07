@@ -89,7 +89,7 @@ NFR-INT1: Adaptadores de provedores implementam interface estável e documentada
 
 ### Additional Requirements
 
-- Starter template: Python lightweight starter (Poetry + Typer + pandas + SQLAlchemy + Streamlit + pytest + black/ruff + python-dotenv).
+- Starter template: Python lightweight starter (Poetry + Typer + pandas + SQLAlchemy + Streamlit + pytest + ruff (black optional) + python-dotenv).
 - Use SQLAlchemy for DB abstraction and `pandas` for ETL; implement `Adapter -> Canonical Mapper` layer.
 - Persist raw responses in `raw/<provider>/` and record `raw_checksum` (SHA256) for auditability.
 - Implement canonical mapping per provider and document mappings in `docs/planning-artifacts/adapter-mappings.md`.
@@ -176,12 +176,12 @@ So that I can reproduce the quickstart experiment in ≤ 30 minutes.
 
 **Acceptance Criteria:**
 
-**Given** a developer on a fresh machine with Python 3.14 and Poetry
+**Given** a developer on a fresh machine with Python 3.12 and Poetry
 **When** they follow the README quickstart steps
 **Then** they can run `poetry install` and `poetry run main --help` and execute a sample quickstart command
 **And** the README lists example tickers and expected output locations (`snapshots/`, `dados/`).
 
-### Story 0.3: Adicionar `pre-commit` com `black` e `ruff`
+### Story 0.3: Adicionar `pre-commit` com `ruff` (black opcional)
 
 As a Maintainer,
 I want `pre-commit` hooks configured for code style and linting,
@@ -191,7 +191,7 @@ So that commits enforce consistent formatting and basic lint rules.
 
 **Given** the repository with `.pre-commit-config.yaml`
 **When** a contributor makes a commit
-**Then** `pre-commit` runs `black` and `ruff` and prevents commit on failures
+**Then** `pre-commit` runs `ruff` (black optional) and prevents commit on failures
 **And** documentation in README explains how to install and run `pre-commit` locally.
 
 ### Story 0.4: Criar skeleton de CI (`.github/workflows/ci.yml`)
@@ -204,12 +204,12 @@ So that pull requests verify project health automatically.
 
 **Given** a push or PR to any branch
 **When** GitHub Actions runs the `ci.yml`
-**Then** it runs a lightweight CI matrix (Python 3.14) with steps:
+**Then** it runs a lightweight CI matrix (Python 3.12) with steps:
 
 - `poetry install --no-dev` (install runtime deps for quick smoke)
 - `poetry install` (install dev deps)
 - `poetry run pytest -q --maxfail=1`
-- `ruff . --select` and `black --check .`
+- `ruff . --select` (optional: `black --check .` if black is used)
 
 **And** the workflow reports pass/fail in the PR status and artifacts/logs are available for failures.
 
@@ -320,7 +320,8 @@ So that downstream modules can rely on a consistent format for persistence and p
 
 **Given** a raw `DataFrame` from `yfinance` adapter
 **When** the canonical mapper is executed
-**Then** it returns a `DataFrame` with canonical columns (`ticker`, `date`, `open`, `high`, `low`, `close`, `adj_close`, `volume`, `source`, `fetched_at`)
+**Then** it returns a `DataFrame` with canonical columns (`ticker`, `date`, `open`, `high`, `low`, `close`, `volume`, `source`, `fetched_at`).
+**Nota:** o mapper pode opcionalmente emitir `adj_close` para cálculos internos (ex.: retornos), porém o esquema persistido é definido por `docs/schema.json` e não inclui `adj_close` por padrão. Atualize `docs/schema.json` para persistir `adj_close` quando necessário e siga o processo de versionamento/migração.
 **And** it computes `raw_checksum` for the raw payload and includes it in the metadata.
 **And** `fetched_at` is normalized to UTC ISO8601 and date handling (timezones) is explicitly documented.
 **And** the mapper includes a lightweight `pandera` schema for validation in the canonical step.
@@ -686,8 +687,8 @@ So that users immediately know where to look for generated artifacts.
 - README quickstart must include a copy-paste command and an expected JSON/text short summary example (see Story 3.1) and an example CSV header plus checksum line, e.g.:
 
   ```csv
-  date,open,high,low,close,adj_close,volume
-  2026-02-14,10.0,10.5,9.8,10.2,10.2,100000
+  date,open,high,low,close,volume
+  2026-02-14,10.0,10.5,9.8,10.2,100000
   # checksum: sha256:<hex>
   ```
 
@@ -874,8 +875,8 @@ Recomendações operacionais e exemplos executáveis aplicáveis às histórias 
 - Exemplo CSV + checksum (formato esperado para snapshots):
 
   ```csv
-  date,open,high,low,close,adj_close,volume
-  2026-02-14,10.0,10.5,9.8,10.2,10.2,100000
+  date,open,high,low,close,volume
+  2026-02-14,10.0,10.5,9.8,10.2,100000
   # checksum: sha256:<hex>
   ```
 

@@ -1,4 +1,3 @@
-```markdown
 # Story 1.9: Garantir execução concorrente segura por ticker (lock simples)
 
 Status: ready-for-dev
@@ -21,14 +20,15 @@ so that we avoid contention and potential SQLite corruption.
 
 ## Tasks / Subtasks
 
-- [ ] Implement lock manager utility `src/locks.py` (file-lock wrapper) using `fcntl`/`portalocker` with a simple API:
-  - [ ] `acquire_lock(ticker: str, timeout_seconds: int, wait: bool) -> contextmanager`
-  - [ ] `release_lock()` automatic via context manager
-  - [ ] configurable lock directory via env `LOCK_DIR` (default: `locks/`)
-- [ ] Integrate lock manager into `pipeline.ingest` orchestration (check at start, acquire lock, run ingest, finally release)
-- [ ] Add logging to `ingest_logs` with fields: `ticker`, `job_id`, `started_at`, `finished_at`, `status`, `lock_action`, `lock_waited_seconds`
-- [ ] Add unit/integration tests that spawn two concurrent ingest processes and assert one waits or exits as configured
-- [ ] Update CLI docs and playbook with `INGEST_LOCK_TIMEOUT_SECONDS` and example behavior
+- [x] Implement lock manager utility `src/locks.py` (file-lock wrapper) using `fcntl`/`portalocker` with a simple API:
+  - [x] `acquire_lock(ticker: str, timeout_seconds: int, wait: bool) -> contextmanager`
+  - [x] `release_lock()` automatic via context manager
+  - [x] configurable lock directory via env `LOCK_DIR` (default: `locks/`)
+- [x] Integrate lock manager into `pipeline.ingest` orchestration (check at start, acquire lock, run ingest, finally release)
+- [x] Add logging to `ingest_logs` with fields: `ticker`, `job_id`, `started_at`, `finished_at`, `status`, `lock_action`, `lock_waited_seconds`
+- [x] Add unit/integration tests that spawn two concurrent ingest processes and assert one waits or exits as configured
+- [x] Update CLI docs and playbook with `INGEST_LOCK_TIMEOUT_SECONDS` and example behavior
+- [x] Documentar o que foi implantado nessa etapa em `docs/sprint-reports` conforme definido no FR28 (`docs/planning-artifacts/prd.md`)
 
 ## Dev Notes
 

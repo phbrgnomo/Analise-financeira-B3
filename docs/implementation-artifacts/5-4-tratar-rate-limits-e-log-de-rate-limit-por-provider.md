@@ -46,7 +46,7 @@ so that retries are respectful and observable.
 
 ## Dev Notes
 
-- Local de implementação recomendado: `src/dados_b3.py` (adaptadores iniciais) e novo módulo `src/adapters/` para organizar providers (ex.: `src/adapters/yfinance.py`, `src/adapters/alphavantage.py`).
+- Local de implementação recomendado: `src/adapters/` para organizar providers (ex.: `src/adapters/yfinance_adapter.py`, `src/adapters/alphavantage_adapter.py`).
 - Interface Adapter: seguir `Adapter.fetch(ticker) -> pd.DataFrame` e lançar exceções específicas `AdapterRateLimitError(retry_after=None, provider=...)` para permitir tratamento centralizado.
 - Logging: utilizar logging estruturado (JSON) com campos mínimos: `ticker`, `job_id`, `provider`, `attempt`, `status_code`, `retry_after`, `provider_rate_limit`, `message`.
 - Persistência de logs: gravar eventos de rate-limit em `ingest_logs` (pode ser tabela no `dados/data.db` ou arquivo `logs/ingest_logs.jsonl` conforme infra existente). Manter `job_id` para correlação com runs.
@@ -57,8 +57,8 @@ so that retries are respectful and observable.
 - Propondo organização mínima:
   - src/adapters/__init__.py
   - src/adapters/base.py  # define Adapter interface e exceções (AdapterRateLimitError)
-  - src/adapters/yfinance.py
-  - src/adapters/alphavantage.py
+  - src/adapters/yfinance_adapter.py
+  - src/adapters/alphavantage_adapter.py
   - src/ingest/runner.py  # orquestrador que usa adapters e aplica retry 정책
 
 ### References

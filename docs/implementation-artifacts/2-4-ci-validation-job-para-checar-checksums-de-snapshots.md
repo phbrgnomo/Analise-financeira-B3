@@ -81,6 +81,10 @@ internal-assistant
 
 - Story file generated from template and epic context.
 - Sprint status updated to `ready-for-dev`.
+- Baseline ajustado para validar o manifesto `snapshots/checksums.json`
+  contra os snapshots versionados e executar o workflow dedicado com Python 3.12.
+- README e quickstart de CI atualizados com o processo oficial de regeneração
+  e validação do manifesto.
 
 ### File List
 

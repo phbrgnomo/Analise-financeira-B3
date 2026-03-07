@@ -1,7 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Smoke test entrypoint used by CI
-# Should run a minimal, fast check that verifies the app can import and run a trivial command.
+# Simple CI helper used by workflows: run tests and exit with pytest status
+# Expected to be committed so CI workflows can call it reliably.
 
-python -m pytest tests -q -k "smoke or not integration" || exit 1
+# Run from repo root
+cd "$(dirname "$0")/../.."
+
+# Prefer poetry if available
+if command -v poetry >/dev/null 2>&1; then
+	poetry run pytest -q
+else
+	pytest -q
+fi

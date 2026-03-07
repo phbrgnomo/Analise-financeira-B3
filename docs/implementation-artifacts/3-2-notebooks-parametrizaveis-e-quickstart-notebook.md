@@ -36,7 +36,7 @@ so that newcomers and automation pipelines can reproduce analyses and examples r
 ## Dev Notes
 
 - Prefer `papermill` for parameter injection (well-supported in CI). If avoiding new deps, implement simple parameter cell parsed by a runner script.
-- Use existing data loader in `src/dados_b3.py` to load OHLCV/Adj Close and compute returns (`src.retorno` functions).
+- Use adapter factory + ingest pipeline (`src/adapters/` + `src/ingest/pipeline.py`) to load OHLCV/Adj Close and compute returns (`src/retorno.py`).
 - Keep notebooks lightweight: rely on small sample dataset `dados/ticker_example.csv` for Quickstart to keep CI quick.
 - Avoid heavy plotting libraries for CI; use matplotlib/seaborn with rasterized outputs or save simple CSVs for assertions.
 
@@ -49,7 +49,7 @@ so that newcomers and automation pipelines can reproduce analyses and examples r
 ### References
 
 - Source: docs/implementation-artifacts (project conventions)
-- Source: src/dados_b3.py, src/retorno.py for data loading and return calculations
+- Source: src/ingest/pipeline.py, src/retorno.py for data loading and return calculations
 
 ## Dev Agent Record
 

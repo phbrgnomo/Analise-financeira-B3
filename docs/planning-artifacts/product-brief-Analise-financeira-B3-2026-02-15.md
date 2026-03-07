@@ -69,7 +69,8 @@ Criar um repositório end‑to‑end que centralize conhecimento e experimentos,
   - Jobs de ingestão por ticker com retries/backoff, logs e status (`ingest_logs`).
   - Execução via CLI e/ou agendamento local (cron), com testes automatizados e checks de integridade.
 - Esquema canônico SQLite mínimo
-  - Tabelas: `prices(ticker, date, open, high, low, close, adj_close, volume, source)` e `returns(ticker, date, return_type, return_value)`.
+  - Tabelas: `prices(ticker, date, open, high, low, close, volume, source)` e `returns(ticker, date, return_type, return_value)`.
+    Observação: historicamente `adj_close` é útil para cálculos de retornos ajustados; o projeto em geral pode expor `adj_close` no mapper para uso interno, mas **não o persiste** por padrão. `docs/schema.json` é a fonte de verdade para o esquema da tabela `prices`.
   - Helpers: `db.write_prices`, `db.read_prices`, `db.append_prices`.
 - Snapshots CSV & verificação
   - Script para produzir snapshots CSV por experimento (timestamped) e rotina de verificação (checksums/rowcounts) para auditabilidade.

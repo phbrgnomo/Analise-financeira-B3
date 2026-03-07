@@ -1,4 +1,5 @@
 import csv
+import logging
 import os
 import sqlite3
 
@@ -31,7 +32,6 @@ def parse_fixture_csv(filename: str):
                 float(r.get("high") or 0),
                 float(r.get("low") or 0),
                 float(r.get("close") or 0),
-                float(r.get("adj_close") or 0),
                 int(r.get("volume") or 0),
                 r.get("source"),
             )
@@ -51,23 +51,42 @@ def create_prices_db_from_rows(rows):
         """
         CREATE TABLE prices (
             ticker TEXT,
-            date TEXT,
+            date DATE,
             open REAL,
             high REAL,
             low REAL,
             close REAL,
-            adj_close REAL,
             volume INTEGER,
-            source TEXT
+            source TEXT,
+            fetched_at TEXT DEFAULT '',
+            raw_checksum TEXT DEFAULT ''
         )
         """
     )
 
+    # normalize tickers to base format (strip .SA) to match project convention
+    from src.tickers import normalize_b3_ticker
+
+    normalized_rows = []
+    for r in rows:
+        t = r[0]
+        try:
+            t = normalize_b3_ticker(t)
+        except (ValueError, TypeError):
+            # known normalization errors: keep original ticker
+            pass
+        except Exception:
+            # unexpected fault, log full traceback but continue with fallback
+            logging.getLogger(__name__).exception(
+                "unexpected error normalizing ticker %r", t
+            )
+        normalized_rows.append((t,) + tuple(r[1:]))
+
     sql = (
-        "INSERT INTO prices (ticker,date,open,high,low,close,adj_close,volume,source)"
-        " VALUES (?,?,?,?,?,?,?,?,?)"
+        "INSERT INTO prices (ticker,date,open,high,low,close,volume,source)"
+        " VALUES (?,?,?,?,?,?,?,?)"
     )
-    cur.executemany(sql, rows)
+    cur.executemany(sql, normalized_rows)
     db.commit()
     return db
 

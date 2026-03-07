@@ -1,0 +1,82 @@
+{
+  "schema_version": 2,
+  "last_updated": "2026-02-23",
+  "metadata": {
+    "primary_key": ["ticker", "date"],
+    "description": "Esquema canônico com PK composta e controle de versão. Use este arquivo como fonte de verdade para geração do DDL do banco de dados.",
+    "migrations": [
+      {
+        "version": 1,
+        "notes": "Esquema inicial com colunas principais",
+        "date": "2024-01-01"
+      },
+      {
+        "version": 2,
+        "notes": "Adicionado metadados do esquema (primary_key, last_updated, migrations) e formalizada a política de versionamento",
+        "date": "2026-02-23"
+      }
+    ]
+  },
+  "columns": [
+    {
+      "name": "ticker",
+      "type": "string",
+      "nullable": false,
+      "semantic": "Símbolo do ativo (ex: PETR4.SA)"
+    },
+    {
+      "name": "date",
+      "type": "date",
+      "nullable": false,
+      "semantic": "Data da cotação no formato YYYY-MM-DD"
+    },
+    {
+      "name": "open",
+      "type": "float",
+      "nullable": true,
+      "semantic": "Preço de abertura"
+    },
+    {
+      "name": "high",
+      "type": "float",
+      "nullable": true,
+      "semantic": "Preço máximo"
+    },
+    {
+      "name": "low",
+      "type": "float",
+      "nullable": true,
+      "semantic": "Preço mínimo"
+    },
+    {
+      "name": "close",
+      "type": "float",
+      "nullable": true,
+      "semantic": "Preço de fechamento"
+    },
+    {
+      "name": "volume",
+      "type": "int",
+      "nullable": true,
+      "semantic": "Volume negociado"
+    },
+    {
+      "name": "source",
+      "type": "string",
+      "nullable": false,
+      "semantic": "Fonte (ex: yfinance)"
+    },
+    {
+      "name": "fetched_at",
+      "type": "datetime",
+      "nullable": false,
+      "semantic": "UTC ISO8601 timestamp"
+    },
+    {
+      "name": "raw_checksum",
+      "type": "string",
+      "nullable": false,
+      "semantic": "SHA256 hex of raw payload"
+    }
+  ]
+}

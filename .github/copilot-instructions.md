@@ -1,3 +1,57 @@
+<!-- Project Guidelines: quick, actionable guidance for AI agents -->
+# Project Guidelines
+
+!!MANDATORY!!
+- before starting any implementation, review `project-context.md` and this instructions document; it reflects current conventions and must be kept in sync with code changes.
+- when adding new modules or changing major architecture (e.g. adapter factory), update this instructions file accordingly so future agents are aware.
+
+## Code Style
+- Linting: `ruff` config is in `pyproject.toml` (line-length 88). Run `poetry run ruff check src tests`.
+- Tests use `pytest` (see `tests/`). Follow existing test patterns and fixtures in `src/tests` and `tests/conftest.py`.
+- **CRITICAL**: When modifying `.py` files, ensure the new code adheres to the linting rules, especially the line-length limit of 88 characters. This is a strict requirement to maintain code readability and consistency across the project. Always run `poetry run pre-commit` on modified files before committing changes.
+
+## Architecture
+- Always reference `docs/architecture.md` for high-level design and rationale.
+- Single-package Python app: core modules live in `src/` (ex.: `src/db.py`, `src/main.py`, `src/validation.py`).
+- Persistence: lightweight SQLite via `sqlite3` (standard library); `dados/` holds runtime DB and data snapshots (`snapshots/`, `dados/`).
+- ETL and adapters live under `src/adapters/`, `src/etl/`, and `scripts/` for small helpers.
+- **The adapter factory (`src/adapters/factory.py`) is the canonical entry point**; all data-provider logic should obtain instances via `get_adapter()` or `register_adapter()`.
+- Adapter guidelines and patterns are in `docs/modules/adapter-guidelines.md` (fetch helpers, retry logic, metadata, testing).
+
+## Playbooks and Instructions
+- Follow playbooks in `docs/playbooks/` for common tasks (ex.: `quickstart-ticker.md`, `testing-network-fixtures.md`).
+
+## Implementation Notes
+- Past implementations are documented in `docs/sprint-reports/`
+- Database canonical schema is documented in `docs/schema.md`
+
+## Build and Test
+- Install developer env: `poetry install` (project uses Poetry).
+- Run tests: `poetry run pytest -q`.
+- Run CLI/app: `poetry run main` (entrypoint configured in `pyproject.toml`).
+
+## MANDATORY: Before Committing the changes
+- Run `poetry run pre-commit run --all-files` to apply formatting and lint fixes.
+- Ensure tests pass: `poetry run pytest`.
+
+## Project Conventions
+- Data files: small example CSVs are kept in `dados/` and `snapshots/` for tests—avoid committing large raw datasets. Place additional sample files under `dados/samples` or `snapshots/` and add a corresponding checksum entry in `snapshots/checksums.json` when needed. The schema validation fixture `ticker_example.csv` lives in `tests/fixtures/`.
+- O helper legado de coleta foi removido; utilize apenas a *adapter factory* (fábrica de adapters).
+- DB path default: `dados/data.db`. Tests typically inject a temporary `conn` or override `db_path` via fixtures; follow patterns in `tests/conftest.py`.
+- Idempotency: `src/db.py` computes a `raw_checksum` to avoid unnecessary upserts—respect this behavior when writing adapters or ETL scripts.
+- CLI helpers: many scripts in `scripts/` (e.g. `validate_snapshots.py`, `init_ingest_db.py`) exist for one-off tasks; read their headers when extending.
+- Para feedback visual da CLI, reutilize `src/cli_feedback.py` em vez de espalhar `typer.echo()`/`print()` ad hoc pelos comandos.
+
+## Integration Points
+- External APIs: `yfinance` (see `pyproject.toml`)—mock network calls in unit tests using fixtures in `tests/fixtures`.
+- Persistence: SQLite via `sqlite3` (see `src/db.py`); prefer `conn` injection in tests.
+
+## Security
+- Secrets/config: use environment variables and `.env` (project uses `python-dotenv`). Do NOT commit credentials or `.env` files.
+- Avoid printing secrets to logs; prefer structured logging via `src/logging_config.py`.
+
+---
+
 <!-- BMAD:START -->
 # BMAD Method — Project Instructions
 
@@ -55,46 +109,4 @@
 ## Slash Commands
 
 Type `/bmad-` in Copilot Chat to see all available BMAD workflows and agent activators. Agents are also available in the agents dropdown.
-
-## IMPORTANTE
-
-- Agentes trabalhando nesse projeto devem sempre utilizar `poetry` para execução de comandos, instalação de dependências e gerenciamento do ambiente virtual. O entrypoint definido é `main` em `src/main.py`, e deve ser invocado via `poetry run main` ou `python -m src.main` para garantir que o ambiente virtual seja ativado corretamente.
-- A cada novo inicio de trabalho, o agente deve verificar a existencia dos arquivos que serão modificados ou criados, para garantir que alterações no codigo não sejam duplicadas e consistentes com o que já está presente.
-
-## Projeto — comandos úteis
-
-- Instalar dependências: poetry install
-- Executar o entrypoint: poetry run main
-- Alternativa (sem poetry): python -m src.main
-- Build: poetry build
-- Testes: poetry run pytest
-- Lint/Format: ruff, black, pre-commit hooks
-
-## Arquitetura (visão geral)
-
-- Pacote principal: src/
-  - src.main — entrada do aplicativo; baixa cotações, calcula retornos e imprime relatórios
-  - src.dados_b3 — coleta dados (pandas_datareader -> Yahoo) e retorna DataFrames OHLCV/Adj Close
-  - src.retorno — funções para cálculo de retornos, risco, conversões e correlações; lê/espera CSVs em dados/
-- Dados persistidos: pasta dados/ contendo arquivos CSV por ativo com coluna 'Return'
-- Dependências principais definidas em pyproject.toml
-- Entrypoint de console definido em [tool.poetry.scripts] como `main = "src.main:main"`
-
-## Convenções chave do repositório
-
-- Formato de data usado em main: YYYY-MM-DD (ex.: 2020-01-01)
-- Ao coletar via Yahoo, ativos B3 usam sufixo .SA (ex.: PETR4 -> PETR4.SA)
-- Retorno diário calculado e salvo na coluna 'Return' dos CSVs em dados/
-- Cálculos anuais usam 252 períodos (dias úteis) em conv_retorno/conv_risco
-- Mensagens, variáveis e comentários estão majoritariamente em PT-BR — manter consistência linguística
-
-## Arquivos de assistente e prompts
-
-- Existem agentes e prompts BMAD em .github/agents/ e .github/prompts/ — utilize esses templates quando gerar tarefas/fluxos automatizados
-- Caso ache necessário, inicie um subagente para tarefas específicas, utilizando os prompts e fluxos pré-definidos como base, e adapte conforme o contexto da tarefa
-
-## Documentação de referência
-
-- O MCP `docs-mcp-server` contém documentação sobre módulos utilizados no projeto. Consulte-o para buscar a documentação mais atualizada das bibliotecas do projeto.
-
 <!-- BMAD:END -->

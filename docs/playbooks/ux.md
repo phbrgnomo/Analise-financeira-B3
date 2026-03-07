@@ -5,20 +5,20 @@ Este documento descreve as expectativas mínimas de UX para CLI, notebooks e uma
 ## CLI
 
 - Flags suportadas (exemplos):
-  - `--ticker <TICKER>` (ex.: PETR4.SA)
+  - `--ticker <TICKER>` (ex.: PETR4, ITUB4, BOVA11)
   - `--force-refresh` (força re-ingest)
-  - `--output <path>` (local de saída dos artefatos)
+  - `--output <path>` (local de saída para `export-csv`)
 
 - Mensagens esperadas (stdout/stderr):
-  - Início do processo: `INFO: Starting ingest for <TICKER>`
-  - Success: `INFO: Snapshot saved to <path>`
+  - Início do processo: `Executando tickers padrão: ...`
+  - Success: `Resumo run: sucesso=<n>, falhas=<n>`
   - Warnings: `WARN: Incomplete data for <date>`
   - Errors: `ERROR: Failed to fetch data for <TICKER> - <reason>`
 
 ## Notebooks
 
 - Parâmetros esperados (exemplos):
-  - `ticker = "PETR4.SA"`
+  - `ticker = "PETR4"`
   - `start_date = "2020-01-01"`
   - `end_date = "2020-12-31"`
 
@@ -40,15 +40,14 @@ Este documento descreve as expectativas mínimas de UX para CLI, notebooks e uma
 ## Exemplos de saída (stdout)
 
 ```
-INFO: Starting ingest for PETR4.SA
-INFO: Downloaded 1200 rows for PETR4.SA
-INFO: Snapshot saved to snapshots/PETR4_snapshot.csv
-INFO: Checksum: e3b0c44298fc1c149afbf4c8996fb924...
+Executando tickers padrão: PETR4, ITUB3, BBDC4
+PETR4.SA: 250 retornos persistidos
+Resumo run: sucesso=1, falhas=0
 ```
 
 ## Notas
 
-- Mensagens devem ser concisas e JSON-parseable quando `--verbose-json` for usado (opcional)
+- Mensagens devem ser concisas e orientadas a troubleshooting
 - Use logging estruturado para facilitar parsing em CI/monitoring
 
 ## Checklist (mínimo)

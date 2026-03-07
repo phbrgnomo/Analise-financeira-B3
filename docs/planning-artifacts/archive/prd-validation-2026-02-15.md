@@ -164,7 +164,7 @@ Proceeding to next validation check...
 From project-types.csv required sections: `language_matrix`, `installation_methods`, `api_surface`, `code_examples`, `migration_guide`.
 
 **Findings:**
-- `language_matrix`: Partially Present — PRD declares language choice (`Python 3.14`, line ~205) but no complete matrix of supported languages/platforms.
+- `language_matrix`: Partially Present — PRD declares language choice (`Python 3.12`, line ~205) but no complete matrix of supported languages/platforms.
 - `installation_methods`: Present — `poetry` usage and quickstart commands are documented (`poetry run main`, examples at lines ~236-239), but a full `installation_methods` section with alternatives and platform-specific notes could be expanded.
 - `api_surface`: Present — `Public API/Module Contracts` are documented with `db.*`, `pipeline.ingest`, `portfolio.generate` examples (lines ~180, ~231-233).
 - `code_examples`: Present — Notebooks, quickstart and sample commands are referenced; notebooks and Streamlit POC are explicitly called out.

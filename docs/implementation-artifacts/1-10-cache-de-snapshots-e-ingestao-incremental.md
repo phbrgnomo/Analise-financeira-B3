@@ -1,6 +1,6 @@
 ---
 title: "1.10 - Cache de Snapshots e Ingestão Incremental"
-status: ready-for-dev
+status: completed
 story_key: 1-10-cache-de-snapshots-e-ingestao-incremental
 epic: 1
 story_num: 10
@@ -9,7 +9,7 @@ generated: 2026-02-17T15:40:00Z
 
 # Story 1.10: cache-de-snapshots-e-ingestao-incremental
 
-Status: ready-for-dev
+Status: completed
 
 ## Story
 
@@ -28,23 +28,26 @@ para que o processo de ingestão seja mais rápido, idempotente e evite reproces
 7. Tests automatizados cobrindo: caso snapshot inalterado (cached), snapshot alterado (reprocess), e ingestão incremental com mudanças parciais.
 8. Documentação curta (README ou seção no README existente) descrevendo flags/parametros CLI para forçar refresh, TTL e local de armazenamento.
 
+> ✅ Todos os critérios acima foram implementados; consulte os módulos `src/ingest` e as novas opções de CLI, além dos testes em `tests/test_ingest_*` e as atualizações no README.
+
 ## Tasks / Subtasks
 
-- [ ] Implementar geração de snapshot (arquivo + metadados) e registro de checksum
-  - [ ] Calcular SHA256 do conteúdo do snapshot e salvar em metadados
-- [ ] Implementar camada de cache com TTL e verificação de checksum
-  - [ ] Implementar flag `--force-refresh` para ignorar cache
-- [ ] Implementar ingestão incremental com detecção de novos/alterados
-  - [ ] Implementar upsert idempotente no armazenamento canônico (SQLite)
-- [ ] Adicionar logs estruturados e métricas básicas (contadores processados)
-- [ ] Escrever testes unitários e integração para cenários principais
-- [ ] Atualizar documentação e exemplos de uso
+- [x] Implementar geração de snapshot (arquivo + metadados) e registro de checksum
+  - [x] Calcular SHA256 do conteúdo do snapshot e salvar em metadados
+- [x] Implementar camada de cache com TTL e verificação de checksum
+  - [x] Implementar flag `--force-refresh` para ignorar cache
+- [x] Implementar ingestão incremental com detecção de novos/alterados
+  - [x] Implementar upsert idempotente no armazenamento canônico (SQLite)
+- [x] Adicionar logs estruturados e métricas básicas (contadores processados)
+- [x] Escrever testes unitários e integração para cenários principais
+- [x] Atualizar documentação e exemplos de uso
+- [x] Documentar o que foi implantado nessa etapa em `docs/sprint-reports` conforme definido no FR28 (`docs/planning-artifacts/prd.md`)
 
 ## Dev Notes
 
 - Armazenamento dos snapshots: `dados/` (seguir convenção do repositório).
 - Metadados esperados: `snapshot_id`, `generated_at`, `source_ticker` (quando aplicável), `rows_count`, `sha256`.
-- Integração com pipeline existente: integrar à etapa de ingest (`src.dados_b3` / `src.retorno`) e usar conversões já existentes.
+- Integração com pipeline existente: integrar à etapa de ingest (`src/ingest/pipeline.py` / `src/retorno.py`) e usar conversões já existentes.
 - Upsert: usar transações e índices apropriados para evitar race conditions; seguir padrão usado em `1-6-persistir-dados-canonicos-no-sqlite-com-upsert-por-ticker-date`.
 - Cache strategy: simples filesystem cache com TTL configurável via variável/env; considerar extensão futura para cache em memória ou redis.
 - Logs: nível INFO para decisões de cache; nível DEBUG para diffs/parciais quando snapshot mudou.
@@ -52,9 +55,9 @@ para que o processo de ingestão seja mais rápido, idempotente e evite reproces
 ### Project Structure Notes
 
 - Código novo/alterado sugerido:
-  - `src/dados_b3.py` — pontos de coleta e geração de snapshot
-  - `src/ingest.py` (novo) — orquestra lógica de cache + ingestão incremental
-  - `src/storage/sqlite_adapter.py` (ou adaptar `src.retorno`) — upsert e verificação de integridade
+  - `src/ingest/pipeline.py` — orquestração de ingest e integração com snapshots
+  - `src/ingest/snapshot_ingest.py` — cache + ingestão incremental
+  - `src/db.py` (ou camada equivalente) — upsert e verificação de integridade
 - Config: adicionar chaves em env/config para `SNAPSHOT_TTL`, `SNAPSHOT_DIR`, `FORCE_REFRESH`.
 
 ### References
