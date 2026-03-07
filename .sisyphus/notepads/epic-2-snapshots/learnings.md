@@ -320,3 +320,84 @@ No regressions introduced by the `df.reset_index()` fix.
 - File-based checksum (`sha256_file`) is source of truth for snapshot integrity
 - DataFrame-based checksum (`snapshot_checksum`) is for in-memory validation only
 - Never mix the two — Task 1-7 learnings remain critical
+
+---
+
+## Task 9: Test `snapshots export` CLI Command (Story 2-3)
+
+### Test Implementation Findings
+
+**DB Isolation in CLI Tests Requires Multi-Level Patching**:
+- Initial attempt: patched only `connection._connect` → failed (stale DB access)
+- Root cause: `db.list_snapshots()` imports `_connect` from `src.db.snapshots` module
+- Solution: patch at THREE locations simultaneously:
+  ```python
+  from src.db import connection, snapshots
+  monkeypatch.setattr(connection, "_connect", lambda db_path=None: conn)
+  monkeypatch.setattr(snapshots, "_connect", lambda db_path=None: conn)
+  monkeypatch.setattr(db, "connect", lambda **kw: conn)
+  ```
+- Pattern from `tests/test_pipeline_snapshot.py` line 96 (reference test)
+- Lesson: When testing CLI commands that invoke DB operations, patch `_connect` at ALL import sites where it's used
+
+**CSV Column Order Not Guaranteed by pandas**:
+- Test assumed specific column order: `date,open,high,low,close,adj_close,volume`
+- Actual output: `adj_close,close,date,high,low,open,volume` (alphabetical)
+- Cause: `df.to_csv(index=False)` uses DataFrame's column order (alphabetical from test setup)
+- Fix: Changed assertion to check for column presence, not specific order:
+  ```python
+  assert "date" in header and "open" in header and "close" in header
+  ```
+- Lesson: Test CSV structure semantically (presence, data values) not syntactically (exact order)
+
+**Integer vs Float Formatting in CSV Export**:
+- Test expected `"10.0"` (float with decimal)
+- CSV contained `10` (integer without decimal) and `10.5` (float)
+- Pandas infers dtype from data: integer columns stay integers in CSV
+- Fix: Relaxed assertion to accept both formats: `"10," in result or "10.0" in result`
+- Lesson: Don't assume decimal formatting in CSV—pandas optimizes dtype representation
+
+**Test DB Schema Initialization Pattern**:
+- Helper function `_setup_snapshot` must CREATE TABLE explicitly
+- Cannot rely on production migrations/fixtures
+- Pattern: Each test starts with clean schema in `tmp_path / "test.db"`
+- Schema from `migrations/0000_init_schema.sql` and `0002_expand_snapshots.sql`
+
+**Test Baseline Verification**:
+- Starting baseline: 235 tests passing (from Task 8)
+- Added: 7 new tests in `test_snapshots_export.py`
+- Final baseline: **242 tests passing** (all pass, no failures)
+- Evidence file: `.sisyphus/evidence/task-9-tests-story-2-3.txt`
+
+### Key Learnings
+
+**CLI Test Isolation Strategy**:
+- Use per-test `tmp_path` instead of session fixtures (as per task instructions)
+- Patch DB connection functions BEFORE importing CLI modules
+- Patch at all relevant import locations (not just one entry point)
+- Always close connections in `try/finally` blocks
+
+**CliRunner Behavior with pytest**:
+- CliRunner doesn't support `mix_stderr=False` parameter (invalid API)
+- Use `result.stdout` for stdout-only assertions
+- Use `result.output` for combined stdout+stderr assertions
+- Status messages go to stderr by design (`typer.echo(..., err=True)`)
+
+**Test Coverage Achieved**:
+1. ✅ CSV export to stdout with stderr status messages
+2. ✅ JSON export with metadata wrapper and records orientation
+3. ✅ File output via `--output` flag (CSV format)
+4. ✅ File output via `--output` flag (JSON format)
+5. ✅ Exit code 1 for unknown ticker
+6. ✅ JSON metadata fields validation (`ticker`, `checksum`, `rows`, `data`)
+7. ✅ CLI mounting verification (`snapshots export --help` works from main app)
+
+**Checksum File Naming Convention**:
+- Checksum sidecar file: `{snapshot_path}.checksum` (full path + `.checksum`)
+- NOT `{snapshot_filename_without_ext}.checksum`
+- Example: `PETR4-20260307T034204Z.csv.checksum`
+
+**Snapshot Filename Pattern** (from Task 3):
+- Format: `{ticker}-{timestamp}Z.csv`
+- Example: `PETR4-20260307T034204Z.csv`
+- Timestamp: ISO 8601 UTC format with `Z` suffix
