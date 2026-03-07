@@ -870,7 +870,7 @@ Max Concurrent: 6 (Wave 1)
   - Files: `src/snapshot_cli.py`, `src/main.py`
   - Pre-commit: `poetry run pre-commit run --all-files`
 
-- [ ] 8. Implement CI Checksum Validation Script (Story 2-4)
+- [x] 8. Implement CI Checksum Validation Script (Story 2-4)
 
   **What to do**:
   - Create `scripts/ci_validate_checksums.py` — standalone script (NOT a CLI command)
