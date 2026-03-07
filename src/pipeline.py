@@ -198,7 +198,7 @@ def snapshot(
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / f"{normalized_ticker}_snapshot.csv"
 
-    _ = write_snapshot(df, out_path)
+    _ = write_snapshot(df.reset_index(), out_path)
 
     metadata = {
         "ticker": normalized_ticker,

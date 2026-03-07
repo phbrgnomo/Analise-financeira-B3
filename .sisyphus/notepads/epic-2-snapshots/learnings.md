@@ -139,3 +139,96 @@
 - `lsp_diagnostics` reports no errors for `src/db/snapshots.py`.
 - `poetry run pytest -xvs tests/` passed: **222 passed**.
 - Evidence saved to `.sisyphus/evidence/task-4-idempotency-fixed.txt`.
+
+## Task 5 — Tests for Story 2-1 (`pipeline snapshot` CLI) — 2026-03-07
+
+### Implementation Bug Discovered and Fixed
+
+**Bug**: `pipeline snapshot` command dropped the `date` column from CSV output.
+
+**Root Cause**:
+- `db.read_prices()` returns DataFrame with `date` as **index** (line 183 of `src/db/prices.py`)
+- `write_snapshot()` calls `serialize_df_bytes(df, index=False)` (line 183 of `src/etl/snapshot.py`)
+- Writing with `index=False` discards the date index
+
+**Fix Applied** (line 201 of `src/pipeline.py`):
+```python
+# Before
+_ = write_snapshot(df, out_path)
+
+# After
+_ = write_snapshot(df.reset_index(), out_path)
+```
+
+**Impact**: Ensures all snapshot CSVs include the `date` column as required by canonical schema.
+
+### Test Monkeypatch Strategy for Date Filtering
+
+**Challenge**: CLI command `db.read_prices()` uses internal `_connect()` function. Simple monkeypatching of `db.connect` was insufficient.
+
+**Solution**: Monkeypatch both the public API **and** the internal implementation:
+
+```python
+from src import db
+from src.db import prices
+
+# Patch the internal _connect used by read_prices
+monkeypatch.setattr(prices, "_connect", lambda db_path=None: sample_db)
+
+# Patch the public API for metadata recording
+monkeypatch.setattr(db, "connect", lambda **kw: sample_db)
+```
+
+**Why Both**:
+- `src.db.prices` imports `_connect` from `src.db.connection` (line 13)
+- `read_prices()` calls `_connect(db_path)` directly when no `conn` parameter provided (line 123)
+- Metadata recording via `db.record_snapshot_metadata()` may also need DB connection
+
+**Pattern Applied**: When testing CLI commands that use DB layer, patch:
+1. The internal `_connect` in the specific module being used
+2. The public `db.connect` for any indirect calls
+
+### CSV Column Structure Verified
+
+**Actual Snapshot Columns** (sorted alphabetically by `serialize_df_bytes`):
+```
+['close', 'date', 'fetched_at', 'high', 'low', 'open', 'raw_checksum', 'source', 'ticker', 'volume']
+```
+
+**Core Canonical Columns**:
+```
+['date', 'ticker', 'open', 'high', 'low', 'close', 'volume']
+```
+
+**Internal Columns** (not part of core schema but included in snapshot):
+```
+['source', 'fetched_at', 'raw_checksum']
+```
+
+**Test Strategy**: Verify presence of core columns (not exact match) to allow for internal metadata columns.
+
+### Test Coverage Achieved
+
+All 7 required test functions implemented and passing:
+
+1. ✅ `test_snapshot_generates_csv_file` — Basic functionality
+2. ✅ `test_snapshot_csv_has_correct_columns` — Schema validation (core columns present)
+3. ✅ `test_snapshot_with_date_range` — `--start`/`--end` filtering works correctly
+4. ✅ `test_snapshot_invalid_ticker_exit_code_1` — Error handling for unknown ticker
+5. ✅ `test_snapshot_empty_date_range_exit_code_1` — Error handling for empty result set
+6. ✅ `test_snapshot_creates_output_dir` — Directory creation when missing
+7. ✅ `test_snapshot_default_output_dir` — Uses `SNAPSHOTS_DIR` constant by default
+
+**Testing Approach**:
+- Used `CliRunner` from Typer for CLI invocation
+- Used `sample_db` fixture for test data (5 rows, PETR4.SA, dates 2023-01-02 to 2023-01-06)
+- Used `tmp_path` fixture for output isolation (NOT session `snapshot_dir`)
+- Applied monkeypatch for both `_connect` and `connect` functions
+- Verified CSV structure, exit codes, error messages, and file creation
+
+### Related Tests Still Pass
+
+- `tests/test_cli.py`: 10 tests passing
+- `tests/test_snapshot.py`: 2 tests passing
+
+No regressions introduced by the `df.reset_index()` fix.
