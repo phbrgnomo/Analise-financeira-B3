@@ -961,7 +961,7 @@ Max Concurrent: 6 (Wave 1)
   - Files: `scripts/ci_validate_checksums.py`
   - Pre-commit: `poetry run pre-commit run --all-files`
 
-- [ ] 9. Tests for Story 2-3 — Snapshots Export CLI
+- [x] 9. Tests for Story 2-3 — Snapshots Export CLI
 
   **What to do**:
   - Create `tests/test_snapshots_export.py` with pytest tests
