@@ -12,6 +12,9 @@ non-CLI callers (e.g. notebooks, API layers).
 
 from __future__ import annotations
 
+import json
+import sqlite3
+import uuid
 from contextlib import suppress
 from datetime import UTC, datetime
 from pathlib import Path
@@ -21,6 +24,7 @@ from typing import Optional
 with suppress(ImportError):
     import src.cli_compat  # noqa: F401
 
+import pandas as pd
 import typer
 
 from src.adapters.factory import available_providers
@@ -37,6 +41,83 @@ def _normalize_cli_ticker(value: str) -> str:
         return normalize_b3_ticker(value)
     except ValueError as exc:
         raise typer.BadParameter(str(exc)) from exc
+
+
+def _restore_snapshot_into_temp_db(
+    snapshot_path: Path,
+    temp_db_target: str,
+    required_columns: list[str],
+) -> tuple[dict[str, str], int]:
+    checks: dict[str, str] = {
+        "row_count": "fail",
+        "columns_present": "fail",
+        "checksum_match": "n/a",
+        "sample_row_check": "fail",
+    }
+    rows_restored = 0
+    required_set = set(required_columns)
+
+    temp_conn = sqlite3.connect(temp_db_target)
+    try:
+        temp_conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS prices (
+                ticker TEXT NOT NULL,
+                date DATE NOT NULL,
+                open REAL,
+                high REAL,
+                low REAL,
+                close REAL,
+                volume INTEGER,
+                adj_close REAL,
+                PRIMARY KEY (ticker, date)
+            )
+            """
+        )
+
+        df = pd.read_csv(snapshot_path)
+        rows_restored = len(df)
+        if "adj_close" not in df.columns and "close" in df.columns:
+            df["adj_close"] = df["close"]
+        checks["columns_present"] = (
+            "pass" if required_set.issubset(set(df.columns)) else "fail"
+        )
+        if checks["columns_present"] == "fail":
+            return checks, rows_restored
+
+        restore_df = df[required_columns].copy()
+        _ = restore_df.to_sql("prices", temp_conn, if_exists="append", index=False)
+        temp_conn.commit()
+
+        row_count_db = temp_conn.execute("SELECT COUNT(*) FROM prices").fetchone()[0]
+        checks["row_count"] = "pass" if row_count_db == rows_restored else "fail"
+
+        if rows_restored == 0:
+            checks["sample_row_check"] = "fail"
+            return checks, rows_restored
+
+        first_row = restore_df.iloc[0]
+        last_row = restore_df.iloc[-1]
+        first_exists = (
+            temp_conn.execute(
+                "SELECT 1 FROM prices WHERE ticker = ? AND date = ?",
+                (first_row["ticker"], str(first_row["date"])),
+            ).fetchone()
+            is not None
+        )
+        last_exists = (
+            temp_conn.execute(
+                "SELECT 1 FROM prices WHERE ticker = ? AND date = ?",
+                (last_row["ticker"], str(last_row["date"])),
+            ).fetchone()
+            is not None
+        )
+        checks["sample_row_check"] = (
+            "pass" if (first_exists and last_exists) else "fail"
+        )
+        return checks, rows_restored
+    finally:
+        temp_conn.close()
 
 
 @app.command("ingest")
@@ -217,3 +298,112 @@ def snapshot(
         f"({len(df)} linhas, {size_bytes} bytes)"
     )
     fb.success(success_message)
+
+
+@app.command("restore-verify")
+def restore_verify_cmd(
+    snapshot_path: Path = typer.Option(  # noqa: B008
+        ..., "--snapshot-path", help="Path to snapshot CSV file"
+    ),
+    temp_db: Optional[Path] = typer.Option(  # noqa: B008
+        None, "--temp-db", help="Temp DB path (default :memory:)"
+    ),
+) -> None:
+    from src import db
+    from src.db.snapshots import get_snapshot_by_path
+    from src.utils.checksums import sha256_file
+
+    fb = CliFeedback("pipeline restore-verify")
+    fb.start("iniciando verificação de restauração")
+
+    if not snapshot_path.exists():
+        fb.error(f"Snapshot file not found: {snapshot_path}")
+        raise typer.Exit(code=2)
+
+    actual_checksum = sha256_file(snapshot_path)
+
+    metadata_conn = db.connect(db_path=None)
+    try:
+        resolved_path = str(snapshot_path.resolve())
+        metadata = get_snapshot_by_path(resolved_path, conn=metadata_conn)
+        if metadata is None:
+            metadata = get_snapshot_by_path(str(snapshot_path), conn=metadata_conn)
+    finally:
+        metadata_conn.close()
+
+    required_columns = [
+        "ticker",
+        "date",
+        "open",
+        "high",
+        "low",
+        "close",
+        "volume",
+        "adj_close",
+    ]
+    checks: dict[str, str] = {
+        "row_count": "fail",
+        "columns_present": "fail",
+        "checksum_match": "n/a",
+        "sample_row_check": "fail",
+    }
+    rows_restored = 0
+    temp_db_target = str(temp_db) if temp_db is not None else ":memory:"
+    try:
+        checks, rows_restored = _restore_snapshot_into_temp_db(
+            snapshot_path,
+            temp_db_target,
+            required_columns,
+        )
+    except (OSError, pd.errors.ParserError, sqlite3.DatabaseError, ValueError) as exc:
+        fb.error(f"Falha ao restaurar snapshot: {exc}")
+        report = {
+            "job_id": str(uuid.uuid4()),
+            "snapshot_path": str(snapshot_path),
+            "timestamp": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+            "checks": checks,
+            "rows_restored": rows_restored,
+            "overall_result": "FAIL",
+        }
+        fb.info(json.dumps(report, indent=2))
+        raise typer.Exit(code=2) from exc
+
+    if metadata and metadata.get("checksum"):
+        checks["checksum_match"] = (
+            "pass" if actual_checksum == metadata["checksum"] else "fail"
+        )
+    else:
+        checks["checksum_match"] = "n/a"
+
+    if (
+        checks["columns_present"] == "fail"
+        or checks["row_count"] == "fail"
+        or checks["sample_row_check"] == "fail"
+    ):
+        overall_result = "FAIL"
+        exit_code = 2
+    elif checks["checksum_match"] == "fail":
+        overall_result = "WARN"
+        exit_code = 1
+    else:
+        overall_result = "PASS"
+        exit_code = 0
+
+    report = {
+        "job_id": str(uuid.uuid4()),
+        "snapshot_path": str(snapshot_path),
+        "timestamp": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+        "checks": checks,
+        "rows_restored": rows_restored,
+        "overall_result": overall_result,
+    }
+    fb.info(json.dumps(report, indent=2))
+
+    if overall_result == "PASS":
+        fb.success("Verificação concluída com sucesso")
+    elif overall_result == "WARN":
+        fb.warn("Verificação concluída com alerta de checksum")
+    else:
+        fb.error("Verificação falhou")
+
+    raise typer.Exit(code=exit_code)

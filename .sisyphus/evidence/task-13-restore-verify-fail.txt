@@ -1,0 +1,4 @@
+▶ pipeline restore-verify: iniciando verificação de restauração
+✗ Snapshot file not found: /tmp/nonexistent.csv
+
+Exit code: 2

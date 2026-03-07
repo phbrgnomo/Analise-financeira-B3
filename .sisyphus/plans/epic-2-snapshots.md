@@ -1281,7 +1281,7 @@ Max Concurrent: 6 (Wave 1)
   - Files: `tests/test_retention_purge.py`
   - Pre-commit: `poetry run pre-commit run --all-files`
 
-- [ ] 13. Implementar comando `pipeline restore-verify` (Story 2-6)
+- [x] 13. Implementar comando `pipeline restore-verify` (Story 2-6)
 
   **What to do**:
   - Adicionar comando `restore-verify` ao sub-app `pipeline_app` em `src/pipeline.py`:

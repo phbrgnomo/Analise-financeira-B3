@@ -567,3 +567,18 @@ Always use `sha256_file()` from `src/utils/checksums`, NOT `snapshot_checksum()`
 - ruff: 5 auto-fixed (unused imports: os, pytest, snapshots in 3 places)
 - pre-commit: all hooks passed
 - Line length: ≤88 chars throughout
+
+
+## [2026-03-07T04:59:16.624376Z] Task 13: Restore-Verify CLI
+
+### Implementation Details
+- Comando `pipeline restore-verify` implementado em `src/pipeline.py` com flags `--snapshot-path` (obrigatória) e `--temp-db` (opcional, default `:memory:`).
+- Fluxo aplicado: valida existência de arquivo, calcula `sha256_file()`, busca metadata via `get_snapshot_by_path()`, restaura CSV em DB temporário e executa 4 checks (`row_count`, `columns_present`, `checksum_match`, `sample_row_check`).
+- Para compatibilidade com snapshots canônicos atuais (sem `adj_close`), o comando faz fallback `adj_close=close` apenas durante validação/restauração temporária.
+- Relatório JSON estruturado emitido via `CliFeedback.info(...)` com `job_id`, `timestamp`, `checks`, `rows_restored`, `overall_result`.
+- Exit codes implementados: `0` (PASS), `1` (WARN por checksum mismatch com estrutura ok), `2` (FAIL por arquivo ausente/erro estrutural).
+
+### QA Evidence
+- Valid snapshot: `task-13-restore-verify-pass.txt` → `overall_result=PASS`, `Exit code: 0`.
+- Missing file: `task-13-restore-verify-fail.txt` → erro `Snapshot file not found`, `Exit code: 2`.
+- Checksum mismatch: `task-13-restore-verify-warn.txt` → `checksum_match=fail`, `overall_result=WARN`, `Exit code: 1`.

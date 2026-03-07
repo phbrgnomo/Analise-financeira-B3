@@ -1,0 +1,17 @@
+▶ pipeline restore-verify: iniciando verificação de restauração
+• {
+  "job_id": "686b7f85-ffe5-42a5-a2c1-e0009ad116c0",
+  "snapshot_path": "/tmp/snapshots_task13/PETR4_snapshot.csv",
+  "timestamp": "2026-03-07T04:58:32.840829Z",
+  "checks": {
+    "row_count": "pass",
+    "columns_present": "pass",
+    "checksum_match": "fail",
+    "sample_row_check": "pass"
+  },
+  "rows_restored": 252,
+  "overall_result": "WARN"
+}
+⚠ Verificação concluída com alerta de checksum
+
+Exit code: 1
