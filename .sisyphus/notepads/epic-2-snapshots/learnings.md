@@ -401,3 +401,74 @@ No regressions introduced by the `df.reset_index()` fix.
 - Format: `{ticker}-{timestamp}Z.csv`
 - Example: `PETR4-20260307T034204Z.csv`
 - Timestamp: ISO 8601 UTC format with `Z` suffix
+
+## Task 10: Test Suite for CI Checksum Validation Script (2026-03-07)
+
+### Goal
+Create comprehensive pytest test suite for `scripts/ci_validate_checksums.py` (CI checksum validation script) with ≥5 test functions covering all validation scenarios.
+
+### Critical Discovery: Correct Mocking Pattern for Script Testing
+
+**Problem**: Initial mock implementation caused infinite recursion:
+```python
+def mock_connect(db_path=None):
+    return db.connect(db_path=str(tmp_path / "test.db"))  # ← calls itself!
+```
+
+**Root Cause**: Mock function called `db.connect()` which was already patched to call the mock → infinite loop.
+
+**Solution Pattern (from Task 9)**:
+1. Create real connection FIRST (outside mock)
+2. Patch multiple import locations (connection, snapshots, db modules)
+3. Return same connection object in all patches
+4. Import script AFTER patching
+
+```python
+# 1. Create connection FIRST
+test_db_path = str(tmp_path / "test.db")
+test_conn = db.connect(db_path=test_db_path)
+
+# 2. Import submodules
+from src.db import connection, snapshots
+
+# 3. Patch multiple locations
+monkeypatch.setattr(connection, "_connect", lambda db_path=None: test_conn)
+monkeypatch.setattr(snapshots, "_connect", lambda db_path=None: test_conn)
+monkeypatch.setattr(db, "connect", lambda **kw: test_conn)
+
+# 4. Import script AFTER patches
+from scripts.ci_validate_checksums import main
+```
+
+### Test Coverage Achieved
+- **7 test functions** (442 lines → 463 lines after mocking fixes)
+- **All tests pass** (7/7 passed in 0.31s)
+- **Scenarios covered**:
+  1. `test_valid_checksums_pass` - all checksums match → exit 0
+  2. `test_tampered_file_fails` - file modified after checksum → exit 1
+  3. `test_missing_file_fails` - snapshot_path doesn't exist → exit 1
+  4. `test_no_snapshots_passes` - empty DB → exit 0
+  5. `test_output_format_shows_results` - stdout format validation
+  6. `test_archived_snapshots_ignored` - archived=1 snapshots skipped
+  7. `test_snapshots_without_checksum_skipped` - NULL checksum skipped
+
+### Key Implementation Details
+- **Helper functions**: `_create_snapshots_table()`, `_insert_snapshot_metadata()`
+- **Test isolation**: Each test uses `tmp_path` fixture for separate DB
+- **Checksum computation**: Uses `sha256_file()` from `src.utils.checksums`
+- **Output validation**: Uses `capsys` fixture to capture stdout
+- **Script interface**: `main() -> int` (returns exit code 0/1)
+
+### Evidence
+- Test output: `.sisyphus/evidence/task-10-tests-story-2-4.txt`
+- Test file: `tests/test_ci_validate_checksums.py` (463 lines)
+
+### Pattern for Future Script Testing
+When testing scripts that use `db.connect()`:
+1. Create real test DB connection FIRST
+2. Patch all import locations (connection, snapshots, db)
+3. Use lambda returning same connection object
+4. Import script AFTER monkeypatch setup
+5. Never create mocks that call the function being mocked
+
+This pattern prevents infinite recursion and ensures tests use isolated test databases.
