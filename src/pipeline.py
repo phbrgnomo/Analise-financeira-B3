@@ -13,6 +13,9 @@ non-CLI callers (e.g. notebooks, API layers).
 from __future__ import annotations
 
 from contextlib import suppress
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Optional
 
 # apply CLI compatibility patch (monkeypatching) on import
 with suppress(ImportError):
@@ -21,10 +24,19 @@ with suppress(ImportError):
 import typer
 
 from src.adapters.factory import available_providers
+from src.cli_feedback import CliFeedback
+from src.paths import SNAPSHOTS_DIR
 from src.tickers import normalize_b3_ticker
 from src.utils.conversions import as_bool as _as_bool
 
 app = typer.Typer()
+
+
+def _normalize_cli_ticker(value: str) -> str:
+    try:
+        return normalize_b3_ticker(value)
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
 
 
 @app.command("ingest")
@@ -142,3 +154,66 @@ def pull_sample_cmd(
         output=output,
     )
     raise typer.Exit(code=exit_code)
+
+
+@app.command("snapshot")
+def snapshot(
+    ticker: str = typer.Option(..., "--ticker", help="Ticker B3, ex.: PETR4"),
+    start: Optional[str] = typer.Option(
+        None,
+        "--start",
+        help="Data inicial YYYY-MM-DD",
+    ),
+    end: Optional[str] = typer.Option(
+        None,
+        "--end",
+        help="Data final YYYY-MM-DD",
+    ),
+    output_dir: Optional[str] = typer.Option(
+        None,
+        "--output-dir",
+        help="Diretório de saída (padrão: snapshots/)",
+    ),
+) -> None:
+    from src import db
+    from src.etl.snapshot import write_snapshot
+    from src.utils.checksums import sha256_file
+
+    fb = CliFeedback("pipeline snapshot")
+    fb.start("iniciando geração de snapshot")
+
+    try:
+        normalized_ticker = _normalize_cli_ticker(ticker)
+    except typer.BadParameter as exc:
+        fb.error(str(exc))
+        raise typer.Exit(code=1) from exc
+
+    df = db.read_prices(normalized_ticker, start=start, end=end, db_path=None)
+
+    if df.empty:
+        fb.error(f"Nenhum dado encontrado para {normalized_ticker}")
+        raise typer.Exit(code=1)
+
+    out_dir = Path(output_dir) if output_dir else SNAPSHOTS_DIR
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_path = out_dir / f"{normalized_ticker}_snapshot.csv"
+
+    _ = write_snapshot(df, out_path)
+
+    metadata = {
+        "ticker": normalized_ticker,
+        "created_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+        "snapshot_path": str(out_path.resolve()),
+        "rows": len(df),
+        "checksum": sha256_file(out_path),
+        "size_bytes": out_path.stat().st_size,
+        "job_id": None,
+    }
+    db.record_snapshot_metadata(metadata, db_path=None)
+
+    size_bytes = out_path.stat().st_size
+    success_message = (
+        f"Snapshot gerado: {out_path} "
+        f"({len(df)} linhas, {size_bytes} bytes)"
+    )
+    fb.success(success_message)

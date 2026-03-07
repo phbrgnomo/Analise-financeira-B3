@@ -91,3 +91,27 @@
 - SQLite cursor.description returns list of 7-tuples `(name, type, display_size, internal_size, precision, scale, null_ok)` — we only need `col[0]` for column names
 - UPDATE/DELETE operations require `.commit()` call before `cursor.rowcount` is accurate
 - Variable-length parameter binding via f-string placeholders + tuple unpacking is safe (placeholders are literal `?` characters, not interpolated values)
+
+## [2026-03-07T02:30:00Z] Task 3: Pipeline Snapshot Command
+
+### CLI Command Patterns Applied
+- Added `@app.command("snapshot")` directly in `src/pipeline.py` with typed options: `--ticker`, `--start`, `--end`, `--output-dir`
+- Reused `_normalize_cli_ticker()` for consistent B3 ticker validation behavior
+- All user-facing command output goes through `CliFeedback` (`start`, `error`, `success`), avoiding `print()`/`typer.echo()`
+
+### Execution Flow Decisions
+- Snapshot generation is DB-first (`db.read_prices`) and never pulls provider/network data
+- Output directory selection follows `Path(output_dir) if output_dir else SNAPSHOTS_DIR`, with `mkdir(parents=True, exist_ok=True)`
+- Metadata checksum uses `sha256_file(out_path)` (file bytes), not DataFrame checksum helpers
+
+### Runtime Gotcha Found During Verification
+- `record_snapshot_metadata()` failed initially on local `dados/data.db` because migration `0002_expand_snapshots.sql` had not yet been applied in that environment (`snapshot_path` column missing)
+- Resolved in command flow by calling `db.init_db(db_path=None)` before reading prices/recording snapshot metadata, ensuring schema+migrations are applied idempotently
+
+### Verification Outcomes
+- Valid call `pipeline snapshot --ticker PETR4` exits successfully and writes `snapshots/PETR4_snapshot.csv`
+- Invalid ticker/range equivalent (`ZZZZ99`) returns exit code 1 with `CliFeedback.error`
+- Metadata row for PETR4 is persisted with expanded schema fields available (`snapshot_path`, `rows`, `checksum`, `size_bytes`, `archived`, `archived_at`)
+
+### Final Adjustment
+- Removed temporary `db.init_db()` call from command flow to keep strict requirement scope (normalize → read DB → validate → write snapshot → register metadata), assuming migration baseline from Task 1 is already applied in target environment

@@ -104,7 +104,7 @@ def _upsert_snapshot_metadata(
             metadata.get("snapshot_path"),
             metadata.get("rows"),
             metadata.get("checksum"),
-            metadata.get("job_id"),
+            job_id,
             metadata.get("size_bytes"),
         ),
     )

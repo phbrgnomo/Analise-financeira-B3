@@ -1,0 +1,8 @@
+Found 1 metadata row
+Snapshot path: /home/phbr/Projects/01-owned/Analise-financeira-B3/snapshots/PETR4_snapshot.csv
+Rows: 252
+Checksum: 3222ce537858b4b5...
+Size: 42667 bytes
+job_id: aada09d14eb8f030c274129c9b639428baca144f58f4c79134cb72b5e772fbaa
+archived: 0
+archived_at: None
