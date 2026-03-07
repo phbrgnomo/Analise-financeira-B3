@@ -1,5 +1,11 @@
 """Orquestração de ingestão de snapshots com cache e ingestão incremental.
 
+O bloqueio por ticker usado internamente (via :func:`src.ingest.ticker_lock`) é
+aplicado apenas **no mesmo processo**. Se você deseja garantir exclusão
+mútua entre dois invocados distintos do CLI, será necessário substituir o
+mecanismo por um lock baseado em arquivo ou similar — o código atual não
+faz essa sincronização entre processos.
+
 Esta implementação foi adicionada na story 1.10 e dá suporte aos critérios
 aceitação:
 
@@ -28,7 +34,8 @@ import pandas as pd
 
 from src.db_client import DatabaseClient, DefaultDatabaseClient
 from src.ingest import cache as _cache
-from src.ingest.pipeline import _rows_to_ingest
+from src.ingest.pipeline import rows_to_ingest
+from src.ingest.ticker_lock import lock_ticker
 from src.utils.checksums import sha256_file
 
 logger = logging.getLogger(__name__)
@@ -69,14 +76,12 @@ def _normalize_df(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
     if "date" in df.columns:
         df["date"] = pd.to_datetime(df["date"]).dt.tz_localize(None)
+    elif isinstance(df.index, pd.DatetimeIndex):
+        df = df.reset_index().rename(columns={df.index.name or "index": "date"})
     else:
-        # try to use index if it looks like dates
-        if isinstance(df.index, pd.DatetimeIndex):
-            df = df.reset_index().rename(columns={df.index.name or "index": "date"})
-        else:
-            raise ValueError(
-                "snapshot DataFrame must have a 'date' column or datetime index"
-            )
+        raise ValueError(
+            "snapshot DataFrame must have a 'date' column or datetime index"
+        )
     return df
 
 
@@ -112,7 +117,7 @@ def _compute_changes(
         db_path=db_path,
     )
 
-    rows = _rows_to_ingest(df, existing)
+    rows = rows_to_ingest(df, existing)
     return rows.reset_index(drop=False)
 
 
@@ -126,7 +131,7 @@ def ingest_snapshot(
     conn: Optional[Any] = None,
     db_path: Optional[str] = None,
     force_refresh: bool = False,
-    ttl: Optional[int] = None,
+    ttl: Optional[float] = None,
     cache_file: Optional[Union[str, Path]] = None,
 ) -> Dict[str, Any]:
     """Processa um snapshot CSV e faz ingest incremental usando cache.
@@ -151,9 +156,10 @@ def ingest_snapshot(
     force_refresh:
         Ignorar cache mesmo que o snapshot já tenha sido processado recentemente.
     ttl:
-        Tempo em segundos a partir do último processamento em que um cache é
-        considerado válido.  ``None`` desativa expiração.  Se nenhum valor for
-        passado, o valor de ambiente ``SNAPSHOT_TTL`` (ou 86400s) é usado.
+        Tempo em segundos (pode ser fracionário nos testes) a partir do último
+        processamento em que um cache é considerado válido.  ``None`` desativa
+        expiração.  Se nenhum valor for passado, o valor de ambiente
+        ``SNAPSHOT_TTL`` (ou 86400s) é usado.
     cache_file:
         Caminho para o arquivo JSON usado como cache.  Padrão:
         ``dados/snapshot_cache.json`` ou ``SNAPSHOT_CACHE_FILE``.
@@ -168,7 +174,9 @@ def ingest_snapshot(
     if not snapshot_path.exists():
         raise FileNotFoundError(f"snapshot not found: {snapshot_path}")
 
-    ttl = DEFAULT_TTL if ttl is None else ttl
+    # TTL may be fractional (tests) and DEFAULT_TTL is already a float; ensure
+    # the returned value is a float so callers can compare using <= reliably.
+    ttl = float(DEFAULT_TTL) if ttl is None else float(ttl)
     cache_file = Path(cache_file or DEFAULT_CACHE_FILE)
 
     checksum = _read_checksum(snapshot_path)
@@ -190,35 +198,42 @@ def ingest_snapshot(
     df = _normalize_df(df)
 
     if ticker is None:
-        if "ticker" in df.columns:
-            unique = df["ticker"].unique()
-            if len(unique) == 1:
-                ticker = unique[0]
-            else:
-                # snapshot contains more than one ticker; refuse to guess
-                raise ValueError(
-                    f"snapshot contains multiple tickers: {unique.tolist()}"
-                )
-        else:
+        if "ticker" not in df.columns:
             raise ValueError("ticker argument required when snapshot lacks column")
+
+        unique = df["ticker"].unique()
+        if len(unique) == 1:
+            ticker = unique[0]
+        else:
+            # snapshot contains more than one ticker; refuse to guess
+            raise ValueError(
+                f"snapshot contains multiple tickers: {unique.tolist()}"
+            )
+    # at this point we guarantee a string value for ticker, but the type
+    # checker still sees Optional[str].  narrow with an explicit runtime
+    # check so that the behaviour does not change when Python is run with
+    # optimizations (``-O`` strips ``assert`` statements).
+    if not isinstance(ticker, str):
+        raise TypeError("ticker must be a string")
 
     if db_client is None:
         db_client = DefaultDatabaseClient()
 
-    changed = _compute_changes(df, ticker, db_client, conn=conn, db_path=db_path)
-    processed = len(changed)
-    skipped = len(df) - processed
+    with lock_ticker(ticker):
+        changed = _compute_changes(df, ticker, db_client, conn=conn, db_path=db_path)
+        processed = len(changed)
+        skipped = len(df) - processed
 
-    if processed > 0:
-        db_client.write_prices(changed, ticker, conn=conn, db_path=db_path)
+        if processed > 0:
+            db_client.write_prices(changed, ticker, conn=conn, db_path=db_path)
 
-    # update cache even if nothing was processed, so subsequent calls within the
-    # TTL will skip.  Use the same checksum we validated above.
-    cache[key] = {
-        "sha256": checksum,
-        "processed_at": datetime.now(timezone.utc).isoformat(),
-    }
-    _cache.save_cache(cache_file, cache)
+        # update cache even if nothing was processed, so subsequent calls
+        # within the TTL will skip. Use the same checksum we validated above.
+        cache[key] = {
+            "sha256": checksum,
+            "processed_at": datetime.now(timezone.utc).isoformat(),
+        }
+        _cache.save_cache(cache_file, cache)
 
     logger.info(
         "ingest_snapshot",

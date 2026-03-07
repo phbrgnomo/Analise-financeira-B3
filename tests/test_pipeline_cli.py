@@ -43,12 +43,15 @@ def test_pipeline_ingest_dry_run(monkeypatch, capsys):
     # CLI prints the job_id on success; we also emit a dry-run notification.
     assert "job_id=" in captured.out
     assert "dry run completed" in captured.out.lower()
+    assert "pipeline ingest" in captured.out.lower()
 
     # also exercise the underlying helper directly to confirm the dry_run
     # flag is propagated and returned value contains the expected key
     result = pipeline.ingest("TEST", "dummy", dry_run=True)
     assert result.get("dry_run") is True
     assert result.get("status") == "success"
+    # lock metadata should be surfaced even on success paths
+    assert "lock_action" in result and "lock_waited_seconds" in result
 
 
 def test_pipeline_ingest_error_logging(monkeypatch, capsys):
@@ -77,7 +80,7 @@ def test_pipeline_ingest_error_logging(monkeypatch, capsys):
 
     # job_id should be printed to stderr not stdout
     captured = capsys.readouterr()
-    assert captured.out == ""
+    assert "pipeline ingest" in captured.out.lower()
     assert "job_id=" in captured.err
 
 
@@ -124,6 +127,27 @@ def test_invalid_provider_returns_error(monkeypatch):
     """Supplying an unknown source should result in exit code !=0."""
     rc = pipeline.ingest_command("TST", "no_such_provider")
     assert rc != 0
+
+
+def test_get_ingest_lock_settings_helper(monkeypatch):
+    """The shared config helper parses and validates lock environment vars."""
+    from src.ingest.config import get_ingest_lock_settings
+
+    monkeypatch.setenv("INGEST_LOCK_TIMEOUT_SECONDS", "5")
+    monkeypatch.setenv("INGEST_LOCK_MODE", "exit")
+    timeout, mode, wait = get_ingest_lock_settings()
+    assert isinstance(timeout, float) and timeout == 5.0
+    assert mode == "exit"
+    assert wait is False
+
+    # invalid timeout or mode should raise
+    monkeypatch.setenv("INGEST_LOCK_TIMEOUT_SECONDS", "-1")
+    with pytest.raises(ValueError):
+        get_ingest_lock_settings()
+    monkeypatch.setenv("INGEST_LOCK_TIMEOUT_SECONDS", "120")
+    monkeypatch.setenv("INGEST_LOCK_MODE", "invalid")
+    with pytest.raises(ValueError):
+        get_ingest_lock_settings()
 
 
 def test_invalid_lock_configuration(monkeypatch):
@@ -199,8 +223,68 @@ def test_mapper_failure_propagates(monkeypatch, capsys):
 
     captured = capsys.readouterr()
     # CLI prints both error message and job_id on stderr for failures
-    assert captured.out == ""
+    assert "pipeline ingest" in captured.out.lower()
     assert "job_id=" in captured.err
+
+
+def test_ingest_treats_missing_persist_status_as_success(monkeypatch):
+    """Persistência sem campo ``status`` continua sendo interpretada como sucesso.
+
+    Regressão da Story 1.3/1.10: ``ingest_from_snapshot`` pode retornar apenas
+    ``cached``/``rows_processed``. O orchestrator deve considerar esse formato
+    como sucesso quando não houver sinal explícito de erro.
+    """
+    dummy = DummyAdapter()
+    monkeypatch.setattr("src.adapters.factory.get_adapter", lambda name: dummy)
+    monkeypatch.setattr("src.etl.mapper.to_canonical", lambda df, **kw: df)
+    monkeypatch.setattr(
+        pipeline,
+        "save_raw_csv",
+        lambda *a, **k: {"status": "success", "filepath": "x.csv"},
+    )
+    monkeypatch.setattr(
+        pipeline,
+        "ingest_from_snapshot",
+        lambda *a, **k: {"cached": False, "rows_processed": 3},
+    )
+
+    result = pipeline.ingest("TST", "dummy", dry_run=False)
+    assert result.get("status") == "success"
+    assert result.get("persist", {}).get("rows_processed") == 3
+
+    # legacy case: cache hit with no rows_processed field at all should also be
+    # treated as success (cached=True indicates nothing to write but not an error)
+    monkeypatch.setattr(
+        pipeline,
+        "ingest_from_snapshot",
+        lambda *a, **k: {"cached": True},
+    )
+
+    result2 = pipeline.ingest("TST", "dummy", dry_run=False)
+    assert result2.get("status") == "success"
+    assert result2.get("persist", {}).get("cached") is True
+
+
+def test_ingest_empty_persist_result_is_success(monkeypatch):
+    """Even an empty persist result (``{}``) is interpreted as success.
+
+    Legacy behaviour is that ``ingest_from_snapshot`` may return an empty
+    dict; the orchestrator should not treat this as an error.  The preceding
+    test already covers cases where the dict contains recognised success
+    signals like ``rows_processed`` or ``cached``.
+    """
+    dummy = DummyAdapter()
+    monkeypatch.setattr("src.adapters.factory.get_adapter", lambda name: dummy)
+    monkeypatch.setattr("src.etl.mapper.to_canonical", lambda df, **kw: df)
+    monkeypatch.setattr(
+        pipeline,
+        "save_raw_csv",
+        lambda *a, **k: {"status": "success", "filepath": "x.csv"},
+    )
+    monkeypatch.setattr(pipeline, "ingest_from_snapshot", lambda *a, **k: {})
+
+    result = pipeline.ingest("TST", "dummy", dry_run=False)
+    assert result.get("status") == "success"
 
 
 def test_ingest_cmd_validates_provider(monkeypatch):
@@ -214,7 +298,7 @@ def test_ingest_cmd_validates_provider(monkeypatch):
 
     with pytest.raises(typer.BadParameter):
         # ingest_cmd signature: source first, then ticker
-        ingest_cmd("no_such_provider", "TST")
+        ingest_cmd("no_such_provider", "PETR4")
 
     # patch adapter factory so that parameter validation is the only guard
     import src.adapters.factory as factory
@@ -226,5 +310,133 @@ def test_ingest_cmd_validates_provider(monkeypatch):
     import click
 
     with pytest.raises(click.exceptions.Exit):
-        ingest_cmd("YFINANCE", "TST")
+        ingest_cmd("YFINANCE", "PETR4")
     # catching Exit is sufficient; absence of BadParameter shows validation passed
+
+
+def test_pull_sample_command_success_writes_files(tmp_path, monkeypatch, capsys):
+    """pull_sample_command gera CSV raw e canônico em dados/samples."""
+    dummy = DummyAdapter()
+    monkeypatch.setattr("src.adapters.factory.get_adapter", lambda name: dummy)
+    monkeypatch.setattr("src.etl.mapper.to_canonical", lambda df, **kw: df)
+    monkeypatch.chdir(tmp_path)
+
+    rc = pipeline.pull_sample_command("PETR4", "dummy", days=5)
+    assert rc == 0
+
+    captured = capsys.readouterr()
+    # cabeçalho de feedback deve estar presente
+    assert "pipeline pull-sample" in captured.out.lower()
+    assert "raw:" in captured.out
+    assert "canonical:" in captured.out
+
+    assert (tmp_path / "dados" / "samples" / "PETR4_dummy_raw.csv").exists()
+    assert (tmp_path / "dados" / "samples" / "PETR4_dummy_sample.csv").exists()
+
+
+def test_pull_sample_command_env_override(tmp_path, monkeypatch, capsys):
+    """Variável de ambiente SAMPLES_DIR controla onde os artefatos são salvos."""
+    dummy = DummyAdapter()
+    monkeypatch.setattr("src.adapters.factory.get_adapter", lambda name: dummy)
+    monkeypatch.setattr("src.etl.mapper.to_canonical", lambda df, **kw: df)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("SAMPLES_DIR", str(tmp_path / "foo"))
+
+    rc = pipeline.pull_sample_command("PETR4", "dummy", days=1)
+    assert rc == 0
+
+    # cabeçalho de feedback ainda aparece mesmo com override da variável
+    captured = capsys.readouterr()
+    assert "pipeline pull-sample" in captured.out.lower()
+
+    assert (tmp_path / "foo" / "PETR4_dummy_raw.csv").exists()
+    assert (tmp_path / "foo" / "PETR4_dummy_sample.csv").exists()
+
+
+def test_pull_sample_command_invalid_provider_returns_error(capsys):
+    """Provider inválido em pull_sample_command retorna código de erro."""
+    rc = pipeline.pull_sample_command("PETR4", "no_such_provider")
+    assert rc == 1
+    captured = capsys.readouterr()
+    assert "pipeline pull-sample" in captured.out.lower()
+    assert "unknown adapter provider" in captured.err
+
+
+def test_pull_sample_cmd_validates_provider(monkeypatch):
+    """Wrapper Typer do pull-sample valida provider e normaliza casing."""
+    import click
+    import typer
+
+    from src.pipeline import pull_sample_cmd
+
+    with pytest.raises(typer.BadParameter):
+        pull_sample_cmd("no_such_provider", "PETR4")
+
+    seen = {}
+
+    def fake_pull_sample_command(
+        ticker,
+        source,
+        *,
+        days=10,
+        start=None,
+        end=None,
+        output=None,
+    ):
+        seen["ticker"] = ticker
+        seen["source"] = source
+        seen["days"] = days
+        seen["start"] = start
+        seen["end"] = end
+        seen["output"] = output
+        return 0
+
+    monkeypatch.setattr(
+        "src.ingest.pipeline.pull_sample_command",
+        fake_pull_sample_command,
+    )
+
+    with pytest.raises(click.exceptions.Exit):
+        pull_sample_cmd("YFINANCE", "PETR4", 7, "2026-01-01", "2026-01-07", None)
+
+    assert seen["ticker"] == "PETR4"
+    assert seen["source"] == "yfinance"
+    assert seen["days"] == 7
+    assert seen["start"] == "2026-01-01"
+    assert seen["end"] == "2026-01-07"
+
+
+def test_pull_sample_cmd_without_source_lists_available(monkeypatch, capsys):
+    """Sem --source, o comando lista fontes e usa yfinance como padrão."""
+    import click
+
+    from src.pipeline import pull_sample_cmd
+
+    seen = {}
+
+    def fake_pull_sample_command(
+        ticker,
+        source,
+        *,
+        days=10,
+        start=None,
+        end=None,
+        output=None,
+    ):
+        seen["ticker"] = ticker
+        seen["source"] = source
+        return 0
+
+    monkeypatch.setattr(
+        "src.ingest.pipeline.pull_sample_command",
+        fake_pull_sample_command,
+    )
+
+    with pytest.raises(click.exceptions.Exit):
+        pull_sample_cmd("", "PETR4")
+
+    captured = capsys.readouterr()
+    assert "Fontes disponíveis:" in captured.out
+    assert "Usando fonte padrão: yfinance" in captured.out
+    assert seen["ticker"] == "PETR4"
+    assert seen["source"] == "yfinance"

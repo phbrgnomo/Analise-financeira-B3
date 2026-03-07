@@ -17,7 +17,7 @@ def test_save_cache_handles_unserializable(tmp_path, caplog):
     # logger warning should mention failure and path
     assert "failed to write snapshot cache" in caplog.text.lower()
     # temp file should be removed
-    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp = path.with_suffix(f"{path.suffix}.tmp")
     assert not tmp.exists()
 
     # original cache file should not have been created
@@ -54,10 +54,23 @@ def test_load_cache_invalid_json_logs_warning_and_returns_empty(tmp_path, caplog
 
 
 def test_entry_is_fresh_for_recent_entry():
+    """Verifica que uma entrada com timestamp recente é considerada
+    fresca com TTL inteiro."""
     now = datetime.now(timezone.utc)
     entry = {"processed_at": now.isoformat()}
 
+    # integer TTL should continue to work
     assert cache.entry_is_fresh(entry, ttl=60) is True
+
+
+def test_entry_is_fresh_with_fractional_ttl():
+    """Confirma que TTL fracionário (60.5) é aceito e ainda marca a
+    entrada como fresca."""
+    now = datetime.now(timezone.utc)
+    entry = {"processed_at": now.isoformat()}
+
+    # fractional TTL is allowed and should still treat the entry as fresh
+    assert cache.entry_is_fresh(entry, ttl=60.5) is True
 
 
 def test_entry_is_not_fresh_when_expired():

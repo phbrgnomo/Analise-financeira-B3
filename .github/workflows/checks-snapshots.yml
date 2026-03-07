@@ -16,7 +16,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.11'
+          python-version: '3.12'
 
       - name: Install Poetry and project dependencies
         run: |
@@ -26,11 +26,30 @@ jobs:
           poetry config virtualenvs.in-project true
           poetry install --no-interaction
 
+      - name: Generate deterministic snapshots
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/tmp_snapshots/snapshots_test"
+          SNAPSHOT_DIR="$GITHUB_WORKSPACE/tmp_snapshots/snapshots_test" \
+            poetry run python scripts/generate_ci_snapshot.py
+
       - name: Validate snapshots manifest
         run: |
-          python scripts/validate_snapshots.py --dir snapshots --manifest snapshots/checksums.json
+          poetry run python scripts/validate_snapshots.py \
+            --dir "$GITHUB_WORKSPACE/tmp_snapshots/snapshots_test" \
+            --manifest snapshots/checksums.json \
+            --allow-external
 
       - name: Run tests
         run: |
           # Run tests inside Poetry-managed venv so installed deps (pandas) are visible
           poetry run pytest -q
+
+      - name: Upload snapshot diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: snapshot-diagnostics
+          path: |
+            snapshots/**
+            tmp_snapshots/snapshots_test/**
+            reports/**

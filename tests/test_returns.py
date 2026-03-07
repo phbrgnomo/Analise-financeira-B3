@@ -3,6 +3,9 @@ from datetime import datetime
 
 import numpy as np
 import pandas as pd
+import pytest
+
+from src.tickers import normalize_b3_ticker
 
 
 def _count_returns(
@@ -22,6 +25,7 @@ def _count_returns(
     Returns:
         int: number of matching return rows.
     """
+    ticker = normalize_b3_ticker(ticker)
     cur = conn.cursor()
     cur.execute(
         "SELECT COUNT(*) FROM returns WHERE ticker = ? AND return_type = ?",
@@ -50,6 +54,7 @@ def _fetch_returns_df(
         pandas.DataFrame: DataFrame indexed by date with a `return` column;
         may be empty if no rows are found.
     """
+    ticker = normalize_b3_ticker(ticker)
     cur = conn.cursor()
     cur.execute(
         "SELECT date, return_value AS return FROM returns WHERE ticker = ?"
@@ -68,14 +73,17 @@ def test_compute_returns_happy_path(sample_db):
     """Compute returns for sample ticker and verify rows written and numeric sanity."""
     import src.retorno as retorno
 
-    ticker = "PETR4.SA"
+    ticker = "PETR4"
 
     # Run compute_returns (should create `returns` table and insert rows)
     retorno.compute_returns(ticker, conn=sample_db)
 
     # Expect N-1 returns for N price rows in fixture
     cur = sample_db.cursor()
-    cur.execute("SELECT COUNT(*) FROM prices WHERE ticker = ?", (ticker,))
+    cur.execute(
+        "SELECT COUNT(*) FROM prices WHERE ticker = ?",
+        (normalize_b3_ticker(ticker),),
+    )
     n_prices = cur.fetchone()[0]
 
     n_returns = _count_returns(sample_db, ticker)
@@ -86,7 +94,7 @@ def test_compute_returns_happy_path(sample_db):
     df_prices = pd.read_sql_query(
         "SELECT date, close FROM prices WHERE ticker = ? ORDER BY date",
         sample_db,
-        params=(ticker,),
+        params=(normalize_b3_ticker(ticker),),
         parse_dates=["date"],
     ).set_index("date")
 
@@ -104,7 +112,7 @@ def test_compute_returns_idempotent(sample_db):
     """Running compute_returns twice should not create duplicate rows."""
     import src.retorno as retorno
 
-    ticker = "PETR4.SA"
+    ticker = "PETR4"
 
     retorno.compute_returns(ticker, conn=sample_db)
     first_count = _count_returns(sample_db, ticker)
@@ -120,7 +128,7 @@ def test_compute_returns_range(sample_db):
     """compute_returns with start/end writes only rows within the requested range."""
     import src.retorno as retorno
 
-    ticker = "PETR4.SA"
+    ticker = "PETR4"
 
     # Choose a sub-range from fixtures (middle dates)
     start = datetime(2023, 1, 3)
@@ -138,7 +146,7 @@ def test_write_returns_preserves_created_at_when_upsert_supported(sample_db):
     """Re-running compute_returns should preserve created_at timestamps."""
     import src.retorno as retorno
 
-    ticker = "PETR4.SA"
+    ticker = "PETR4"
 
     retorno.compute_returns(ticker, conn=sample_db)
 
@@ -175,7 +183,7 @@ def test_write_returns_preserves_created_at_when_upsert_not_supported(
     # Force an older SQLite version to trigger fallback path
     monkeypatch.setattr(sqlite3, "sqlite_version", "3.8.0")
 
-    ticker = "PETR4.SA"
+    ticker = "PETR4"
 
     retorno.compute_returns(ticker, conn=sample_db)
 
@@ -197,25 +205,111 @@ def test_write_returns_preserves_created_at_when_upsert_not_supported(
     assert first_created == second_created
 
 
-# sourcery skip: extract-duplicate-method,remove-pass-body,remove-assert-true
-# the function deliberately contains repetitive/conditional patterns
-# for clarity; ignore automated refactor hints here.
+def test_fallback_failure_logs_processed_count(monkeypatch):  # noqa: C901
+    """Logger.exception is invoked with the number of rows processed.
+
+    Instead of relying on the logging subsystem, we patch the logger to
+    capture arguments directly.  This makes the test more deterministic and
+    avoids fiddling with caplog levels.
+    """
+    from src.db import returns as returns_mod
+
+    # force fallback branch and skip migrations (not needed here)
+    monkeypatch.setattr(returns_mod, "_sqlite_version_tuple", lambda: (3, 8, 0))
+    monkeypatch.setattr(returns_mod, "_migrate_returns_date_column", lambda conn: None)
+
+    # spy on logger.exception
+    called: list[tuple] = []
+
+    def fake_exception(msg, *args, **kwargs):
+        called.append((msg, args, kwargs))
+
+    monkeypatch.setattr(returns_mod.logger, "exception", fake_exception)
+
+    class FakeCursor:
+        def __init__(self):
+            self.rowcount = 0
+            self.row_idx = 0
+
+        def execute(self, sql, params=None):
+            # only fail when updating second row
+            # sourcery skip: no-conditionals-in-tests
+            if sql.strip().startswith("UPDATE returns SET"):
+                self.row_idx += 1
+                if self.row_idx == 2:
+                    raise RuntimeError("boom")
+                self.rowcount = 0
+            elif sql.strip().startswith("INSERT INTO returns"):
+                self.rowcount = 0
+            else:
+                self.rowcount = 0
+
+        def executemany(self, *args, **kwargs):
+            raise RuntimeError("should not be used in fallback")
+
+    class FakeConn:
+        def __init__(self):
+            self.cur = FakeCursor()
+
+        def cursor(self):
+            return self.cur
+
+        def execute(self, sql, *args, **kwargs):
+            return None
+
+        def commit(self):
+            pass
+
+        def rollback(self):
+            pass
+
+    conn = FakeConn()
+    df = pd.DataFrame(
+        {
+            "ticker": ["A", "B"],
+            "date": ["2026-01-01", "2026-01-02"],
+            "return_value": [1, 2],
+        }
+    )
+
+    with pytest.raises(RuntimeError):
+        returns_mod._write_returns_core(conn, df, return_type="daily")
+
+    assert called, "logger.exception should have been called"
+    msg, args, kwargs = called[0]
+    assert "processed %d rows" in msg
+    assert args and args[0] == 1
+
+
+def _returns_table_exists(conn: sqlite3.Connection) -> bool:
+    """Return True if the ``returns`` table exists in the database."""
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT name FROM sqlite_master "
+        "WHERE type='table' AND name='returns'"
+    )
+    return cur.fetchone() is not None
+
+
+def _safe_count_returns(
+    conn: sqlite3.Connection,
+    ticker: str,
+    return_type: str = "daily",
+) -> int:
+    """Count returns rows, returning 0 if the table does not exist."""
+    if not _returns_table_exists(conn):
+        return 0
+    return _count_returns(conn, ticker, return_type)
+
+
 def test_compute_returns_empty_and_single_price(sample_db):
     """Handle empty ticker (no prices) and single-price series gracefully."""
     import src.retorno as retorno
 
     # Empty ticker: should not raise and produce zero rows
     retorno.compute_returns("EMPTY_TICKER", conn=sample_db)
-    # If `returns` table was never created (no prices), treat as zero rows.
-    cur = sample_db.cursor()
-    cur.execute("PRAGMA table_info(returns)")
-    # sourcery skip: no-conditionals-in-tests
-    if not cur.fetchall():
-        # Table missing -> treat as zero rows (nothing to assert against)
-        assert True
-    else:
-        # Table exists: explicitly assert count is zero
-        assert _count_returns(sample_db, "EMPTY_TICKER") == 0
+    assert _safe_count_returns(sample_db, "EMPTY_TICKER") == 0
+
     # Single price row: insert one price and expect zero returns
     cur = sample_db.cursor()
     cur.execute("PRAGMA table_info(prices)")
@@ -251,10 +345,4 @@ def test_compute_returns_empty_and_single_price(sample_db):
     sample_db.commit()
 
     retorno.compute_returns("SINGLE", conn=sample_db)
-    cur = sample_db.cursor()
-    cur.execute("PRAGMA table_info(returns)")
-    if not cur.fetchall():
-        # No returns table -> treat as zero rows
-        assert True
-    else:
-        assert _count_returns(sample_db, "SINGLE") == 0
+    assert _safe_count_returns(sample_db, "SINGLE") == 0

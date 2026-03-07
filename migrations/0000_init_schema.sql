@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS prices (
     open REAL,
     high REAL,
     low REAL,
-    close REAL NOT NULL,
+    close REAL,
     volume INTEGER,
     source TEXT NOT NULL,
     fetched_at TEXT NOT NULL,

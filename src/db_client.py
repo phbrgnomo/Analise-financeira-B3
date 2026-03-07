@@ -1,3 +1,11 @@
+"""Abstração de cliente de banco de dados para o pipeline de ingestão.
+
+Define :class:`DatabaseClient` (ABC) e :class:`DefaultDatabaseClient` (SQLite)
+para isolar a camada de persistência e facilitar testes com implementações
+alternativas.  Expõe operações de leitura/escrita de linhas de preços e
+registro de metadados de ingestão.
+"""
+
 from __future__ import annotations
 
 import abc
@@ -54,7 +62,18 @@ class DatabaseClient(abc.ABC):
         conn: Optional[sqlite3.Connection] = None,
         return_type: str = "daily",
     ) -> None:
-        pass
+        """Persist computed return rows to the database.
+
+        Parameters
+        ----------
+        df:
+            DataFrame with columns ``ticker``, ``date``, ``return_value``,
+            ``return_type`` and ``created_at``.
+        conn:
+            Optional SQLite connection to reuse.
+        return_type:
+            Label for the return type (default ``"daily"``).
+        """
 
     @abc.abstractmethod
     def record_snapshot_metadata(
@@ -62,7 +81,15 @@ class DatabaseClient(abc.ABC):
         metadata: Dict[str, Any],
         conn: Optional[sqlite3.Connection] = None,
     ) -> None:
-        pass
+        """Record ingest/snapshot metadata to the metadata store.
+
+        Parameters
+        ----------
+        metadata:
+            Dictionary with keys such as ``job_id``, ``action``, ``ticker``.
+        conn:
+            Optional SQLite connection to reuse.
+        """
 
     @abc.abstractmethod
     def write_prices(
@@ -73,7 +100,21 @@ class DatabaseClient(abc.ABC):
         db_path: Optional[str] = None,
         source: str = "provider",
     ) -> None:
-        pass
+        """Persist price rows for a ticker to the database.
+
+        Parameters
+        ----------
+        df:
+            DataFrame with OHLCV columns matching the canonical schema.
+        ticker:
+            Ticker identifier (e.g. ``"PETR4"``).
+        conn:
+            Optional SQLite connection to reuse.
+        db_path:
+            Optional database file path (used when ``conn`` is None).
+        source:
+            Data source label (default ``"provider"``).
+        """
 
 
 class DefaultDatabaseClient(DatabaseClient):

@@ -18,7 +18,7 @@ poetry run python -m src.main compute-returns --ticker PETR4.SA
 Exemplo: consultar retornos via sqlite3/SQL
 
 ```sql
-SELECT date, return, created_at
+SELECT date, return_value, created_at
 FROM returns
 WHERE ticker = 'PETR4.SA'
 ORDER BY date DESC

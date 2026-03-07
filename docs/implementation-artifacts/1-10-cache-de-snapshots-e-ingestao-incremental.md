@@ -47,7 +47,7 @@ para que o processo de ingestão seja mais rápido, idempotente e evite reproces
 
 - Armazenamento dos snapshots: `dados/` (seguir convenção do repositório).
 - Metadados esperados: `snapshot_id`, `generated_at`, `source_ticker` (quando aplicável), `rows_count`, `sha256`.
-- Integração com pipeline existente: integrar à etapa de ingest (`src.dados_b3` / `src.retorno`) e usar conversões já existentes.
+- Integração com pipeline existente: integrar à etapa de ingest (`src/ingest/pipeline.py` / `src/retorno.py`) e usar conversões já existentes.
 - Upsert: usar transações e índices apropriados para evitar race conditions; seguir padrão usado em `1-6-persistir-dados-canonicos-no-sqlite-com-upsert-por-ticker-date`.
 - Cache strategy: simples filesystem cache com TTL configurável via variável/env; considerar extensão futura para cache em memória ou redis.
 - Logs: nível INFO para decisões de cache; nível DEBUG para diffs/parciais quando snapshot mudou.
@@ -55,9 +55,9 @@ para que o processo de ingestão seja mais rápido, idempotente e evite reproces
 ### Project Structure Notes
 
 - Código novo/alterado sugerido:
-  - `src/dados_b3.py` — pontos de coleta e geração de snapshot
-  - `src/ingest.py` (novo) — orquestra lógica de cache + ingestão incremental
-  - `src/storage/sqlite_adapter.py` (ou adaptar `src.retorno`) — upsert e verificação de integridade
+  - `src/ingest/pipeline.py` — orquestração de ingest e integração com snapshots
+  - `src/ingest/snapshot_ingest.py` — cache + ingestão incremental
+  - `src/db.py` (ou camada equivalente) — upsert e verificação de integridade
 - Config: adicionar chaves em env/config para `SNAPSHOT_TTL`, `SNAPSHOT_DIR`, `FORCE_REFRESH`.
 
 ### References

@@ -130,7 +130,7 @@ class YFinanceAdapter(Adapter):
         normalized_ticker = self._normalize_ticker(ticker)
 
         # Definir datas padrão se não fornecidas usando uma única referência de tempo
-        now = datetime.now()
+        now = datetime.now(timezone.utc)
         if end_date is None:
             end_date = now.strftime("%Y-%m-%d")
         if start_date is None:
@@ -145,7 +145,8 @@ class YFinanceAdapter(Adapter):
         # Logging estruturado da requisição
         log_context = {
             "ticker": normalized_ticker,
-            "provider": "yahoo",
+            # provider now canonicalized to the package name
+            "provider": "yfinance",
             "start_date": start_date,
             "end_date": end_date,
             "max_retries": self.max_retries,
@@ -177,7 +178,7 @@ class YFinanceAdapter(Adapter):
             ]
 
         # Adicionar metadados
-        df.attrs["source"] = "yahoo"
+        df.attrs["source"] = "yfinance"
         df.attrs["ticker"] = normalized_ticker
         fetched_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
         df.attrs["fetched_at"] = fetched_at
@@ -249,8 +250,10 @@ class YFinanceAdapter(Adapter):
         """
         Implementação única de fetch para o provedor Yahoo (usado pelo base retry).
         """
+        # Note: pandas_datareader parameter `data_source` is ignored by our
+        # wrapper, but we keep it for compatibility with the original API.
         return web.DataReader(
-            ticker, data_source="yahoo", start=start, end=end, **kwargs
+            ticker, data_source="yfinance", start=start, end=end, **kwargs
         )
 
     def get_metadata(self) -> Dict[str, str]:
@@ -275,7 +278,7 @@ class YFinanceAdapter(Adapter):
 
         base_metadata.update(
             {
-                "provider": "yahoo",
+                "provider": "yfinance",
                 "library": library,
                 "library_version": version,
                 "library_available": library_available,

@@ -32,7 +32,7 @@ def main(db_path: str = "dados/data.db", ticker: str = "PETR4.SA"):
     with closing(sqlite3.connect(db_path)) as conn:
         try:
             sql = (
-                "SELECT date, return_value AS return FROM returns "
+                "SELECT date, return_value FROM returns "
                 "WHERE ticker = ? ORDER BY date"
             )
             df = pd.read_sql_query(
@@ -50,7 +50,10 @@ def main(db_path: str = "dados/data.db", ticker: str = "PETR4.SA"):
             logger.warning(msg)
             raise ValueError(msg)
 
-        df["cumulative_return"] = (1 + df["return"]).cumprod() - 1
+        # calcula retorno acumulado: transforma cada retorno em fator de
+        # crescimento (1 + return_value), aplica produto acumulado e subtrai 1
+        # para converter de volta em porcentagem acumulada.
+        df["cumulative_return"] = (1 + df["return_value"]).cumprod() - 1
         print(df.tail())
 
 

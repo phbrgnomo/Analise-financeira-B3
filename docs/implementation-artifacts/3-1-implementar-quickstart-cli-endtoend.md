@@ -64,7 +64,7 @@ so that I can reproduce a complete experiment quickly.
 
 - Source tree components to touch:
   - `src/main.py` (CLI wiring)
-  - `src/dados_b3.py` (data access / DB helpers)
+  - `src/ingest/pipeline.py` (orquestração de ingest e persistência)
   - `src/retorno.py` (returns computation if used in quickstart)
   - `tests/` (add integration mocked test using `tests/fixtures/sample_ticker.csv`)
 

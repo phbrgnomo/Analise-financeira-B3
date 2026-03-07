@@ -1,6 +1,7 @@
 from unittest.mock import patch
 
 import pandas as pd
+import pytest
 
 from src.adapters.retry_config import RetryConfig
 from src.adapters.retry_metrics import get_global_metrics
@@ -18,6 +19,13 @@ def test_retry_config_compute_delay_ms():
     assert rc.compute_delay_ms(2) == 1000
     assert rc.compute_delay_ms(3) == 2000
     assert rc.compute_delay_ms(10) == 2000
+
+
+def test_invalid_delay_configuration():
+    """max_delay_ms must not be less than initial_delay_ms."""
+    with pytest.raises(ValueError):
+        # validation now runs in __post_init__; explicit call not needed
+        RetryConfig(initial_delay_ms=500, max_delay_ms=400)
 
 
 @patch("src.adapters.yfinance_adapter.web.DataReader")

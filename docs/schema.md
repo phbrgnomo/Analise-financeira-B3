@@ -7,7 +7,7 @@ Campos:
 - date (date, não-nulo): data da cotação no formato YYYY-MM-DD
 - open/high/low/close (float, nulos permitidos): preços
 - volume (int, nulo permitido): volume negociado
-- source (string, não-nulo): origem dos dados (ex: 'yahoo')
+- source (string, não-nulo): origem dos dados (ex: 'yfinance')
 - fetched_at (datetime, não-nulo): timestamp UTC ISO8601 de coleta
 - raw_checksum (string, não-nulo): SHA256 hexdigest do payload original (CSV ou provider payload)
 

@@ -1,10 +1,23 @@
 """Utilitário simples de bloqueio de arquivo multiplataforma para ingestão por ticker.
 
+Este módulo é usado pelo pipeline de ingestão para garantir que apenas um
+processo do mesmo ticker execute a parte de download/ETL/cache/cache/write
+(see :mod:`src.ingest.snapshot_ingest` for o fluxo completo).  O bloqueio é
+adquirido antes da avaliação de cache e liberado imediatamente após a fase
+crítica de escrita, permitindo que o restante do pipeline (e.g. cálculo de
+retornos) prossiga em paralelo.
+
 Este módulo fornece um gerenciador de contexto mínimo que serializa o acesso a
-um arquivo chamado ``{LOCK_DIR}/{ticker}.lock``. A implementação dá preferência
-à biblioteca ``portalocker`` (agora dependência direta do projeto), mas mantém
-um fallback POSIX ``fcntl`` como rede de segurança e para facilitar testes do
-caminho sem ``portalocker``.
+um arquivo de bloqueio dentro de ``LOCK_DIR``; o nome do arquivo é derivado do
+ticker passado após uma sanitização de caracteres inválidos (todas as letras são
+maiusculizadas e caracteres fora de ``A-Z0-9._-`` são substituídos por “_”).
+Se a normalização alterar significativamente o valor ou remover caracteres, um
+sufixo de hash de 8 dígitos é anexado para garantir unicidade e manter o nome
+de arquivo conciso. Exemplos resultantes: ``{safe}.lock`` ou
+``{safe}_{hash}.lock``. A implementação dá preferência à biblioteca
+``portalocker`` (agora dependência direta do projeto), mas mantém um fallback
+POSIX ``fcntl`` como rede de segurança e para facilitar testes do caminho sem
+``portalocker``.
 
 A superfície da API é propositalmente enxuta para que consumidores possam
 simplesmente escrever ``with acquire_lock(...) as meta:`` e não se preocupar com
@@ -28,12 +41,16 @@ acquire_lock(ticker, timeout_seconds=120, wait=True) -> contextmanager
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import os
+import re
 import time
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Dict, Iterator
+
+from src.tickers import normalize_b3_ticker
 
 logger = logging.getLogger(__name__)
 
@@ -75,8 +92,11 @@ def _acquire_with_portalocker(
     comportamento tenta adquirir o bloqueio em loop até o tempo expirar.
     """
     # the caller only invokes this when ``portalocker`` is available, but
-    # type checkers can't prove that, so assert it for static analysis.
-    assert portalocker is not None
+    # type checkers can't prove that, so guard explicitly.
+    if portalocker is None:
+        raise RuntimeError(
+            "_acquire_with_portalocker called but portalocker is not installed"
+        )
 
     # Always attempt non-blocking acquisitions so we can implement our own
     # timeout rather than relying on portalocker's blocking behaviour which
@@ -176,7 +196,21 @@ def acquire_lock(
     # para um caminho absoluto
     lock_dir = _resolve_lock_dir(os.environ.get("LOCK_DIR"))
     lock_dir.mkdir(parents=True, exist_ok=True)
-    lock_path = lock_dir / f"{ticker}.lock"
+    # normalize ticker for filesystem: try canonical B3 form first
+    try:
+        norm = normalize_b3_ticker(ticker)
+    except ValueError:
+        # invalid ticker input – log for debugging and fall back to a simple
+        # uppercase normalization so the lock name remains safe.
+        logger.exception("normalize_b3_ticker failed for %r", ticker)
+        norm = ticker.strip().upper()
+    safe = re.sub(r"[^A-Z0-9._-]", "_", norm)
+    if not safe or safe.lower() != norm.lower():
+        # if normalization removed too much or changed case, hash to avoid
+        # collisions and keep filename reasonable length
+        h = hashlib.sha256(norm.encode("utf-8")).hexdigest()[:8]
+        safe = f"{safe or 'T'}_{h}"
+    lock_path = lock_dir / f"{safe}.lock"
 
     # abre o descritor de arquivo agora para que ele permaneça válido até o
     # fim do contexto ou até desistirmos de adquirir o bloqueio. Se a

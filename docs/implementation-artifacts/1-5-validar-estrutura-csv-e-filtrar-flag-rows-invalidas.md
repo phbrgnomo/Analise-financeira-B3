@@ -61,7 +61,7 @@ All unit tests pass locally (`poetry run pytest` at implementation time).
 
 - Suggested locations:
   - Validation code: `src/validation.py` or `src/ingest/validation.py`
-  - Ingest logging helper: reuse/extend current logging in `src/dados_b3.py` or create `src/ingest/logging.py`
+  - Ingest logging helper: reuse/extend current logging in `src/ingest/pipeline.py` or create `src/ingest/logging.py`
   - Tests: `tests/test_validation.py` and fixtures under `tests/fixtures/`
 
 ### References

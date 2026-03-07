@@ -92,7 +92,7 @@ Observações:
 
 ### Project Structure Notes
 
-- Implementar código em `src/` seguindo convenções existentes: `src.dados_b3`, `src.retorno`, `src.db` (novo).
+- Implementar código em `src/` seguindo convenções existentes: `src/ingest/pipeline.py`, `src/retorno.py`, `src/db.py`.
 - Tests em `tests/` com fixtures em `tests/fixtures/`.
 - Documentar API em `docs/` e referenciar em `docs/planning-artifacts/epics.md` e `docs/planning-artifacts/prd.md`.
 

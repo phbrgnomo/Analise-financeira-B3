@@ -2,11 +2,11 @@
 
 [![CI](https://github.com/phbrgnomo/Analise-financeira-B3/actions/workflows/ci.yml/badge.svg)](https://github.com/phbrgnomo/Analise-financeira-B3/actions/workflows/ci.yml) [![Python](https://img.shields.io/badge/python-3.12%2B-blue)](https://www.python.org/)
 
-Ferramenta leve para coletar dados de mercados (B3), calcular retornos e métricas de risco, e gerar relatórios simples a partir de séries históricas.
+Uma ferramenta leve para coletar dados de mercados (B3), calcular retornos e métricas de risco, e gerar relatórios simples a partir de séries históricas.
 
 **Status:** Projeto experimental / utilitários para análise local
 
-> Visão rápida: coleta dados via Yahoo Finance (adaptador em `src/dados_b3.py`), calcula retornos e estatísticas em `src/retorno.py` e tem um entrypoint em `src/main.py`.
+> Visão rápida: coleta dados via adapter factory (`src/adapters/factory.py`), calcula retornos e estatísticas em `src/retorno.py` e tem entrypoint em `src/main.py`.
 
 ## Recursos principais
 - Coleta de cotações OHLC/Adj Close para ativos B3 (sufixo `.SA`).
@@ -28,6 +28,10 @@ necessário.
   válido. Padrão `86400` (um dia). Use com o comando `ingest-snapshot`.
 - **SNAPSHOT_CACHE_FILE**: caminho para o arquivo JSON onde o cache é
   armazenado. Valor padrão `dados/snapshot_cache.json`.
+- **SNAPSHOTS_KEEP_LATEST**: quantidade de snapshots recentes por ticker a
+  manter no diretório de snapshots. Padrão `1`.
+- **DEFAULT_TICKERS**: tickers padrão usados no `main run` quando `--ticker`
+  não é informado. Exemplo: `PETR4,ITUB3,BBDC4`.
 
 - **VALIDATION_INVALID_PERCENT_THRESHOLD**: limite percentual usado pelo
   processo de validação para considerar uma operação como inválida. Valor
@@ -72,12 +76,12 @@ VALIDATION_INVALID_PERCENT_THRESHOLD=0.05
 poetry install
 ```
 
-2. Execute a aplicação (entrypoint):
+2. Execute o fluxo principal da aplicação (entrypoint):
 
 ```bash
-poetry run main
-# ou alternativamente
-python -m src.main
+poetry run main run
+# ticker específico (padrão B3)
+poetry run main run --ticker PETR4
 ```
 
 3. Exemplos e testes rápidos:
@@ -107,9 +111,7 @@ NETWORK_MODE=record poetry run pytest tests/adapters/test_adapters.py::TestYFina
 As instruções completas e o playbook estão em `docs/playbooks/testing-network-fixtures.md`.
 
 ## Uso e convenções
-- Dados são obtidos através da fábrica de adaptadores (`src.adapters.factory`).
-- Dados são obtidos através da fábrica de adaptadores (`src.adapters.factory`).  O adaptador padrão é `yfinance`, mas outros podem ser registrados.  Para fins de testes e *smoke* CLI há também um provedor `dummy` embutido; ele gera um DataFrame pequeno sem acesso à rede e pode ser usado via `get_adapter("dummy")` ou pelo parâmetro `--provider dummy` na CLI.  `src/dados_b3.py` existe para compatibilidade e não deve ser usado em
-  código novo.
+- Dados são obtidos através da fábrica de adaptadores (`src.adapters.factory`). O adaptador padrão é `yfinance`, mas outros podem ser registrados. Para fins de testes e *smoke* CLI há também um provedor `dummy` embutido; ele gera um DataFrame pequeno sem acesso à rede e pode ser usado via `get_adapter("dummy")` ou pelo parâmetro `--provider dummy` na CLI.
 
   Exemplo de uso:
   ```python
@@ -119,18 +121,26 @@ As instruções completas e o playbook estão em `docs/playbooks/testing-network
   df = adapter.fetch("PETR4.SA", start_date="2022-01-01", end_date="2022-12-31")
   print(df.head())
   ```
-- Ao coletar ativos da B3 via Yahoo, adicione o sufixo `.SA` (ex.: `PETR4.SA`).
-- Dados persistidos ficam na pasta `dados/` em CSV com coluna `Return` para retornos diários.
+- Na CLI, informe tickers no padrão B3 sem sufixo de provider (ex.: `PETR4`, `MGLU3`, `BOVA11`).
+- A adaptação para formato de provider (ex.: `.SA`) é feita internamente pelo adapter.
+- Dados persistidos ficam em `dados/data.db` no banco SQLite.
+- No banco (`prices` e `returns`), os tickers são persistidos no padrão B3 (ex.: `PETR4`).
+- A coluna `date` nas tabelas canônicas usa afinidade `DATE`.
 - Cálculos anuais usam 252 dias úteis por convenção do projeto.
 - O pipeline agora suporta ingestão de snapshots via CLI usando `ingest-snapshot`.
   Esta rotina aplica cache com TTL e faz ingestão incremental no banco, evitando
   reprocessamento quando o arquivo não mudou. Veja abaixo para detalhes de
   flags.
+  Use este comando apenas quando você já tiver um CSV local para importar.
+
+### Comandos principais da CLI
+
+Para os principais comandos da CLI e seus parâmetros, consulte `poetry run main --help` ou o playbook detalhado em `docs/playbooks/quickstart-cli.md`.
 
 ## Estrutura do repositório (resumo)
 - `src/` — código principal
   - `src/main.py` — entrypoint do CLI (usa `src.adapters.factory` para selecionar provedores)
-  - `src/dados_b3.py` — *facade* legado; atualmente delega a fábrica de adaptadores
+  - `src/ingest/` — orquestração de ingestão, snapshots e persistência incremental
   - `src/retorno.py` — cálculos de retorno/risco
 - `dados/` — CSVs de séries históricas e outputs gerados
 - `snapshots/` — snapshots e checksums para validação
@@ -170,6 +180,31 @@ python examples/checksums_example.py
 ```
 
 O script calcula o SHA256 do arquivo de exemplo `snapshots/PETR4_snapshot_test.csv` e grava um arquivo `*.checksum` ao lado do CSV.
+
+## Manifesto de snapshots
+
+- O arquivo canônico de integridade é [snapshots/checksums.json](snapshots/checksums.json).
+- Sempre que um snapshot versionado em [snapshots](snapshots) for criado, removido
+  ou alterado, atualize também o manifesto e os sidecars `*.checksum`.
+- O comando recomendado para regenerar o manifesto localmente é:
+
+```bash
+poetry run python scripts/validate_snapshots.py \
+  --dir snapshots \
+  --manifest snapshots/checksums.json \
+  --update
+```
+
+- Para validar antes de abrir PR:
+
+```bash
+poetry run python scripts/validate_snapshots.py \
+  --dir snapshots \
+  --manifest snapshots/checksums.json
+```
+
+- O workflow [checks-snapshots.yml](.github/workflows/checks-snapshots.yml) usa o
+  mesmo contrato e deve falhar quando houver drift entre CSVs e manifesto.
 
 ## Onde ler mais
 - Documentação e planejamento do projeto em `docs/`.

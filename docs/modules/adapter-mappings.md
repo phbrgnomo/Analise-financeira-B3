@@ -13,7 +13,7 @@ Este arquivo documenta exemplos de mapeamento entre provedores de dados e o esqu
 Provedor: `yfinance` (via `yfinance.download`)
 
 Campos brutos típicos retornados por `yfinance` (por ticker agrupado):
-- `Open`, `High`, `Low`, `Close`, `Adj Close`, `Volume` (índice: `Date`)
+- `Open`, `High`, `Low`, `Close`, `Volume` (índice: `Date`)
 
 Mapping canônico sugerido para a tabela `prices`:
 
@@ -23,7 +23,6 @@ Mapping canônico sugerido para a tabela `prices`:
 - `high` <- `High`
 - `low` <- `Low`
 - `close` <- `Close`
-- `adj_close` <- `Adj Close`
 
 Observação sobre persistência:
 - `adj_close` é mapeado a partir de `Adj Close` e é útil para cálculos de retornos e análises.

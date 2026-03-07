@@ -7,7 +7,7 @@ import pandas as pd
 import pytest
 
 import src.db as db_module
-from src.db import _sqlite_version_tuple
+from src.db._helpers import _sqlite_version_tuple
 
 
 @pytest.mark.flaky(reruns=1)
@@ -23,6 +23,7 @@ def test_concurrent_writes_file_backed(tmp_path: Path):
     suportado.
     """
     # Skip when running against old SQLite versions that lack UPSERT/WAL support
+    # sourcery skip: no-conditionals-in-tests
     if _sqlite_version_tuple() < (3, 24, 0):
         pytest.skip("SQLite too old for concurrency test; skipping")
 
@@ -52,31 +53,37 @@ def test_concurrent_writes_file_backed(tmp_path: Path):
 
     start = datetime(2020, 1, 1)
 
-    futures = []
     errors = []
 
     with ThreadPoolExecutor(max_workers=workers) as exe:
-        for w in range(workers):
-            # each worker will write rows_per_worker different dates for its ticker
+        # helper to build a future for worker w
+        def make_task(w: int):
             ticker = f"T{w:02d}"
 
-            def task(t=ticker, offset=w):
+            def task():
                 try:
+                    # iterate explicitly; we only care about side effects
                     for i in range(rows_per_worker):
-                        day = start + timedelta(days=offset * rows_per_worker + i)
-                        df = make_df(day, n=1)
-                        # write_prices will open its own connection (as designed)
-                        db_module.write_prices(df, t, db_path=db_path)
+                        db_module.write_prices(
+                            make_df(
+                                start + timedelta(days=w * rows_per_worker + i),
+                                n=1,
+                            ),
+                            ticker,
+                            db_path=db_path,
+                        )
                 except Exception as e:  # pragma: no cover - surface errors
                     return e
                 return None
 
-            futures.append(exe.submit(task))
+            return exe.submit(task)
 
-        for f in as_completed(futures):
-            exc = f.result()
-            if exc:
-                errors.append(exc)
+        futures = [make_task(w) for w in range(workers)]
+
+
+        # gather results via comprehension rather than explicit loop
+        results = [f.result() for f in as_completed(futures)]
+        errors.extend(e for e in results if e)
 
     assert not errors, f"Worker errors occurred: {errors}"
 

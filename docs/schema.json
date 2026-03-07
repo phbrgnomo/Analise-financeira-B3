@@ -64,7 +64,7 @@
       "name": "source",
       "type": "string",
       "nullable": false,
-      "semantic": "Fonte (ex: yahoo)"
+      "semantic": "Fonte (ex: yfinance)"
     },
     {
       "name": "fetched_at",

@@ -31,24 +31,24 @@ para que desenvolvedores e analistas reproduzam resultados de forma confiável e
 - [ ] Revisar chamadas em `src/` que escrevem/esperam arquivos e anotar seus paths na documentação.
 - [ ] Adicionar seção de "Reproducing results" com comandos mínimos e expectativas.
 
-## Dev Notes
+# Dev Notes
 
 - Use as convenções já presentes no projeto: ativos B3 com sufixo `.SA`, datas em `YYYY-MM-DD` e `252` dias úteis para anualização.
-- Saída canônica dos retornos: CSVs em `dados/{TICKER}.csv` com coluna `Return` para cada ativo.
+- Saída canônica dos retornos: CSVs em `dados/{TICKER}.csv` com coluna `return_value` para cada ativo.
 - Evitar mudanças no código que alterem paths sem atualizar o README; preferir variáveis de ambiente ou constantes centrais se precisar mudar.
 
 ### Project Structure Notes
 
 - Paths relevantes:
-  - Dados brutos / persistidos: `dados/` (CSV por ativo com coluna `Return`)
-  - Implementação e módulos: `src/` (ex.: `src/dados_b3.py`, `src/retorno.py`)
+  - Dados brutos / persistidos: `dados/` (CSV por ativo com coluna `return_value`)
+  - Implementação e módulos: `src/` (ex.: `src/ingest/pipeline.py`, `src/retorno.py`)
   - Artefatos de documentação e histórias: `docs/` e `docs/implementation-artifacts/`
 - Detectadas diferenças: nenhum padrão divergente encontrado nos arquivos principais; manter convenções do `pyproject.toml` e scripts de exemplo.
 
 ### References
 
 - Source: [docs/planning-artifacts](docs/planning-artifacts) — epics e PRD relacionados a organização de outputs
-- Source: `src/main.py`, `src/dados_b3.py`, `src/retorno.py` — pontos onde arquivos são lidos/gravas
+- Source: `src/main.py`, `src/ingest/pipeline.py`, `src/retorno.py` — pontos onde arquivos são lidos/gravados
 
 ## Dev Agent Record
 

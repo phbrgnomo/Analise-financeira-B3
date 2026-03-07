@@ -20,7 +20,7 @@ para que outros desenvolvedores entendam claramente o mapeamento de campos, conv
 1. Documento `docs/implementation-artifacts/5-3-documentar-mappings-provider-canonico-em-adapter-mappings-md.md` criado com linguagem clara em PT-BR.
 2. Inclui tabela de mapeamento campo-a-campo entre fonte (raw provider) e schema canônico (colunas esperadas em `dados/` CSVs e `src.retorno`), com exemplos de valores.
 3. Explica conversões de unidades/tipos (ex.: ajuste de preços, tratamento de NA, formatação de datas) e periodicidade esperada (diário, ajustes de fechamento).
-4. Lista locais de código a serem modificados (ex.: `src/dados_b3.py`, `src/retorno.py`, `src/main.py`) e arquivos de dados afetados (`dados/*.csv`).
+4. Lista locais de código a serem modificados (ex.: `src/ingest/pipeline.py`, `src/retorno.py`, `src/main.py`) e arquivos de dados afetados (`dados/*.csv`).
 5. Contém notas de testes: exemplos de CSVs de entrada, comandos para validação local e casos de borda (missing, múltiplos tickers, split/bonificação).
 6. Referências apontando para `docs/schema.md`, `README.md` e quaisquer PRD/epics relevantes.
 
@@ -43,7 +43,7 @@ para que outros desenvolvedores entendam claramente o mapeamento de campos, conv
   - Manter compatibilidade com pipelines existentes que esperam `Adj Close` ou retornos diários.
 
 - Componentes do projeto a tocar:
-  - `src/dados_b3.py` — integração / coleta via Yahoo (`.SA` suffix handling).
+  - `src/adapters/` + `src/ingest/pipeline.py` — integração / coleta via provider (`.SA` suffix handling quando aplicável).
   - `src/retorno.py` — funções de cálculo/conversão de retorno e risco.
   - `dados/` — exemplos de CSVs e fixtures para testes.
   - `docs/schema.md` — referência de esquema canônico.
@@ -56,7 +56,7 @@ para que outros desenvolvedores entendam claramente o mapeamento de campos, conv
 ### References
 
 - Source: [docs/schema.md](docs/schema.md#esquema-canonico)
-- Source: [src/dados_b3.py](src/dados_b3.py#L1)
+- Source: [src/ingest/pipeline.py](src/ingest/pipeline.py#L1)
 - Source: [src/retorno.py](src/retorno.py#L1)
 - Project README: [README.md](README.md)
 

@@ -12,6 +12,8 @@ from typing import Callable, Generator
 import pandas as pd
 import pytest
 
+from src.adapters.retry_metrics import get_global_metrics
+
 # Ensure tests directory is importable when pytest runs the tests as a script
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 from fixture_utils import create_prices_db_from_csv, get_or_make_snapshot_dir
@@ -42,6 +44,21 @@ def _load_sample_dataframe(ticker: str, start=None, end=None, **kwargs) -> pd.Da
 
     # Não expor "Adj Close" nos dados de playback: DB não contém essa coluna.
     return df[["Open", "High", "Low", "Close", "Volume"]]
+
+
+@pytest.fixture(autouse=True)
+def reset_retry_metrics():
+    """Reset the global retry-metrics singleton before every test.
+
+    Prevents retry counters from leaking between tests when the same process
+    runs the full suite, which could produce non-deterministic assertions in
+    tests that inspect retry/failure counts.
+    """
+    get_global_metrics().reset()
+    yield
+    # reset again after the test so any metric mutations don't bleed into
+    # fixtures that run during teardown.
+    get_global_metrics().reset()
 
 
 @pytest.fixture(autouse=True)

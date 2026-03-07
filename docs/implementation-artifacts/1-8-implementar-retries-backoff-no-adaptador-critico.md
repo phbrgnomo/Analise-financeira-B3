@@ -34,13 +34,13 @@
  ## Dev Notes
 
  - Requisitos críticos: garantir idempotência ou deduplicação; evitar retries em operações que alteram estado sem proteção.
- - Preferência por implementar utilitário genérico no módulo do adaptador (ex.: `src/dados_b3` ou `src/utils`) seguindo padrões existentes do repositório.
+ - Preferência por implementar utilitário genérico no módulo do adaptador (ex.: `src/adapters/*` ou `src/utils`) seguindo padrões existentes do repositório.
  - Evitar adicionar dependências pesadas. Se já existe utilitário similar no repo, estender/reusar-o.
  - Respeitar timeouts configurados e não aumentar implicitamente o timeout total sem expor configuração.
 
  ### Project Structure Notes
 
- - Manter implementações em módulos coerentes com `src/` (ex.: `src/adapters/critical_adapter.py` ou dentro de `src/dados_b3.py` se for o adaptador relevante).
+ - Manter implementações em módulos coerentes com `src/` (ex.: `src/adapters/critical_adapter.py` ou adaptadores específicos em `src/adapters/`).
  - Nomear funções públicas com prefixo `retry_` ou documentar na API do adaptador.
 
  ### References

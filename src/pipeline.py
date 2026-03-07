@@ -12,15 +12,17 @@ non-CLI callers (e.g. notebooks, API layers).
 
 from __future__ import annotations
 
+from contextlib import suppress
+
 # apply CLI compatibility patch (monkeypatching) on import
-try:
+with suppress(ImportError):
     import src.cli_compat  # noqa: F401
-except ImportError:
-    pass
 
 import typer
 
 from src.adapters.factory import available_providers
+from src.tickers import normalize_b3_ticker
+from src.utils.conversions import as_bool as _as_bool
 
 app = typer.Typer()
 
@@ -33,7 +35,7 @@ def ingest_cmd(
         help=f"Provider adapter to use (choices: {', '.join(available_providers())})",
     ),
     ticker: str = typer.Argument(
-        ..., help="Ticker to ingest, ex. PETR4.SA (positional)."
+        ..., help="Ticker B3 para ingestão, ex.: PETR4, MGLU3, BOVA11"
     ),
     dry_run: bool = typer.Option(
         False, "--dry-run", help="Fetch and map but do not write any data"
@@ -63,7 +65,80 @@ def ingest_cmd(
             % (source, ", ".join(provs)),
         )
     src_name = prov_map[src_key]
+    try:
+        normalized_ticker = normalize_b3_ticker(ticker)
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+
     exit_code = ingest_command(
-        ticker, src_name, dry_run=dry_run, force_refresh=force_refresh
+        normalized_ticker,
+        src_name,
+        dry_run=_as_bool(dry_run),
+        force_refresh=_as_bool(force_refresh),
+    )
+    raise typer.Exit(code=exit_code)
+
+
+@app.command("pull-sample")
+def pull_sample_cmd(
+    source: str = typer.Option(
+        "",
+        "--source",
+        help=(
+            "Provider adapter to use. Quando omitido, mostra fontes "
+            "disponíveis e usa yfinance."
+        ),
+    ),
+    ticker: str = typer.Argument(
+        ..., help="Ticker B3 para amostra visual, ex.: PETR4, VALE3, BOVA11"
+    ),
+    days: int = typer.Option(
+        10,
+        "--days",
+        min=1,
+        help="Janela em dias quando --start não for informado",
+    ),
+    start: str | None = typer.Option(None, "--start", help="Data inicial YYYY-MM-DD"),
+    end: str | None = typer.Option(None, "--end", help="Data final YYYY-MM-DD"),
+    output: str | None = typer.Option(
+        None,
+        "--output",
+        help=(
+            "CSV canônico de saída (padrão: dados/samples/<ticker>_sample.csv)"
+        ),
+    ),
+) -> None:
+    """Gera artefatos raw/canônico de amostra via adapter sem persistir no DB."""
+    from src.ingest.pipeline import pull_sample_command
+
+    provs = available_providers()
+    prov_map = {p.lower(): p for p in provs}
+
+    raw_source = source.strip()
+    if not raw_source:
+        typer.echo(f"Fontes disponíveis: {', '.join(provs)}")
+        src_name = "yfinance"
+        typer.echo(f"Usando fonte padrão: {src_name}")
+    else:
+        src_key = raw_source.lower()
+        if src_key not in prov_map:
+            raise typer.BadParameter(
+                "unknown provider %r, choose from %s"
+                % (source, ", ".join(provs)),
+            )
+        src_name = prov_map[src_key]
+
+    try:
+        normalized_ticker = normalize_b3_ticker(ticker)
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+
+    exit_code = pull_sample_command(
+        normalized_ticker,
+        src_name,
+        days=days,
+        start=start,
+        end=end,
+        output=output,
     )
     raise typer.Exit(code=exit_code)

@@ -52,7 +52,7 @@ echo "[6/6] Validate snapshots"
 # (so the script can be invoked directly without requiring the earlier
 # exported SNAPSHOT_DIR). When run via this orchestrator, the value set
 # earlier by `export SNAPSHOT_DIR=...` will be preserved.
-SNAPSHOT_DIR="${SNAPSHOT_DIR:-snapshots}" bash tests/ci/validate_snapshots.sh
+SNAPSHOT_DIR="${SNAPSHOT_DIR:-snapshots_test}" bash tests/ci/validate_snapshots.sh
 
 echo "CI Orchestrator: all stages passed at $(date -u)"
 

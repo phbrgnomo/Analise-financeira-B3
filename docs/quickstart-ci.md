@@ -18,9 +18,7 @@ poetry run python scripts/init_ingest_db.py --db dados/data.db
 
 ```bash
 mkdir -p ./snapshots_test
-SNAPSHOT_DIR=$PWD/snapshots_test ./examples/run_quickstart_example.sh
-# ou
-SNAPSHOT_DIR=$PWD/snapshots_test poetry run python scripts/run_save_raw_example.py --out-dir snapshots_test
+SNAPSHOT_DIR=$PWD/snapshots_test poetry run python scripts/generate_ci_snapshot.py
 ```
 
 4. Validar checksums/manifest:
@@ -29,6 +27,13 @@ SNAPSHOT_DIR=$PWD/snapshots_test poetry run python scripts/run_save_raw_example.
 poetry run python scripts/validate_snapshots.py --dir snapshots_test --manifest snapshots/checksums.json --allow-external
 # ou usar o wrapper
 poetry run python scripts/verify_snapshot.py --dir snapshots_test --manifest snapshots/checksums.json --allow-external
+```
+
+Se você alterou o snapshot determinístico de referência, regenere o manifesto
+canônico antes de abrir PR:
+
+```bash
+poetry run python scripts/validate_snapshots.py --dir snapshots_test --manifest snapshots/checksums.json --update --allow-external
 ```
 
 5. Rodar teste E2E localmente (opcional):

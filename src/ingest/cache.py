@@ -84,11 +84,13 @@ def save_cache(path: Path, cache: Dict[str, Any]) -> None:
             )
 
 
-def entry_is_fresh(entry: Dict[str, Any], ttl: Optional[int]) -> bool:
+def entry_is_fresh(entry: Dict[str, Any], ttl: Optional[float]) -> bool:
     """Return ``True`` if the cache entry is still within ``ttl`` seconds.
 
-    If ``ttl`` is ``None`` the entry is always considered fresh.  The
-    ``processed_at`` value is an ISO formatted UTC timestamp.
+    ``ttl`` may be fractional (tests sometimes use `0.1` seconds) so the
+    type is ``float | None``.  If ``ttl`` is ``None`` the entry is always
+    considered fresh.  The ``processed_at`` value is an ISO formatted UTC
+    timestamp.
     """
     if ttl is None:
         return True

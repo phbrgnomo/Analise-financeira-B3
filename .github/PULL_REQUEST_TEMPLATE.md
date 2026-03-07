@@ -10,7 +10,7 @@
 
 ### Checklist (marque o que se aplica)
 
-- [ ] Código segue padrões de estilo (`black`, `ruff`).
+- [ ] Código segue padrões de estilo (`ruff`).
 - [ ] Testes adicionados/atualizados.
 - [ ] Migração incluída quando aplicável (`migrations/`).
 - [ ] Documentação atualizada (`docs/`).

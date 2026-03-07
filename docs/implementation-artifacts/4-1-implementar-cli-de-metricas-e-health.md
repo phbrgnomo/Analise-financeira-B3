@@ -21,7 +21,7 @@ para que eu possa checar conectividade, integridade e métricas operacionais do 
 
 - [ ] Task 1: API e CLI
   - [ ] Criar subcomando `metrics` e flags `--metrics`, `--test-conn`, `--health` usando Typer (suggested: `src/cli/metrics.py` ou `src/main.py` subcommand)
-  - [ ] Reusar `src.dados_b3` / `src.retorno` e contratos DB (`db.read_prices`/`db.*`) quando necessário
+  - [ ] Reusar `src/adapters/*`, `src/retorno.py` e contratos DB (`db.read_prices`/`db.*`) quando necessário
 - [ ] Task 2: Implementação das métricas
   - [ ] Implementar coletor leve de métricas internas (jobs_count, avg_latency_ms, error_rate, rows_fetched)
   - [ ] Exportar JSON via stdout e opcional `.metrics` file quando flag `--output` for fornecida
