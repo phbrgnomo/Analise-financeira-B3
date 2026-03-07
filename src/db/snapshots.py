@@ -2,12 +2,56 @@
 
 import hashlib
 import json
+import re
 import sqlite3
 from datetime import datetime
 from typing import Any, Optional
 
 from src.db.connection import _connect
 from src.time_utils import now_utc_iso
+
+
+def _extract_date_range_from_payload(  # noqa: C901 - multiple fallback strategies
+    metadata: dict[str, Any],
+) -> tuple[str, str]:
+    start = str(metadata.get("start") or metadata.get("start_date") or "")
+    end = str(metadata.get("end") or metadata.get("end_date") or "")
+    if start and end:
+        return start, end
+
+    payload_obj: dict[str, Any] = {}
+    payload = metadata.get("payload")
+    if isinstance(payload, dict):
+        payload_obj = payload
+    elif isinstance(payload, str):
+        try:
+            parsed = json.loads(payload)
+            if isinstance(parsed, dict):
+                payload_obj = parsed
+        except json.JSONDecodeError:
+            payload_obj = {}
+
+    if not start:
+        start = str(payload_obj.get("start") or payload_obj.get("start_date") or "")
+    if not end:
+        end = str(payload_obj.get("end") or payload_obj.get("end_date") or "")
+    if start and end:
+        return start, end
+
+    snapshot_path = str(metadata.get("snapshot_path") or "")
+    date_matches = re.findall(r"\d{4}-\d{2}-\d{2}|\d{8}", snapshot_path)
+    if not start and len(date_matches) >= 1:
+        start = date_matches[0]
+    if not end and len(date_matches) >= 2:
+        end = date_matches[1]
+    return start, end
+
+
+def _build_stable_snapshot_job_id(metadata: dict[str, Any]) -> str:
+    ticker = str(metadata.get("ticker") or metadata.get("symbol") or "").strip()
+    start, end = _extract_date_range_from_payload(metadata)
+    stable_key = f"{ticker}_{start}_{end}"
+    return hashlib.sha256(stable_key.encode("utf-8")).hexdigest()
 
 
 def get_last_snapshot_payload(
@@ -50,7 +94,7 @@ def get_last_snapshot_payload(
 
 
 def record_snapshot_metadata(
-    metadata: dict,
+    metadata: dict[str, Any],
     conn: Optional[sqlite3.Connection] = None,
     db_path: Optional[str] = None,
 ) -> None:
@@ -82,9 +126,7 @@ def _upsert_snapshot_metadata(
     job_id = (
         metadata.get("job_id")
         or metadata.get("id")
-        or hashlib.sha256(
-            json.dumps(metadata, sort_keys=True).encode("utf-8")
-        ).hexdigest()
+        or _build_stable_snapshot_job_id(metadata)
     )
     created_at = metadata.get("created_at") or now_utc_iso()
     ticker = metadata.get("ticker") or metadata.get("symbol") or None
@@ -116,7 +158,7 @@ def get_snapshot_metadata(
     *,
     conn: Optional[sqlite3.Connection] = None,
     db_path: Optional[str] = None,
-) -> Optional[dict]:
+) -> Optional[dict[str, Any]]:
     """Retrieve snapshot metadata by ID.
 
     Parameters
@@ -155,7 +197,7 @@ def list_snapshots(
     archived: bool = False,
     conn: Optional[sqlite3.Connection] = None,
     db_path: Optional[str] = None,
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """List snapshots filtered by ticker and archived status.
 
     Parameters
@@ -283,7 +325,7 @@ def get_snapshot_by_path(
     *,
     conn: Optional[sqlite3.Connection] = None,
     db_path: Optional[str] = None,
-) -> Optional[dict]:
+) -> Optional[dict[str, Any]]:
     """Retrieve snapshot metadata by snapshot_path.
 
     Parameters

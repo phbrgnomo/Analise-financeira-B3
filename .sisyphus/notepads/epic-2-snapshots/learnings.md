@@ -115,3 +115,27 @@
 
 ### Final Adjustment
 - Removed temporary `db.init_db()` call from command flow to keep strict requirement scope (normalize → read DB → validate → write snapshot → register metadata), assuming migration baseline from Task 1 is already applied in target environment
+
+## [2026-03-07T02:18:30Z] Task 4: Idempotency Fix
+
+### Root-Cause Correction
+- `_upsert_snapshot_metadata()` previously generated `job_id` from `json.dumps(metadata, sort_keys=True)`, which included volatile fields (`created_at`) and broke idempotency.
+- Implemented deterministic ID generation with stable inputs only: `ticker`, `start`, `end`.
+- New stable key pattern: `f"{ticker}_{start}_{end}"` hashed with SHA256.
+
+### Stable Field Resolution Strategy
+- Added `_extract_date_range_from_payload(metadata)` to resolve `start/end` in this order:
+  1. Top-level metadata keys (`start`/`start_date`, `end`/`end_date`)
+  2. Nested `payload` (dict or JSON string)
+  3. Date-like tokens from `snapshot_path` (regex fallback)
+- If range is unavailable, fallback still remains deterministic (`ticker__`).
+
+### Behavioral Outcome
+- Kept SQL statement unchanged (`INSERT OR REPLACE INTO snapshots(...)`) as required.
+- Second run for same ticker/range now reuses the same primary key and replaces row content instead of inserting a duplicate.
+- Verified replacement semantics: row count unchanged on second run, `id` unchanged, `created_at` updated.
+
+### Validation Results
+- `lsp_diagnostics` reports no errors for `src/db/snapshots.py`.
+- `poetry run pytest -xvs tests/` passed: **222 passed**.
+- Evidence saved to `.sisyphus/evidence/task-4-idempotency-fixed.txt`.

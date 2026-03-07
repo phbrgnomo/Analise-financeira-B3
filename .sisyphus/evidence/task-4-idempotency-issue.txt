@@ -1,0 +1,55 @@
+=== TASK 4: IDEMPOTENCY VERIFICATION FAILURE ===
+
+Date: 2026-03-07T02:14:34Z
+Issue: Running `pipeline snapshot --ticker PETR4` twice creates DUPLICATE rows in DB
+
+EVIDENCE:
+- First run: 26 rows in snapshots table
+- Second run: 27 rows in snapshots table (EXPECTED: still 26)
+- Different IDs generated: 9e8859165e22132e vs 31d3864a41534456
+
+ROOT CAUSE (src/db/snapshots.py lines 82-88):
+```python
+job_id = (
+    metadata.get("job_id")
+    or metadata.get("id")
+    or hashlib.sha256(
+        json.dumps(metadata, sort_keys=True).encode("utf-8")
+    ).hexdigest()
+)
+```
+
+The `job_id` is computed from the ENTIRE metadata dict, which includes:
+- `created_at` timestamp (changes every run)
+- `snapshot_path` (may change)
+- Other volatile fields
+
+Because `created_at` changes on every run, the hash changes, creating a NEW id.
+INSERT OR REPLACE with different ID = INSERT NEW ROW (not replace existing).
+
+EXPECTED BEHAVIOR (from Task 4 acceptance criteria):
+- Running command twice for same ticker → 1 row in DB (idempotent via INSERT OR REPLACE)
+
+REQUIRED FIX:
+ID generation must be based on STABLE identifiers:
+- ticker (stable)
+- date range start/end (stable for same query)
+- OR: Use a deterministic ID like f"{ticker}_{start}_{end}" hash
+
+DO NOT include volatile fields in ID generation:
+- created_at (changes every run)
+- snapshot_path (may change with --output-dir)
+- size_bytes (changes if data changes)
+- checksum (changes if data changes)
+
+ACCEPTANCE TEST:
+After fix, running:
+```bash
+poetry run python -m src.main pipeline snapshot --ticker PETR4
+poetry run python -m src.main pipeline snapshot --ticker PETR4
+```
+
+Should result in:
+- Same row count before and after second run
+- Same ID for both runs (deterministic based on ticker + date range)
+- created_at, checksum, etc. updated to latest values (INSERT OR REPLACE behavior)
