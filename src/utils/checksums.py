@@ -117,10 +117,11 @@ def serialize_df_bytes(
             float_format=float_format,
             na_rep=na_rep,
         )
-    except (TypeError, ValueError):
-        # these are the common errors raised by sort_index when the index
-        # contains unorderable or invalid values; other exceptions should
-        # propagate normally.
+    except Exception:
+        # sort_index may raise different exception types depending on the
+        # DataFrame implementation or test monkeypatching; catch all
+        # and fall back to a non-sorted serialization while emitting a
+        # single process-wide warning to avoid log spam.
         if not _non_deterministic_checksum_warned:
             logger.warning(
                 "Falha ao ordenar DataFrame por índice; "
