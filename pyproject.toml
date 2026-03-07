@@ -35,6 +35,7 @@ pre-commit = "^3.3.0"
 jsonschema = "^4.19.0"
 # Hypothesis 7.x series doesn’t exist on PyPI; latest 6.x is 6.151.9
 hypothesis = "^6.151.9"
+sqlparse = "^0.5.5"
 
 [tool.pytest.ini_options]
 addopts = "-ra -q"

@@ -75,17 +75,6 @@ def _upsert_snapshot_metadata(
 ) -> None:
     cur = conn.cursor()
     cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS snapshots (
-            id TEXT PRIMARY KEY,
-            ticker TEXT,
-            created_at TEXT,
-            payload TEXT
-        )
-        """
-    )
-    # index to speed up queries filtering by ticker and ordering by creation time
-    cur.execute(
         "CREATE INDEX IF NOT EXISTS snapshots_ticker_created_at_idx "
         "ON snapshots(ticker, created_at)"
     )

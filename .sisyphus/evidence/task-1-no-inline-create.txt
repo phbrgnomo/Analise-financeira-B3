@@ -1,0 +1,5 @@
+Testing inline CREATE TABLE removed:
+✓ PASS: Inline CREATE TABLE removed (grep returned no matches)
+
+Testing CREATE INDEX still present:
+78:        "CREATE INDEX IF NOT EXISTS snapshots_ticker_created_at_idx "
