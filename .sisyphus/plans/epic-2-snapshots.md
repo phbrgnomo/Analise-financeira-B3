@@ -1023,7 +1023,7 @@ Max Concurrent: 6 (Wave 1)
   - Files: `tests/test_snapshots_export.py`
   - Pre-commit: `poetry run pre-commit run --all-files`
 
-- [ ] 10. Tests for Story 2-4 — CI Checksum Validation
+- [x] 10. Tests for Story 2-4 — CI Checksum Validation
 
   **What to do**:
   - Create `tests/test_ci_validate_checksums.py` with pytest tests
