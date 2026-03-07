@@ -285,7 +285,7 @@ Max Concurrent: 6 (Wave 1)
   - Files: `migrations/0002_expand_snapshots.sql`, `src/db/snapshots.py`
   - Pre-commit: `poetry run pre-commit run --all-files`
 
-- [ ] 2. Expand `src/db/snapshots.py` — New DB Query Functions (Story 2-2, 2-3, 2-5 foundation)
+- [x] 2. Expand `src/db/snapshots.py` — New DB Query Functions (Story 2-2, 2-3, 2-5 foundation)
 
   **What to do**:
   - Add function `get_snapshot_metadata(snapshot_id: str, *, conn=None, db_path=None) -> dict | None` — fetch single snapshot row by ID
@@ -413,7 +413,7 @@ Max Concurrent: 6 (Wave 1)
   - Files: `src/db/snapshots.py`, `src/db/__init__.py`
   - Pre-commit: `poetry run pre-commit run --all-files`
 
-- [ ] 3. Implement `pipeline snapshot` CLI Command (Story 2-1)
+- [x] 3. Implement `pipeline snapshot` CLI Command (Story 2-1)
 
   **What to do**:
   - Add `snapshot` command to `src/pipeline.py` Typer sub-app
@@ -508,7 +508,7 @@ Max Concurrent: 6 (Wave 1)
   - Files: `src/pipeline.py`
   - Pre-commit: `poetry run pre-commit run --all-files`
 
-- [ ] 4. Integrate Checksum Metadata Registration (Story 2-2)
+- [x] 4. Integrate Checksum Metadata Registration (Story 2-2)
 
   **What to do**:
   - Ensure `pipeline snapshot` command (Task 3) registers complete metadata after generating snapshot:
@@ -616,7 +616,7 @@ Max Concurrent: 6 (Wave 1)
   - Files: `src/pipeline.py`, `src/db/snapshots.py` (if _upsert changes needed)
   - Pre-commit: `poetry run pre-commit run --all-files`
 
-- [ ] 5. Tests for Story 2-1 — Snapshot Generation (`pipeline snapshot`)
+- [x] 5. Tests for Story 2-1 — Snapshot Generation (`pipeline snapshot`)
 
   **What to do**:
   - Create `tests/test_pipeline_snapshot.py` with pytest tests
@@ -691,7 +691,7 @@ Max Concurrent: 6 (Wave 1)
   - Files: `tests/test_pipeline_snapshot.py`
   - Pre-commit: `poetry run pre-commit run --all-files`
 
-- [ ] 6. Tests for Story 2-2 — Checksum Metadata Registration
+- [x] 6. Tests for Story 2-2 — Checksum Metadata Registration
 
   **What to do**:
   - Create `tests/test_snapshot_metadata.py` with pytest tests
