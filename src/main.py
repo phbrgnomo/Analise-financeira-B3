@@ -65,6 +65,7 @@ DEFAULT_TICKERS = _load_default_tickers()
 
 try:
     from src import pipeline as pipeline_module
+    from src import snapshot_cli as snapshot_cli_module
 
     # Expor o sub-app 'pipeline' com uma descrição para aparecer no help
     app.add_typer(
@@ -72,6 +73,11 @@ try:
         name="pipeline",
         help="Comandos do pipeline: operações de ingest e "
              "amostragem sem execução completa do ETL.",
+    )
+    app.add_typer(
+        snapshot_cli_module.app,
+        name="snapshots",
+        help="Comandos para exportação de snapshots em CSV/JSON.",
     )
 except ImportError as exc:
     import logging

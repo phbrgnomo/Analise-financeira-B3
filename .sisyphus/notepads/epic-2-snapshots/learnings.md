@@ -232,3 +232,22 @@ All 7 required test functions implemented and passing:
 - `tests/test_snapshot.py`: 2 tests passing
 
 No regressions introduced by the `df.reset_index()` fix.
+
+## [2026-03-07T03:25:00Z] Task 7: Implement `snapshots export` CLI Command (Story 2-3)
+
+### Implementation Decisions
+- Created `src/snapshot_cli.py` as a standalone Typer sub-app (`app = typer.Typer()`), keeping the flat `src/` CLI structure.
+- Added `export` command with required options `--ticker`, `--format`, and `--output`.
+- Used `db.list_snapshots(ticker=..., archived=False)` and selected the first row as latest snapshot (`created_at DESC` ordering from Task 2 contract).
+- Implemented path resolution that supports both absolute `snapshot_path` metadata and relative paths under `SNAPSHOTS_DIR`.
+- Implemented CSV export as plain CSV bytes to stdout/file with `index=False`.
+- Implemented JSON export with `records` orientation and metadata wrapper:
+  `{"ticker": ..., "checksum": ..., "rows": ..., "data": [...]}`.
+- Mounted sub-app in `src/main.py` with `app.add_typer(snapshot_cli_module.app, name="snapshots")`.
+
+### Gotchas Encountered
+- `CliFeedback` default methods route several statuses to stdout (`start`, `success`, `warn`).
+  To preserve strict stdout=data and stderr=status separation for export output,
+  Task 7 uses a small local subclass overriding those methods with `err=True`.
+- Needed explicit format normalization (`strip().lower()`) and ticker normalization
+  (`strip().upper()`) to avoid invalid-format/ticker edge behavior.
