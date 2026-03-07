@@ -11,8 +11,20 @@ import typer
 from src import db
 from src.cli_feedback import CliFeedback
 from src.paths import SNAPSHOTS_DIR
+from src.retention import (
+    archive_snapshots,
+    delete_snapshots,
+    find_purge_candidates,
+    get_retention_days,
+)
 
 app = typer.Typer()
+
+_PURGE_ARCHIVE_DIR_OPTION = typer.Option(
+    None,
+    "--archive-dir",
+    help="Diretório para arquivar snapshots ao invés de deletar",
+)
 
 
 class _SnapshotExportFeedback(CliFeedback):
@@ -97,6 +109,116 @@ def _emit_export(content: str, output_path: Path | None) -> None:
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     _ = output_path.write_text(content, encoding="utf-8")
+
+
+def _show_candidates(
+    feedback: CliFeedback,
+    candidates: list[dict[str, object]],
+    *,
+    older_than: int,
+) -> None:
+    if not candidates:
+        feedback.info(
+            "Nenhum snapshot elegível para purge "
+            f"(older-than={older_than} dias)."
+        )
+        return
+
+    feedback.info(
+        f"{len(candidates)} snapshot(s) elegível(eis) para purge "
+        f"(older-than={older_than} dias):"
+    )
+    for row in candidates:
+        feedback.info(
+            "id="
+            f"{row.get('id')} "
+            f"ticker={row.get('ticker')} "
+            f"created_at={row.get('created_at')} "
+            f"size_bytes={row.get('size_bytes')} "
+            f"path={row.get('path')}"
+        )
+
+
+@app.command("purge")
+def purge_snapshots(
+    older_than: int | None = typer.Option(
+        None,
+        "--older-than",
+        help=(
+            "Remove snapshots mais antigos que N dias "
+            "(default: SNAPSHOT_RETENTION_DAYS ou 90)"
+        ),
+    ),
+    dry_run: bool = typer.Option(
+        False,
+        "--dry-run",
+        help="Lista candidatos sem modificar estado",
+    ),
+    confirm: bool = typer.Option(
+        False,
+        "--confirm",
+        help="Executa exclusão/arquivamento real",
+    ),
+    archive_dir: Path | None = _PURGE_ARCHIVE_DIR_OPTION,
+) -> None:
+    feedback = CliFeedback("snapshots purge")
+
+    if dry_run and confirm:
+        feedback.error("--dry-run e --confirm não podem ser usados juntos")
+        raise typer.Exit(code=1)
+
+    effective_older_than = (
+        older_than if older_than is not None else get_retention_days()
+    )
+    feedback.start(
+        f"avaliando purge older-than={effective_older_than} dias "
+        f"dry_run={dry_run} confirm={confirm}"
+    )
+
+    conn = db.connect()
+    try:
+        candidates = find_purge_candidates(conn, effective_older_than)
+        _show_candidates(
+            feedback,
+            candidates,
+            older_than=effective_older_than,
+        )
+
+        if dry_run:
+            feedback.success("Dry-run concluído sem alterações")
+            return
+
+        if not confirm:
+            feedback.warn("use --confirm para executar")
+            return
+
+        snapshot_ids = [
+            candidate["id"]
+            for candidate in candidates
+            if "id" in candidate
+        ]
+
+        if archive_dir is not None:
+            archived = archive_snapshots(
+                conn,
+                cast(list[int], snapshot_ids),
+                archive_dir,
+            )
+            ok_count = sum(1 for row in archived if row.get("checksum_ok"))
+            feedback.success(
+                f"Arquivamento concluído: {len(archived)} snapshot(s), "
+                f"checksums OK: {ok_count}"
+            )
+            return
+
+        deleted = delete_snapshots(conn, cast(list[int], snapshot_ids))
+        deleted_count = sum(1 for row in deleted if row.get("deleted"))
+        feedback.success(
+            f"Purge concluído: {len(deleted)} snapshot(s) processado(s), "
+            f"arquivos removidos: {deleted_count}"
+        )
+    finally:
+        conn.close()
 
 
 @app.command("export")

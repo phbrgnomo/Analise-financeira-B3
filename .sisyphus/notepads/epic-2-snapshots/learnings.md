@@ -472,3 +472,38 @@ When testing scripts that use `db.connect()`:
 5. Never create mocks that call the function being mocked
 
 This pattern prevents infinite recursion and ensures tests use isolated test databases.
+
+## Task 11: Retention Policy + Purge CLI (2026-03-07)
+
+### Estrutura adotada para retenção
+- Criado `src/retention.py` com 4 funções focadas no escopo simplificado da story:
+  `get_retention_days`, `find_purge_candidates`, `archive_snapshots`,
+  `delete_snapshots`.
+- `get_retention_days()` lê `SNAPSHOT_RETENTION_DAYS` com fallback robusto para `90`.
+- `find_purge_candidates()` usa cutoff em UTC com `datetime.now(timezone.utc)`
+  e query apenas em snapshots ativos (`archived = 0`) e com `snapshot_path` válido.
+
+### Fluxos de purge implementados
+- **Dry-run**: apenas lista candidatos e retorna sem alteração de DB/FS.
+- **Confirm + archive-dir**: copia arquivo para diretório de archive,
+  valida checksum do arquivo copiado com `sha256_file()`, marca
+  `archived=1` e `archived_at` em UTC ISO.
+- **Confirm sem archive-dir**: remove arquivo CSV e sidecar `.checksum`
+  com `contextlib.suppress(OSError)` e depois remove registros da DB via
+  `src.db.snapshots.delete_snapshots()`.
+
+### Padrões/gotchas importantes
+- IDs no schema atual são `TEXT`; para atender contrato da task (`list[int]`),
+  o CLI usa cast de IDs para `list[int]` na chamada do módulo e o módulo converte
+  para `str` ao chamar `db.snapshots.delete_snapshots()`.
+- Checksum correto para metadata continua sendo `sha256_file()` (bytes do arquivo),
+  não `snapshot_checksum()`.
+- Mensageria do comando `purge` foi centralizada em `CliFeedback` sem
+  `print()`/`typer.echo()` direto no comando.
+
+### Verificações executadas
+- `poetry run ruff check src/retention.py src/snapshot_cli.py` ✅
+- `poetry run python -m src.main snapshots purge --help` ✅
+- `poetry run python -m src.main snapshots purge --dry-run --confirm`
+  retorna exit code `1` ✅
+- `poetry run pre-commit run --all-files` ✅

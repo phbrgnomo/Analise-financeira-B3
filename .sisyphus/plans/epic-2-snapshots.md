@@ -1081,7 +1081,7 @@ Max Concurrent: 6 (Wave 1)
 
 ### Wave 3 — Stories 2-5 (Retention/Purge) e 2-6 (Restore-Verify)
 
-- [ ] 11. Implementar módulo de retenção e comando `snapshots purge` (Story 2-5)
+- [x] 11. Implementar módulo de retenção e comando `snapshots purge` (Story 2-5)
 
   **What to do**:
   - Criar `src/retention.py` com a lógica de retenção:
