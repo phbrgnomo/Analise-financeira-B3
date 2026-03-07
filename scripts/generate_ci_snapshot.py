@@ -277,8 +277,21 @@ def main() -> int:
         return 2
     # decidir diretório de saída e validá-lo
     snapshot_dir = choose_snapshot_dir(repo_root)
+    # Construir raízes adicionais permitidas (ex.: RUNNER_TEMP) para a
+    # validação final. `choose_snapshot_dir` já valida internamente com
+    # extras, mas ao revalidar aqui devemos manter a mesma tolerância a
+    # diretórios temporários do runner para evitar rejeições redundantes.
+    extra_allowed: list[Path] = []
+    if runner_env := os.environ.get("RUNNER_TEMP"):
+        try:
+            runner_sanitized = _sanitize_env_value(runner_env)
+            if runner_sanitized:
+                extra_allowed.append(Path(runner_sanitized))
+        except ValueError:
+            pass
+
     try:
-        validate_snapshot_dir(snapshot_dir, repo_root)
+        validate_snapshot_dir(snapshot_dir, repo_root, extra_allowed=extra_allowed)
     except ValueError as exc:
         print(f"Erro: configuração de diretório inválida: {exc}", file=sys.stderr)
         return 6
