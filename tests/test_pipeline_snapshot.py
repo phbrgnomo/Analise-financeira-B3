@@ -11,6 +11,7 @@ Verifies all behaviors of the snapshot generation command:
 """
 
 import re
+from typing import Pattern
 
 import pandas as pd
 from typer.testing import CliRunner
@@ -20,7 +21,7 @@ from src.main import app
 
 def _strip_ansi(s: str) -> str:
     """Remove ANSI/escape sequences for format-independent assertions."""
-    ansi = re.compile(r"\x1B\[[0-?]*[ -/]*[@-~]")
+    ansi: Pattern[str] = re.compile(r"\x1B\[[0-?]*[ -/]*[@-~]")
     return ansi.sub("", s)
 
 
@@ -79,20 +80,22 @@ def test_snapshot_csv_has_correct_columns(sample_db, tmp_path, monkeypatch):
     csv_path = output_dir / "PETR4_snapshot.csv"
     df = pd.read_csv(csv_path)
 
-    expected_core = ["close", "date", "high", "low", "open", "ticker", "volume"]
-    actual_cols = list(df.columns)
-    for col in expected_core:
-        assert col in actual_cols, (
-            f"Missing required column '{col}' in snapshot. "
-            f"Got columns: {actual_cols}"
-        )
+    expected_core = {"close", "date", "high", "low", "open", "ticker", "volume"}
+    actual_cols = set(df.columns)
+    missing = expected_core - actual_cols
+    assert not missing, (
+        f"Missing required columns in snapshot: "
+        f"{sorted(missing)}. Got: {sorted(actual_cols)}"
+    )
 
 
 def test_snapshot_with_date_range(sample_db, tmp_path, monkeypatch):
     """--start and --end filter data correctly."""
     from src import db
     from src.db import prices
-
+    # the date-range command path performs low-level price reads via
+    # ``prices._connect``; patching only ``db.connect`` does not intercept
+    # those calls, so we patch both helpers here.
     monkeypatch.setattr(prices, "_connect", lambda db_path=None: sample_db)
     monkeypatch.setattr(db, "connect", lambda **kw: sample_db)
 
@@ -131,8 +134,13 @@ def test_snapshot_with_date_range(sample_db, tmp_path, monkeypatch):
     assert "2023-01-04" in dates
 
 
-def test_snapshot_invalid_ticker_exit_code_1(sample_db, tmp_path):
+def test_snapshot_invalid_ticker_exit_code_1(sample_db, tmp_path, monkeypatch):
     """Unknown ticker produces exit code 1."""
+    # ensure CLI uses the sample database instead of real data
+    from src import db
+
+    monkeypatch.setattr(db, "connect", lambda **kw: sample_db)
+
     runner = CliRunner()
     output_dir = tmp_path / "snapshots"
 

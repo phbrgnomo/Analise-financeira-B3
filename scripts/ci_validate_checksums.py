@@ -13,6 +13,7 @@ Exit codes:
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
@@ -25,7 +26,7 @@ from src import db  # noqa: E402
 from src.utils.checksums import sha256_file  # noqa: E402
 
 
-def main() -> int:
+def main() -> int:  # noqa: C901 - complexity acceptable in simple script
     """Run checksum validation against all non-archived snapshots.
 
     Returns
@@ -36,11 +37,26 @@ def main() -> int:
     print("Validating snapshot checksums...")
     print()
 
-    conn = db.connect(db_path="dados/data.db")
+    db_path = os.environ.get("DB_PATH", "dados/data.db")
+    conn = None
     try:
+        conn = db.connect(db_path=db_path)
         snapshots = db.list_snapshots(archived=False, conn=conn)
+    except Exception as exc:  # pragma: no cover - defensive
+        # report a clear message and exit non-zero
+        print(
+            f"Error accessing database at {db_path}: {exc}",
+            file=sys.stderr,
+        )
+        if conn:
+            try:
+                conn.close()
+            except Exception:  # pragma: no cover - best effort
+                pass
+        sys.exit(1)
     finally:
-        conn.close()
+        if conn:
+            conn.close()
 
     if not snapshots:
         print("No snapshots to validate")

@@ -44,10 +44,10 @@ def _extract_json_from_cli_output(output: str) -> dict:
     Returns:
         Parsed JSON report as dict
     """
-    json_match = re.search(r"\{.*\}", output, re.DOTALL)
-    if not json_match:
+    if json_match := re.search(r"\{.*\}", output, re.DOTALL):
+        return json.loads(json_match.group())
+    else:
         raise ValueError(f"No JSON found in CLI output:\n{output}")
-    return json.loads(json_match.group())
 
 
 def _create_test_snapshot_with_metadata(
@@ -122,13 +122,9 @@ def _create_test_snapshot_with_metadata(
     return snapshot_path, checksum
 
 
-def test_restore_verify_pass(tmp_path, monkeypatch):
+def test_restore_verify_pass(mock_metadata_db, tmp_path, monkeypatch):
     """Valid snapshot with all checks passing → exit 0, overall_result=PASS."""
-    # Setup test DB with migrations
-    metadata_db_path = tmp_path / "metadata.db"
-    db.init_db(db_path=str(metadata_db_path))
-    metadata_conn = db.connect(db_path=str(metadata_db_path))
-    apply_migrations(metadata_conn)
+    metadata_conn, metadata_db_path = mock_metadata_db
 
     # Create snapshot with metadata
     snapshot_path, _ = _create_test_snapshot_with_metadata(
@@ -136,13 +132,6 @@ def test_restore_verify_pass(tmp_path, monkeypatch):
     )
     metadata_conn.close()
 
-    # Patch db.connect to use test DB
-    original_connect = db.connect
-
-    def mock_db_connect(db_path=None):
-        return original_connect(db_path=str(metadata_db_path))
-
-    monkeypatch.setattr(db, "connect", mock_db_connect)
 
     # Run restore-verify
     runner = CliRunner()
@@ -178,19 +167,10 @@ def test_restore_verify_pass(tmp_path, monkeypatch):
     assert "sucesso" in result.output.lower()
 
 
-def test_restore_verify_missing_file(tmp_path, monkeypatch):
+def test_restore_verify_missing_file(mock_metadata_db, tmp_path, monkeypatch):
     """Non-existent snapshot file → exit 2, overall_result=FAIL."""
-    # Setup test DB (empty)
-    metadata_db_path = tmp_path / "metadata.db"
-    db.init_db(db_path=str(metadata_db_path))
+    _, metadata_db_path = mock_metadata_db
 
-    # Patch db.connect
-    original_connect = db.connect
-
-    def mock_db_connect(db_path=None):
-        return original_connect(db_path=str(metadata_db_path))
-
-    monkeypatch.setattr(db, "connect", mock_db_connect)
 
     # Run restore-verify with non-existent path
     missing_path = tmp_path / "does_not_exist.csv"
@@ -207,13 +187,9 @@ def test_restore_verify_missing_file(tmp_path, monkeypatch):
     assert "not found" in result.output.lower()
 
 
-def test_restore_verify_checksum_mismatch(tmp_path, monkeypatch):
+def test_restore_verify_checksum_mismatch(mock_metadata_db, tmp_path, monkeypatch):
     """Valid structure but tampered file → exit 1, overall_result=WARN."""
-    # Setup test DB with migrations
-    metadata_db_path = tmp_path / "metadata.db"
-    db.init_db(db_path=str(metadata_db_path))
-    metadata_conn = db.connect(db_path=str(metadata_db_path))
-    apply_migrations(metadata_conn)
+    metadata_conn, metadata_db_path = mock_metadata_db
 
     # Create snapshot with metadata, then tamper file
     snapshot_path, _ = _create_test_snapshot_with_metadata(
@@ -221,13 +197,6 @@ def test_restore_verify_checksum_mismatch(tmp_path, monkeypatch):
     )
     metadata_conn.close()
 
-    # Patch db.connect
-    original_connect = db.connect
-
-    def mock_db_connect(db_path=None):
-        return original_connect(db_path=str(metadata_db_path))
-
-    monkeypatch.setattr(db, "connect", mock_db_connect)
 
     # Run restore-verify
     runner = CliRunner()
@@ -249,19 +218,10 @@ def test_restore_verify_checksum_mismatch(tmp_path, monkeypatch):
     assert "alerta" in result.output.lower() or "warn" in result.output.lower()
 
 
-def test_restore_verify_invalid_csv(tmp_path, monkeypatch):
+def test_restore_verify_invalid_csv(mock_metadata_db, tmp_path, monkeypatch):
     """Malformed CSV file → exit 2, overall_result=FAIL."""
-    # Setup test DB
-    metadata_db_path = tmp_path / "metadata.db"
-    db.init_db(db_path=str(metadata_db_path))
+    _, metadata_db_path = mock_metadata_db
 
-    # Patch db.connect
-    original_connect = db.connect
-
-    def mock_db_connect(db_path=None):
-        return original_connect(db_path=str(metadata_db_path))
-
-    monkeypatch.setattr(db, "connect", mock_db_connect)
 
     # Create invalid CSV
     snapshot_dir = tmp_path / "snapshots"
@@ -282,18 +242,15 @@ def test_restore_verify_invalid_csv(tmp_path, monkeypatch):
     assert report["overall_result"] == "FAIL"
 
 
-def test_restore_verify_missing_metadata(tmp_path, monkeypatch):
+def test_restore_verify_missing_metadata(mock_metadata_db, tmp_path, monkeypatch):
     """Snapshot file exists but no metadata in DB → n/a checksum,
     but structure validated.
     """
-    # Setup empty DB
-    metadata_db_path = tmp_path / "metadata.db"
-    db.init_db(db_path=str(metadata_db_path))
-    metadata_conn = db.connect(db_path=str(metadata_db_path))
-    apply_migrations(metadata_conn)
+    metadata_conn, metadata_db_path = mock_metadata_db
     metadata_conn.close()
 
     # Patch db.connect
+    # (fixture already patched, but keep for clarity)
     original_connect = db.connect
 
     def mock_db_connect(db_path=None):
@@ -335,13 +292,9 @@ def test_restore_verify_missing_metadata(tmp_path, monkeypatch):
     assert checks["checksum_match"] == "n/a"
 
 
-def test_restore_verify_json_report_structure(tmp_path, monkeypatch):
+def test_restore_verify_json_report_structure(mock_metadata_db, tmp_path, monkeypatch):
     """Validate JSON report has all required keys with correct types."""
-    # Setup test DB with migrations
-    metadata_db_path = tmp_path / "metadata.db"
-    db.init_db(db_path=str(metadata_db_path))
-    metadata_conn = db.connect(db_path=str(metadata_db_path))
-    apply_migrations(metadata_conn)
+    metadata_conn, metadata_db_path = mock_metadata_db
 
     # Create snapshot with metadata
     snapshot_path, _ = _create_test_snapshot_with_metadata(
@@ -349,7 +302,7 @@ def test_restore_verify_json_report_structure(tmp_path, monkeypatch):
     )
     metadata_conn.close()
 
-    # Patch db.connect
+    # Patch db.connect (already done by fixture)
     original_connect = db.connect
 
     def mock_db_connect(db_path=None):
@@ -369,12 +322,16 @@ def test_restore_verify_json_report_structure(tmp_path, monkeypatch):
     report = _extract_json_from_cli_output(result.stdout)
 
     # Validate required keys exist
-    required_keys = [
-        "job_id", "snapshot_path", "timestamp",
-        "checks", "rows_restored", "overall_result"
-    ]
-    for key in required_keys:
-        assert key in report, f"Missing required key: {key}"
+    required_keys = {
+        "job_id",
+        "snapshot_path",
+        "timestamp",
+        "checks",
+        "rows_restored",
+        "overall_result",
+    }
+    missing = required_keys - report.keys()
+    assert not missing, f"Missing required keys: {sorted(missing)}"
 
     # Validate types
     assert isinstance(report["job_id"], str)
@@ -386,13 +343,12 @@ def test_restore_verify_json_report_structure(tmp_path, monkeypatch):
 
     # Validate checks dict structure
     checks = report["checks"]
-    required_checks = [
-        "row_count", "columns_present",
-        "checksum_match", "sample_row_check"
-    ]
-    for check_name in required_checks:
-        assert check_name in checks, f"Missing check: {check_name}"
-        assert checks[check_name] in ["pass", "fail", "n/a"]
+    required_checks = {"row_count", "columns_present",
+                       "checksum_match", "sample_row_check"}
+    missing_checks = required_checks - checks.keys()
+    assert not missing_checks, f"Missing check(s): {sorted(missing_checks)}"
+    # all recorded values must be one of the accepted statuses
+    assert set(checks.values()) <= {"pass", "fail", "n/a"}
 
 
 def test_restore_verify_missing_columns(tmp_path, monkeypatch):

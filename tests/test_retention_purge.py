@@ -162,7 +162,7 @@ def test_archive_snapshots_copies_and_marks(tmp_path):
 
     # Archive the snapshot
     archive_dir = tmp_path / "archive"
-    results = archive_snapshots(conn, [1], archive_dir)
+    results = archive_snapshots(conn, ["1"], archive_dir)
 
     # Verify results
     assert len(results) == 1
@@ -224,7 +224,7 @@ def test_archive_snapshots_checksum_mismatch(tmp_path):
 
     # Archive the snapshot
     archive_dir = tmp_path / "archive"
-    results = archive_snapshots(conn, [1], archive_dir)
+    results = archive_snapshots(conn, ["1"], archive_dir)
 
     # Verify checksum_ok=False
     assert len(results) == 1
@@ -235,6 +235,39 @@ def test_archive_snapshots_checksum_mismatch(tmp_path):
         "SELECT archived FROM snapshots WHERE id = ?", ("1",)
     ).fetchone()
     assert row[0] == 1
+
+    conn.close()
+
+
+def test_archive_snapshots_missing_source_continues(tmp_path):
+    """If the source CSV is missing, the function doesn't raise and reports error."""
+    db_path = tmp_path / "test.db"
+    db.init_db(db_path=str(db_path))
+    conn = db.connect(db_path=str(db_path))
+    apply_migrations(conn)
+
+    # insert a record pointing to a non-existent file
+    cur = conn.cursor()
+    cur.execute(
+        "INSERT INTO snapshots (id, ticker, snapshot_path, checksum, "
+        "size_bytes, created_at, archived) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ("1", "PETR4", "/nonexistent/path.csv", "abc", 0,
+         datetime.now(timezone.utc).isoformat(), 0),
+    )
+    conn.commit()
+
+    archive_dir = tmp_path / "archive"
+    results = archive_snapshots(conn, ["1"], archive_dir)
+
+    assert len(results) == 1
+    assert results[0]["checksum_ok"] is False
+    assert "error" in results[0]
+
+    # DB should not be marked archived because copy failed
+    row = conn.execute(
+        "SELECT archived FROM snapshots WHERE id = ?", ("1",)
+    ).fetchone()
+    assert row[0] == 0
 
     conn.close()
 
@@ -276,7 +309,7 @@ def test_delete_snapshots_removes_files_and_db(tmp_path):
     )
     conn.commit()
 
-    results = delete_snapshots(conn, [1])
+    results = delete_snapshots(conn, ["1"])
 
     # Verify results
     assert len(results) == 1
@@ -318,7 +351,7 @@ def test_delete_snapshots_missing_file_no_crash(tmp_path):
     conn.commit()
 
     # Should NOT raise exception
-    results = delete_snapshots(conn, [1])
+    results = delete_snapshots(conn, ["1"])
 
     # Verify results (deleted=True because file doesn't exist)
     assert len(results) == 1
@@ -334,7 +367,7 @@ def test_delete_snapshots_missing_file_no_crash(tmp_path):
     conn.close()
 
 
-def test_purge_dryrun_no_side_effects(sample_db, tmp_path, monkeypatch):
+def test_purge_dryrun_no_side_effects(tmp_path, monkeypatch):
     """Invoke `snapshots purge --dry-run`.
 
     Verify: DB and FS unchanged.
@@ -407,7 +440,7 @@ def test_purge_dryrun_no_side_effects(sample_db, tmp_path, monkeypatch):
     metadata_conn.close()
 
 
-def test_purge_confirm_deletes_candidates(sample_db, tmp_path, monkeypatch):
+def test_purge_confirm_deletes_candidates(tmp_path, monkeypatch):
     """Invoke `snapshots purge --confirm` (without --archive-dir).
 
     Verify: old snapshots removed from DB and FS.
@@ -480,7 +513,7 @@ def test_purge_confirm_deletes_candidates(sample_db, tmp_path, monkeypatch):
     metadata_conn.close()
 
 
-def test_purge_confirm_archives_candidates(sample_db, tmp_path, monkeypatch):
+def test_purge_confirm_archives_candidates(tmp_path, monkeypatch):
     """Invoke `snapshots purge --confirm --archive-dir`.
 
     Verify: old snapshots archived and marked archived=1.

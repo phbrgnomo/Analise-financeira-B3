@@ -12,7 +12,9 @@ from typing import Callable, Generator
 import pandas as pd
 import pytest
 
+from src import db
 from src.adapters.retry_metrics import get_global_metrics
+from src.db_migrator import apply_migrations
 
 # Ensure tests directory is importable when pytest runs the tests as a script
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
@@ -111,6 +113,36 @@ def sqlite_version_override(monkeypatch):
     if ver := os.environ.get("SQLITE_VERSION"):
         monkeypatch.setattr(sqlite3, "sqlite_version", ver)
     yield
+
+
+@pytest.fixture
+def mock_metadata_db(tmp_path, monkeypatch):
+    """Prepare a metadata database and patch ``db.connect`` to point at it.
+
+    Yields
+    ------
+    tuple[sqlite3.Connection, pathlib.Path]
+        The open connection and the path to the metadata DB.  The connection
+        is closed after the test automatically.
+    """
+    metadata_db_path = tmp_path / "metadata.db"
+    # initialize and migrate a fresh metadata database
+    db.init_db(db_path=str(metadata_db_path))
+    metadata_conn = db.connect(db_path=str(metadata_db_path))
+    apply_migrations(metadata_conn)
+
+    original_connect = db.connect
+
+    def mock_db_connect(db_path=None, **kw):
+        # ignore any requested path, always return connection to our test DB
+        return original_connect(db_path=str(metadata_db_path))
+
+    monkeypatch.setattr(db, "connect", mock_db_connect)
+
+    try:
+        yield metadata_conn, metadata_db_path
+    finally:
+        metadata_conn.close()
 
 
 @pytest.fixture(scope="function")

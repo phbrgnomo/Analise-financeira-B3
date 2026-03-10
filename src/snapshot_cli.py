@@ -28,6 +28,17 @@ _PURGE_ARCHIVE_DIR_OPTION = typer.Option(
 
 
 class _SnapshotExportFeedback(CliFeedback):
+    """Feedback helper for `snapshots export` CLI commands.
+
+    This subclass of :class:`CliFeedback` overrides the basic methods
+    to emit formatted messages with simple symbols and colors.  It uses
+    ``self.command_name`` for context (set by callers) and implements:
+    ``start`` (beginning of an operation), ``warn`` (non-fatal issues) and
+    ``success`` (completion notice).  Messages are written to ``stderr`` by
+    design so that exported data can safely go to ``stdout`` without
+    interleaving status logs.
+    """
+
     @override
     def start(self, message: str) -> None:
         typer.echo(f"▶ {self.command_name}: {message}", err=True)
@@ -43,9 +54,7 @@ class _SnapshotExportFeedback(CliFeedback):
 
 def _resolve_snapshot_path(raw_path: str) -> Path:
     candidate = Path(raw_path)
-    if candidate.is_absolute():
-        return candidate
-    return SNAPSHOTS_DIR / candidate
+    return candidate if candidate.is_absolute() else SNAPSHOTS_DIR / candidate
 
 
 def _load_latest_snapshot(
@@ -161,6 +170,27 @@ def purge_snapshots(
     ),
     archive_dir: Path | None = _PURGE_ARCHIVE_DIR_OPTION,
 ) -> None:
+    """Purge or archive old snapshots based on retention policy.
+
+    Parameters
+    ----------
+    older_than : int | None
+        Number of days; snapshots older than this are eligible.  Defaults to
+        the configured retention (usually 90 days).
+    dry_run : bool
+        If true, list eligible candidates but make no changes.
+    confirm : bool
+        Requires confirmation to perform deletion/archiving; without this the
+        command will warn but exit with no action.
+    archive_dir : Path | None
+        Optional directory to move snapshots instead of deleting them.
+
+    Side effects
+    ------------
+    When ``confirm`` is provided the command will either delete or archive
+    matching snapshot records and files.  Without ``confirm`` no modifications
+    occur.
+    """
     feedback = CliFeedback("snapshots purge")
 
     if dry_run and confirm:
@@ -193,7 +223,7 @@ def purge_snapshots(
             return
 
         snapshot_ids = [
-            candidate["id"]
+            str(candidate.get("id"))
             for candidate in candidates
             if "id" in candidate
         ]
@@ -201,18 +231,20 @@ def purge_snapshots(
         if archive_dir is not None:
             archived = archive_snapshots(
                 conn,
-                cast(list[int], snapshot_ids),
+                snapshot_ids,
                 archive_dir,
             )
-            ok_count = sum(1 for row in archived if row.get("checksum_ok"))
+            ok_count = sum(bool(row.get("checksum_ok"))
+                       for row in archived)
             feedback.success(
                 f"Arquivamento concluído: {len(archived)} snapshot(s), "
                 f"checksums OK: {ok_count}"
             )
             return
 
-        deleted = delete_snapshots(conn, cast(list[int], snapshot_ids))
-        deleted_count = sum(1 for row in deleted if row.get("deleted"))
+        deleted = delete_snapshots(conn, snapshot_ids)
+        deleted_count = sum(bool(row.get("deleted"))
+                        for row in deleted)
         feedback.success(
             f"Purge concluído: {len(deleted)} snapshot(s) processado(s), "
             f"arquivos removidos: {deleted_count}"
@@ -239,6 +271,30 @@ def export_snapshot(
         help="Output file path (default: stdout)",
     ),
 ) -> None:
+    """Export the latest snapshot for a ticker.
+
+    This command looks up the most recent non-archived snapshot for the
+    provided ``ticker`` and writes its contents either in CSV or JSON format.
+    By default the serialized snapshot is written to standard output; if
+    ``output`` is supplied, the data is saved to the given file path (the
+    parent directory is created if necessary).
+
+    Parameters
+    ----------
+    ticker : str
+        B3 ticker symbol to export (e.g. ``PETR4``).
+    format : str
+        Desired output format, either ``csv`` or ``json``.  Case-insensitive.
+    output : str | None
+        Optional filesystem path to write the export.  If omitted the data
+        is printed on ``stdout`` while status messages are emitted to
+        ``stderr``.
+
+    Raises
+    ------
+    typer.Exit
+        On validation errors or when export fails.
+    """
     fb = _SnapshotExportFeedback("snapshots export")
     normalized_ticker = ticker.strip().upper()
     requested_format = format.strip().lower()

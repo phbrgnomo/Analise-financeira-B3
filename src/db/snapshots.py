@@ -1,10 +1,10 @@
 """Snapshot metadata persistence."""
 
+
 import hashlib
 import json
 import re
 import sqlite3
-from datetime import datetime
 from typing import Any, Optional
 
 from src.db.connection import _connect
@@ -14,10 +14,66 @@ from src.time_utils import now_utc_iso
 def _extract_date_range_from_payload(  # noqa: C901 - multiple fallback strategies
     metadata: dict[str, Any],
 ) -> tuple[str, str]:
+    """Extract start/end dates from snapshot metadata.
+
+    The function attempts to determine a ``(start, end)`` pair in
+    ``YYYY-MM-DD`` form by probing the provided metadata dictionary using a
+    sequence of fallback strategies:
+
+    1. Look for explicit keys ``"start"``/``"start_date"`` and
+       ``"end"``/``"end_date"`` at the top level of ``metadata``.
+    2. If missing, and ``metadata["payload"]`` is a JSON string or dict,
+       parse it and repeat step 1 on the resulting object.
+    3. Finally, inspect ``metadata.get("snapshot_path")`` for any
+       substrings matching either ``YYYY-MM-DD`` or ``YYYYMMDD``; the first
+       match becomes ``start`` and the second (if present) becomes ``end``.
+
+    A nested helper ``_normalize_date_string`` converts ``YYYYMMDD`` inputs to
+    ``YYYY-MM-DD``.  When no date is found for a boundary, the returned value
+    is the empty string.  This lenient behavior allows callers to handle
+    unspecified ranges gracefully.
+
+    Parameters
+    ----------
+    metadata : dict[str, Any]
+        Arbitrary snapshot metadata; keys may include
+        ``ticker``, ``snapshot_path``, ``payload`` (JSON), and date fields as
+        described above.
+
+    Returns
+    -------
+    tuple[str, str]
+        ``(start, end)`` strings normalized to ``YYYY-MM-DD`` or ``""`` when
+        unspecified.
+
+    Examples
+    --------
+    >>> _extract_date_range_from_payload({"snapshot_path": "/foo/20230101"})
+    ("2023-01-01", "")
+    >>> _extract_date_range_from_payload({"payload": '{"start": "2023-01-01",
+    "end_date": "2023-01-02"}'})
+    ("2023-01-01", "2023-01-02")
+    """
+    def _normalize_date_string(date_str: str) -> str:
+        """Normalize date strings to ``YYYY-MM-DD`` format.
+
+        Accepts either ``YYYY-MM-DD`` or ``YYYYMMDD`` and returns the
+        dashed variant. If the incoming string doesn’t match either pattern
+        it is returned unchanged (allowing unknown formats to pass through).
+        """
+        date_str = date_str.strip()
+        if not date_str:
+            return date_str
+        if re.fullmatch(r"\d{4}-\d{2}-\d{2}", date_str):
+            return date_str
+        if re.fullmatch(r"\d{8}", date_str):
+            return f"{date_str[:4]}-{date_str[4:6]}-{date_str[6:8]}"
+        return date_str
+
     start = str(metadata.get("start") or metadata.get("start_date") or "")
     end = str(metadata.get("end") or metadata.get("end_date") or "")
     if start and end:
-        return start, end
+        return _normalize_date_string(start), _normalize_date_string(end)
 
     payload_obj: dict[str, Any] = {}
     payload = metadata.get("payload")
@@ -36,18 +92,44 @@ def _extract_date_range_from_payload(  # noqa: C901 - multiple fallback strategi
     if not end:
         end = str(payload_obj.get("end") or payload_obj.get("end_date") or "")
     if start and end:
-        return start, end
+        return _normalize_date_string(start), _normalize_date_string(end)
 
     snapshot_path = str(metadata.get("snapshot_path") or "")
     date_matches = re.findall(r"\d{4}-\d{2}-\d{2}|\d{8}", snapshot_path)
-    if not start and len(date_matches) >= 1:
-        start = date_matches[0]
-    if not end and len(date_matches) >= 2:
-        end = date_matches[1]
+    normalized_matches = [_normalize_date_string(m) for m in date_matches]
+    if not start and normalized_matches:
+        start = normalized_matches[0]
+    if not end and len(normalized_matches) >= 2:
+        end = normalized_matches[1]
     return start, end
 
 
 def _build_stable_snapshot_job_id(metadata: dict[str, Any]) -> str:
+    """Produce a deterministic job ID for a snapshot.
+
+    Parameters
+    ----------
+    metadata : dict[str, Any]
+        Arbitrary snapshot metadata.  This function looks for ``ticker`` or
+        ``symbol`` keys (falling back to empty string if neither is present)
+        as well as any date range information obtained via
+        :func:`_extract_date_range_from_payload` (which inspects the payload
+        or the snapshot_path).  The date strings are normalized internally
+        (see ``_extract_date_range_from_payload`` for details).
+
+    Returns
+    -------
+    str
+        A SHA‑256 hex digest computed from the string ``"ticker_start_end"``.
+        Using a hash means the identifier remains stable across runs even if
+        the original key values are long or vary in formatting.
+
+    Notes
+    -----
+    - Missing ticker/symbol collapses to the empty string.
+    - This helper is used by the metadata upsert logic to avoid generating
+      duplicate records for the same underlying snapshot range.
+    """
     ticker = str(metadata.get("ticker") or metadata.get("symbol") or "").strip()
     start, end = _extract_date_range_from_payload(metadata)
     stable_key = f"{ticker}_{start}_{end}"
@@ -218,26 +300,31 @@ def list_snapshots(
     """
     _conn = conn or _connect(db_path)
     try:
-        cur = _conn.cursor()
-        archived_int = 1 if archived else 0
-        if ticker is None:
-            cur.execute(
-                "SELECT * FROM snapshots WHERE archived = ? "
-                "ORDER BY created_at DESC",
-                (archived_int,)
-            )
-        else:
-            cur.execute(
-                "SELECT * FROM snapshots WHERE archived = ? AND ticker = ? "
-                "ORDER BY created_at DESC",
-                (archived_int, ticker)
-            )
-        rows = cur.fetchall()
-        cols = [col[0] for col in cur.description]
-        return [dict(zip(cols, row, strict=False)) for row in rows]
+        return _extracted_from_list_snapshots_28(_conn, archived, ticker)
     finally:
         if conn is None:
             _conn.close()
+
+
+# TODO Rename this here and in `list_snapshots`
+def _extracted_from_list_snapshots_28(_conn, archived, ticker):
+    cur = _conn.cursor()
+    archived_int = 1 if archived else 0
+    if ticker is None:
+        cur.execute(
+            "SELECT * FROM snapshots WHERE archived = ? "
+            "ORDER BY created_at DESC",
+            (archived_int,)
+        )
+    else:
+        cur.execute(
+            "SELECT * FROM snapshots WHERE archived = ? AND ticker = ? "
+            "ORDER BY created_at DESC",
+            (archived_int, ticker)
+        )
+    rows = cur.fetchall()
+    cols = [col[0] for col in cur.description]
+    return [dict(zip(cols, row, strict=False)) for row in rows]
 
 
 def mark_snapshots_archived(
@@ -266,19 +353,25 @@ def mark_snapshots_archived(
         return 0
     _conn = conn or _connect(db_path)
     try:
-        cur = _conn.cursor()
-        archived_at = datetime.utcnow().isoformat()
-        placeholders = ",".join("?" * len(snapshot_ids))
-        cur.execute(
-            f"UPDATE snapshots SET archived = 1, archived_at = ? "
-            f"WHERE id IN ({placeholders})",
-            (archived_at, *snapshot_ids)
-        )
-        _conn.commit()
-        return cur.rowcount
+        return _extracted_from_mark_snapshots_archived_27(_conn, snapshot_ids)
     finally:
         if conn is None:
             _conn.close()
+
+
+# TODO Rename this here and in `mark_snapshots_archived`
+def _extracted_from_mark_snapshots_archived_27(_conn, snapshot_ids):
+    cur = _conn.cursor()
+    # use shared helper to ensure consistent UTC ISO format
+    archived_at = now_utc_iso()
+    placeholders = ",".join("?" * len(snapshot_ids))
+    cur.execute(
+        f"UPDATE snapshots SET archived = 1, archived_at = ? "
+        f"WHERE id IN ({placeholders})",
+        (archived_at, *snapshot_ids)
+    )
+    _conn.commit()
+    return cur.rowcount
 
 
 def delete_snapshots(

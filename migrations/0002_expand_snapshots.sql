@@ -4,6 +4,10 @@
 
 ALTER TABLE snapshots ADD COLUMN snapshot_path TEXT;
 
+-- index to accelerate queries by path (used by get_snapshot_by_path)
+CREATE INDEX IF NOT EXISTS snapshots_snapshot_path_idx
+    ON snapshots(snapshot_path);
+
 ALTER TABLE snapshots ADD COLUMN rows INTEGER;
 
 ALTER TABLE snapshots ADD COLUMN checksum TEXT;

@@ -48,6 +48,23 @@ def _restore_snapshot_into_temp_db(
     temp_db_target: str,
     required_columns: list[str],
 ) -> tuple[dict[str, str], int]:
+    """Load a CSV snapshot into a temporary SQLite database and run checks.
+
+    Parameters
+    ----------
+    snapshot_path : Path
+        Path to the snapshot CSV file to import.
+    temp_db_target : str
+        SQLite URI or path for the temporary database (':memory:' by default).
+    required_columns : list[str]
+        Column names that must be present in the snapshot for validation.
+
+    Returns
+    -------
+    tuple[dict[str, str], int]
+        A tuple containing a dictionary of check results and the number of rows
+        restored.
+    """
     checks: dict[str, str] = {
         "row_count": "fail",
         "columns_present": "fail",
@@ -256,6 +273,51 @@ def snapshot(
         help="Diretório de saída (padrão: snapshots/)",
     ),
 ) -> None:
+    """Create a CSV snapshot of market data for a given ticker.
+
+    Fetches price history for ``ticker`` (B3 format, e.g. ``PETR4``) from the
+    database, optionally limiting the range with ``start``/``end`` dates in
+    ``YYYY-MM-DD`` format.  The resulting snapshot file is written to
+    ``output_dir`` (defaults to the configured ``SNAPSHOTS_DIR`` such as
+    ``snapshots/``) and metadata is recorded in the database.  Returns ``None``
+    but emits status via ``CliFeedback`` and may raise ``typer.Exit`` on errors.
+
+    Parameters
+    ----------
+    ticker : str
+        B3 ticker to snapshot.
+    start : Optional[str]
+        Inclusive start date filter (YYYY-MM-DD).
+    end : Optional[str]
+        Inclusive end date filter (YYYY-MM-DD).
+    output_dir : Optional[str]
+        Directory where the CSV file will be placed; created if missing.
+    """
+    """Generate a snapshot CSV for a given B3 ticker.
+
+    This command reads historical price data for ``ticker`` (normalized to
+    uppercase) from the database and writes a canonical snapshot file.  The
+    optional ``start`` and ``end`` parameters filter the date range using
+    ``YYYY-MM-DD`` strings.  ``output_dir`` specifies the directory where the
+    CSV will be written; when omitted the default ``snapshots/`` directory is
+    used (created if necessary).
+
+    Parameters
+    ----------
+    ticker : str
+        B3-formatted ticker symbol (e.g. ``PETR4``).
+    start : Optional[str]
+        Beginning of time window (inclusive) in ``YYYY-MM-DD`` format.
+    end : Optional[str]
+        End of time window (inclusive) in ``YYYY-MM-DD`` format.
+    output_dir : Optional[str]
+        Directory path for snapshot output; defaults to ``snapshots/``.
+
+    Side effects
+    ------------
+    Writes a CSV file to the filesystem and records metadata in the
+    snapshots database.  Emits status feedback on stderr via ``CliFeedback``.
+    """
     from src import db
     from src.etl.snapshot import write_snapshot
     from src.utils.checksums import sha256_file
@@ -281,18 +343,19 @@ def snapshot(
 
     _ = write_snapshot(df.reset_index(), out_path)
 
+    # calculate once to avoid redundant filesystem stats
+    size_bytes = out_path.stat().st_size
     metadata = {
         "ticker": normalized_ticker,
         "created_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         "snapshot_path": str(out_path.resolve()),
         "rows": len(df),
         "checksum": sha256_file(out_path),
-        "size_bytes": out_path.stat().st_size,
+        "size_bytes": size_bytes,
         "job_id": None,
     }
     db.record_snapshot_metadata(metadata, db_path=None)
 
-    size_bytes = out_path.stat().st_size
     success_message = (
         f"Snapshot gerado: {out_path} "
         f"({len(df)} linhas, {size_bytes} bytes)"
@@ -309,6 +372,23 @@ def restore_verify_cmd(
         None, "--temp-db", help="Temp DB path (default :memory:)"
     ),
 ) -> None:
+    """Validate a snapshot file against its metadata in the database.
+
+    Reads the CSV at ``snapshot_path`` and compares row counts, column
+    presence, checksum, and sample rows with the corresponding metadata entry
+    (optionally using a temporary database at ``temp_db`` instead of the
+    default connection).  Prints JSON summary and uses exit codes to signal
+    pass/warn/fail conditions.  Side effects are limited to reading files and
+    optionally creating the temp DB.
+
+    Parameters
+    ----------
+    snapshot_path : Path
+        Filesystem path to the snapshot CSV to verify.
+    temp_db : Optional[Path]
+        When provided, a temporary SQLite database path is used for metadata
+        lookups (default is ``:memory:``).
+    """
     from src import db
     from src.db.snapshots import get_snapshot_by_path
     from src.utils.checksums import sha256_file

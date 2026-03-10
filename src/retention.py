@@ -13,6 +13,18 @@ from src.utils.checksums import sha256_file
 
 
 def get_retention_days() -> int:
+    """Return snapshot retention period in days from environment.
+
+    Reads the ``SNAPSHOT_RETENTION_DAYS`` environment variable and converts
+    it to an integer.  If the variable is missing or cannot be parsed as an
+    integer, the function falls back to the default of 90 days.
+
+    Returns
+    -------
+    int
+        Number of retention days (default 90).  No parameters; this function
+        has the side effect of reading from ``os.environ``.
+    """
     raw = os.getenv("SNAPSHOT_RETENTION_DAYS", "90").strip()
     try:
         return int(raw)
@@ -24,6 +36,26 @@ def find_purge_candidates(
     conn: sqlite3.Connection,
     older_than_days: int,
 ) -> list[dict[str, object]]:
+    """Return metadata rows of snapshots eligible for purging.
+
+    The function queries the ``snapshots`` table for records whose
+    ``created_at`` timestamp is older than the UTC cutoff computed from
+    ``older_than_days``.  Only non-archived snapshots with a non-null
+    ``snapshot_path`` are considered.
+
+    Parameters
+    ----------
+    conn : sqlite3.Connection
+        Open SQLite connection to the metadata database.
+    older_than_days : int
+        Age threshold in days; snapshots older than this are candidates.
+
+    Returns
+    -------
+    list of dict
+        Each dict contains keys ``id``, ``path`` (snapshot_path),
+        ``ticker``, ``created_at``, ``size_bytes``, and ``checksum``.
+    """
     cutoff = datetime.now(timezone.utc) - timedelta(days=older_than_days)
     cur = conn.cursor()
     _ = cur.execute(
@@ -39,9 +71,38 @@ def find_purge_candidates(
 
 def archive_snapshots(
     conn: sqlite3.Connection,
-    snapshot_ids: list[int],
+    snapshot_ids: list[str],  # IDs are stored as TEXT in the DB
     archive_dir: Path,
 ) -> list[dict[str, object]]:
+    """Copy snapshots to an archive directory and mark them archived.
+
+    Parameters
+    ----------
+    conn : sqlite3.Connection
+        Open connection to the metadata database.
+    snapshot_ids : list[str]
+        List of snapshot IDs (TEXT) that should be archived.
+    archive_dir : Path
+        Destination directory where snapshot files will be copied.
+
+    Returns
+    -------
+    list of dict
+        Each dict has keys ``id``, ``path`` (original location),
+        ``archived_path`` (destination copy or None on failure),
+        ``checksum_ok`` (bool), and optionally ``error`` if an OSError
+        occurred during copy.
+
+    Side effects
+    ------------
+    The function creates ``archive_dir`` if missing, copies each snapshot
+    file there with a prefix of the ID, computes a SHA-256 checksum of the
+    copy, and updates the database row by setting ``archived = 1`` and
+    ``archived_at`` (commit occurs at the end).  Checksum mismatches do not
+    prevent the database flag from being set; the design assumes even a
+    mismatched file should be marked archived and ``checksum_ok`` recorded in
+    the results for later inspection.
+    """
     if not snapshot_ids:
         return []
 
@@ -52,7 +113,9 @@ def archive_snapshots(
         f"WHERE id IN ({placeholders})"
     )
     cur = conn.cursor()
-    _ = cur.execute(query, snapshot_ids)
+    # ensure IDs are str for consistency with DB schema
+    str_ids = [str(i) for i in snapshot_ids]
+    _ = cur.execute(query, str_ids)
     rows = cast(list[tuple[object, object, object]], cur.fetchall())
 
     results: list[dict[str, object]] = []
@@ -61,11 +124,28 @@ def archive_snapshots(
     for snapshot_id, raw_path, expected_checksum in rows:
         source_path = Path(str(raw_path))
         archived_path = archive_dir / f"{snapshot_id}_{source_path.name}"
-        _ = shutil.copy2(source_path, archived_path)
+        try:
+            _ = shutil.copy2(source_path, archived_path)
+        except OSError as exc:  # could be missing/unreadable
+            # continue processing other snapshots but mark failure
+            results.append(
+                {
+                    "id": snapshot_id,
+                    "path": str(source_path),
+                    "archived_path": None,
+                    "checksum_ok": False,
+                    "error": str(exc),
+                }
+            )
+            continue
 
         actual_checksum = sha256_file(archived_path)
         checksum_ok = actual_checksum == str(expected_checksum or "")
 
+        # mark row as archived regardless of checksum_ok; callers can inspect
+        # the returned ``checksum_ok`` flag to decide if the copy matched
+        # the expected value.  this keeps archival state in sync even when
+        # integrity checks fail.
         _ = cur.execute(
             "UPDATE snapshots SET archived = 1, archived_at = ? WHERE id = ?",
             (now_iso, snapshot_id),
@@ -86,8 +166,35 @@ def archive_snapshots(
 
 def delete_snapshots(
     conn: sqlite3.Connection,
-    snapshot_ids: list[int],
+    snapshot_ids: list[str],  # string IDs matching TEXT column in DB
 ) -> list[dict[str, object]]:
+    """Remove snapshot files from disk and delete DB records.
+
+    Parameters
+    ----------
+    conn : sqlite3.Connection
+        Open connection against the metadata database.
+    snapshot_ids : list[str]
+        List of snapshot identifiers (stored as TEXT in the `snapshots` table)
+        to be deleted.
+
+    Returns
+    -------
+    list[dict[str, object]]
+        Each entry contains ``id`` (the snapshot ID), ``path`` (original
+        filesystem path) and ``deleted`` (bool indicating whether the CSV file
+        no longer exists on disk).
+
+    Side effects
+    ------------
+    The function attempts to unlink the CSV file and its accompanying
+    ``.checksum`` file for each snapshot, suppressing any ``OSError``
+    encountered while doing so.  After filesystem cleanup it calls
+    :func:`src.db.snapshots.delete_snapshots` to remove rows from the database
+    (ids are coerced to strings).  Errors during unlinking do not abort the
+    overall operation; they are simply omitted from the returned ``deleted``
+    flag.
+    """
     if not snapshot_ids:
         return []
 

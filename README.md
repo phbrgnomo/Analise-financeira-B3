@@ -50,10 +50,22 @@ VALIDATION_INVALID_PERCENT_THRESHOLD=0.05
 - **INGEST_LOCK_TIMEOUT_SECONDS**: tempo máximo em segundos que uma chamada
   de ingest aguardará para obter um bloqueio por ticker. Padrão `120`.
 
+Exemplo em `.env`:
+
+```bash
+INGEST_LOCK_TIMEOUT_SECONDS=30
+```
+
 - **INGEST_LOCK_MODE**: define como reagir quando outro processo já detém o
   bloqueio para o mesmo ticker. `wait` (padrão) faz o comando aguardar até
   que o recurso seja liberado; `exit` faz com que a chamada falhe imediatamente
   com mensagem de erro clara.
+
+Exemplo em `.env`:
+
+```bash
+INGEST_LOCK_MODE=exit
+```
 
 - **LOCK_DIR**: diretório onde os arquivos de bloqueio por ticker são
   armazenados. O valor padrão é `locks/` (no diretório de trabalho atual) e
@@ -61,12 +73,21 @@ VALIDATION_INVALID_PERCENT_THRESHOLD=0.05
   um caminho específico quando múltiplos executores compartilham o mesmo
   ambiente de trabalho.
 
-  Exemplo em `.env`:
+- **DB_PATH**: caminho para o banco SQLite usado pelos scripts utilitários
+  (por exemplo `scripts/ci_validate_checksums.py`). O valor padrão é
+  `dados/data.db` mas pode ser sobrescrito em diferentes ambientes (desenvolvimento,
+  staging, CI) sem precisar alterar o código. Exemplos:
 
-  ```bash
-  INGEST_LOCK_MODE=exit
-  INGEST_LOCK_TIMEOUT_SECONDS=30
-  ```
+```bash
+DB_PATH=/tmp/mytest.db python scripts/ci_validate_checksums.py
+```
+
+Em `.env`:
+
+```bash
+DB_PATH=dados/custom.db
+```
+
 
 ## Quickstart
 

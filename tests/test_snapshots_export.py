@@ -11,6 +11,7 @@ Verifies all behaviors of the snapshot export command:
 
 import json
 from pathlib import Path
+from typing import Any
 
 from typer.testing import CliRunner
 
@@ -20,7 +21,30 @@ from src.etl.snapshot import write_snapshot
 from src.main import app
 
 
-def _setup_snapshot(ticker: str, tmp_path: Path, conn) -> tuple[Path, str]:
+def _prepare_test_db(tmp_path: Path, monkeypatch):
+    """Initialize a temp database, apply migrations, and monkeypatch connections.
+
+    Returns a live ``sqlite3.Connection`` which the caller should close.
+    """
+    db_path = tmp_path / "test.db"
+    db.init_db(db_path=str(db_path))
+    conn = db.connect(db_path=str(db_path))
+    # applying migrations ensures schema mirrors production
+    from src.db_migrator import apply_migrations
+
+    apply_migrations(conn)
+
+    # patch all relevant connection entrypoints so CLI code uses our conn
+    from src.db import connection, snapshots
+
+    monkeypatch.setattr(connection, "_connect", lambda db_path=None: conn)
+    monkeypatch.setattr(snapshots, "_connect", lambda db_path=None: conn)
+    monkeypatch.setattr(db, "connect", lambda **kw: conn)
+
+    return conn
+
+
+def _setup_snapshot(ticker: str, tmp_path: Path, conn: Any) -> tuple[Path, str]:
     """Create a test snapshot and register metadata.
 
     Returns:
@@ -30,26 +54,8 @@ def _setup_snapshot(ticker: str, tmp_path: Path, conn) -> tuple[Path, str]:
 
     import pandas as pd
 
-    # Initialize DB schema
-    cur = conn.cursor()
-    cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS snapshots (
-            id TEXT PRIMARY KEY,
-            ticker TEXT,
-            created_at TEXT,
-            payload TEXT,
-            snapshot_path TEXT,
-            rows INTEGER,
-            checksum TEXT,
-            job_id TEXT,
-            size_bytes INTEGER,
-            archived BOOLEAN DEFAULT 0,
-            archived_at TEXT
-        )
-        """
-    )
-    conn.commit()
+    # Assume caller has already prepared the database and applied migrations.
+    # The table will therefore exist with the real production schema.
 
     df = pd.DataFrame(
         {
@@ -88,19 +94,24 @@ def _setup_snapshot(ticker: str, tmp_path: Path, conn) -> tuple[Path, str]:
     return snapshot_path, checksum
 
 
+def _assert_snapshot_json(data: dict, ticker: str = "PETR4") -> None:
+    """Common assertions for JSON export metadata structure."""
+    required_fields = {"ticker", "checksum", "rows", "data"}
+    assert required_fields.issubset(data.keys()), (
+        "Missing required field(s): "
+        f"{required_fields - set(data.keys())}"
+    )
+    assert data.get("ticker") == ticker
+    assert isinstance(data.get("data"), list)
+
+
 def test_export_csv_to_stdout(tmp_path, monkeypatch):
     """CSV data on stdout, status messages on stderr."""
-    test_db_path = str(tmp_path / "test.db")
-    conn = db.connect(db_path=test_db_path)
-
-    # Patch _connect at all import locations
-    from src.db import connection, snapshots
-    monkeypatch.setattr(connection, "_connect", lambda db_path=None: conn)
-    monkeypatch.setattr(snapshots, "_connect", lambda db_path=None: conn)
-    monkeypatch.setattr(db, "connect", lambda **kw: conn)
+    conn = _prepare_test_db(tmp_path, monkeypatch)
 
     try:
-        snapshot_path, _ = _setup_snapshot("PETR4", tmp_path, conn)
+        # only checksum used later; ignore snapshot_path
+        _, _ = _setup_snapshot("PETR4", tmp_path, conn)
 
         from src import snapshot_cli
 
@@ -128,17 +139,11 @@ def test_export_csv_to_stdout(tmp_path, monkeypatch):
 
 def test_export_json_to_stdout(tmp_path, monkeypatch):
     """JSON export with metadata wrapper and records orientation."""
-    test_db_path = str(tmp_path / "test.db")
-    conn = db.connect(db_path=test_db_path)
-
-    # Patch _connect at all import locations
-    from src.db import connection, snapshots
-    monkeypatch.setattr(connection, "_connect", lambda db_path=None: conn)
-    monkeypatch.setattr(snapshots, "_connect", lambda db_path=None: conn)
-    monkeypatch.setattr(db, "connect", lambda **kw: conn)
+    conn = _prepare_test_db(tmp_path, monkeypatch)
 
     try:
-        snapshot_path, checksum = _setup_snapshot("PETR4", tmp_path, conn)
+        # only checksum is used later; path is irrelevant for this test
+        _, checksum = _setup_snapshot("PETR4", tmp_path, conn)
 
         from src import snapshot_cli
 
@@ -154,13 +159,9 @@ def test_export_json_to_stdout(tmp_path, monkeypatch):
 
         data = json.loads(result.stdout)
 
-        assert "ticker" in data
-        assert data["ticker"] == "PETR4"
-        assert "checksum" in data
-        assert "rows" in data
+        _assert_snapshot_json(data, ticker="PETR4")
+        # additional content-specific checks
         assert data["rows"] == 3
-        assert "data" in data
-        assert isinstance(data["data"], list)
         assert len(data["data"]) == 3
     finally:
         conn.close()
@@ -168,17 +169,11 @@ def test_export_json_to_stdout(tmp_path, monkeypatch):
 
 def test_export_csv_to_file(tmp_path, monkeypatch):
     """--output flag writes CSV file correctly."""
-    test_db_path = str(tmp_path / "test.db")
-    conn = db.connect(db_path=test_db_path)
-
-    # Patch _connect at all import locations
-    from src.db import connection, snapshots
-    monkeypatch.setattr(connection, "_connect", lambda db_path=None: conn)
-    monkeypatch.setattr(snapshots, "_connect", lambda db_path=None: conn)
-    monkeypatch.setattr(db, "connect", lambda **kw: conn)
+    conn = _prepare_test_db(tmp_path, monkeypatch)
 
     try:
-        snapshot_path, _ = _setup_snapshot("PETR4", tmp_path, conn)
+        # path not required for this assertion
+        _, _ = _setup_snapshot("PETR4", tmp_path, conn)
 
         from src import snapshot_cli
 
@@ -215,17 +210,11 @@ def test_export_csv_to_file(tmp_path, monkeypatch):
 
 def test_export_json_to_file(tmp_path, monkeypatch):
     """--output flag writes JSON file correctly."""
-    test_db_path = str(tmp_path / "test.db")
-    conn = db.connect(db_path=test_db_path)
-
-    # Patch _connect at all import locations
-    from src.db import connection, snapshots
-    monkeypatch.setattr(connection, "_connect", lambda db_path=None: conn)
-    monkeypatch.setattr(snapshots, "_connect", lambda db_path=None: conn)
-    monkeypatch.setattr(db, "connect", lambda **kw: conn)
+    conn = _prepare_test_db(tmp_path, monkeypatch)
 
     try:
-        snapshot_path, _ = _setup_snapshot("PETR4", tmp_path, conn)
+        # only checksum is relevant for these assertions
+        _, _ = _setup_snapshot("PETR4", tmp_path, conn)
 
         from src import snapshot_cli
 
@@ -287,17 +276,11 @@ def test_export_no_snapshot_exit_1(tmp_path, monkeypatch):
 
 def test_export_json_has_metadata_fields(tmp_path, monkeypatch):
     """JSON contains ticker, checksum, rows, data."""
-    test_db_path = str(tmp_path / "test.db")
-    conn = db.connect(db_path=test_db_path)
-
-    # Patch _connect at all import locations
-    from src.db import connection, snapshots
-    monkeypatch.setattr(connection, "_connect", lambda db_path=None: conn)
-    monkeypatch.setattr(snapshots, "_connect", lambda db_path=None: conn)
-    monkeypatch.setattr(db, "connect", lambda **kw: conn)
+    conn = _prepare_test_db(tmp_path, monkeypatch)
 
     try:
-        snapshot_path, checksum = _setup_snapshot("PETR4", tmp_path, conn)
+        # path not needed here, keep only checksum for clarity
+        _, checksum = _setup_snapshot("PETR4", tmp_path, conn)
 
         from src import snapshot_cli
 
@@ -312,9 +295,12 @@ def test_export_json_has_metadata_fields(tmp_path, monkeypatch):
         assert result.exit_code == 0
         data = json.loads(result.stdout)
 
-        required_fields = ["ticker", "checksum", "rows", "data"]
-        for field in required_fields:
-            assert field in data, f"Missing required field: {field}"
+        required_fields = {"ticker", "checksum", "rows", "data"}
+        # verify all required keys are present
+        assert required_fields.issubset(data.keys()), (
+            "Missing required field(s): "
+            f"{required_fields - set(data.keys())}"
+        )
 
         assert isinstance(data["ticker"], str)
         assert isinstance(data["rows"], int)

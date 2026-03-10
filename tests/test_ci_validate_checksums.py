@@ -11,34 +11,51 @@ Verifies all behaviors of the checksum validation script:
 Script tested: scripts/ci_validate_checksums.py
 """
 
+import pytest
+
 from src import db
+from src.db_migrator import apply_migrations
 from src.utils.checksums import sha256_file
 
+# The tests no longer create a table by hand; instead we initialize a
+# temporary database and run the real migration scripts so the schema stays
+# in sync with the application.  Helper above has been removed to avoid
+# drift.  See individual tests for migration calls.
 
-def _create_snapshots_table(conn):
-    """Create snapshots table with full schema from 0002 migration."""
-    cur = conn.cursor()
-    cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS snapshots (
-            id TEXT PRIMARY KEY,
-            ticker TEXT,
-            created_at TEXT,
-            payload TEXT,
-            snapshot_path TEXT,
-            rows INTEGER,
-            checksum TEXT,
-            job_id TEXT,
-            size_bytes INTEGER,
-            archived BOOLEAN DEFAULT 0,
-            archived_at TEXT,
-            start_date TEXT,
-            end_date TEXT,
-            rows_count INTEGER
-        )
-        """
-    )
-    conn.commit()
+
+@pytest.fixture
+
+def test_db(tmp_path, monkeypatch):
+    """Create and migrate a temporary metadata database.
+
+    Patches connection helpers so that any call to ``db.connect`` or the
+    lower-level ``_connect`` helpers returns a single connection object.
+    Yields
+    -------
+    sqlite3.Connection, pathlib.Path
+        Open connection to the migrated database and the path to the file.
+    """
+    db_path = tmp_path / "test.db"
+    db.init_db(db_path=str(db_path))
+    conn = db.connect(db_path=str(db_path))
+    apply_migrations(conn)
+    # close the first handle before opening patched connection to avoid
+    # leaving two open handles against the same file
+    conn.close()
+
+    test_conn = db.connect(db_path=str(db_path))
+
+    # patch environment and helpers
+    monkeypatch.setenv("DB_PATH", str(db_path))
+    from src.db import connection, snapshots
+
+    monkeypatch.setattr(connection, "_connect", lambda db_path=None: test_conn)
+    monkeypatch.setattr(snapshots, "_connect", lambda db_path=None: test_conn)
+    monkeypatch.setattr(db, "connect", lambda **kw: test_conn)
+
+    yield test_conn, db_path
+
+    test_conn.close()
 
 
 def _insert_snapshot_metadata(
@@ -64,12 +81,9 @@ def _insert_snapshot_metadata(
     conn.commit()
 
 
-def test_valid_checksums_pass(tmp_path, monkeypatch):
+def test_valid_checksums_pass(test_db, tmp_path):
     """All snapshot files have valid checksums → exit 0."""
-    # 1. Create test DB with snapshots table
-    db_path = tmp_path / "test.db"
-    conn = db.connect(db_path=str(db_path))
-    _create_snapshots_table(conn)
+    conn, db_path = test_db
 
     # 2. Create snapshot files in tmp_path
     snapshot_dir = tmp_path / "snapshots"
@@ -108,15 +122,6 @@ def test_valid_checksums_pass(tmp_path, monkeypatch):
         checksum=checksum2,
     )
 
-    # 5. Mock db.connect() to return our test DB connection
-    test_db_path = str(tmp_path / "test.db")
-    test_conn = db.connect(db_path=test_db_path)
-
-    from src.db import connection, snapshots
-
-    monkeypatch.setattr(connection, "_connect", lambda db_path=None: test_conn)
-    monkeypatch.setattr(snapshots, "_connect", lambda db_path=None: test_conn)
-    monkeypatch.setattr(db, "connect", lambda **kw: test_conn)
 
     # 6. Import and run script's main() function
     from scripts.ci_validate_checksums import main
@@ -127,14 +132,10 @@ def test_valid_checksums_pass(tmp_path, monkeypatch):
     assert exit_code == 0  # All valid → success
 
 
-def test_tampered_file_fails(tmp_path, monkeypatch, capsys):
+def test_tampered_file_fails(test_db, tmp_path, capsys):
     """Modified file after checksum recorded → exit 1."""
-    # Create test DB with snapshots table
-    db_path = tmp_path / "test.db"
-    conn = db.connect(db_path=str(db_path))
-    _create_snapshots_table(conn)
-
-    # Create snapshot file
+    conn, db_path = test_db
+    # Create snapshot file (connection already patched by fixture)
     snapshot_dir = tmp_path / "snapshots"
     snapshot_dir.mkdir()
 
@@ -156,20 +157,8 @@ def test_tampered_file_fails(tmp_path, monkeypatch, capsys):
         checksum=checksum1,
     )
 
-    conn.close()
-
     # CRITICAL: Tamper with file AFTER checksum recorded in DB
     snapshot1.write_text("TAMPERED DATA - CHECKSUM MISMATCH\n")
-
-    # Mock db.connect() to return our test DB connection
-    test_db_path = str(tmp_path / "test.db")
-    test_conn = db.connect(db_path=test_db_path)
-
-    from src.db import connection, snapshots
-
-    monkeypatch.setattr(connection, "_connect", lambda db_path=None: test_conn)
-    monkeypatch.setattr(snapshots, "_connect", lambda db_path=None: test_conn)
-    monkeypatch.setattr(db, "connect", lambda **kw: test_conn)
 
     # Run script
     from scripts.ci_validate_checksums import main
@@ -186,12 +175,9 @@ def test_tampered_file_fails(tmp_path, monkeypatch, capsys):
     assert "Checksum mismatch" in output
 
 
-def test_missing_file_fails(tmp_path, monkeypatch, capsys):
+def test_missing_file_fails(test_db, tmp_path, capsys):
     """File at snapshot_path doesn't exist → exit 1."""
-    # Create test DB with snapshots table
-    db_path = tmp_path / "test.db"
-    conn = db.connect(db_path=str(db_path))
-    _create_snapshots_table(conn)
+    conn, db_path = test_db
 
     # Create snapshot file temporarily
     snapshot_dir = tmp_path / "snapshots"
@@ -215,20 +201,8 @@ def test_missing_file_fails(tmp_path, monkeypatch, capsys):
         checksum=checksum1,
     )
 
-    conn.close()
-
     # CRITICAL: Delete file AFTER metadata inserted
     snapshot1.unlink()
-
-    # Mock db.connect() to return our test DB connection
-    test_db_path = str(tmp_path / "test.db")
-    test_conn = db.connect(db_path=test_db_path)
-
-    from src.db import connection, snapshots
-
-    monkeypatch.setattr(connection, "_connect", lambda db_path=None: test_conn)
-    monkeypatch.setattr(snapshots, "_connect", lambda db_path=None: test_conn)
-    monkeypatch.setattr(db, "connect", lambda **kw: test_conn)
 
     # Run script
     from scripts.ci_validate_checksums import main
@@ -245,25 +219,11 @@ def test_missing_file_fails(tmp_path, monkeypatch, capsys):
     assert "File not found" in output
 
 
-def test_no_snapshots_passes(tmp_path, monkeypatch, capsys):
+def test_no_snapshots_passes(test_db, tmp_path, capsys):
     """Empty DB (no snapshots) → exit 0 (valid case)."""
-    # Create DB with empty snapshots table
-    db_path = tmp_path / "test.db"
-    conn = db.connect(db_path=str(db_path))
-    _create_snapshots_table(conn)
-    # DON'T insert any rows
-    conn.commit()
-    conn.close()
+    conn, db_path = test_db
 
-    # Mock db.connect()
-    test_db_path = str(tmp_path / "test.db")
-    test_conn = db.connect(db_path=test_db_path)
-
-    from src.db import connection, snapshots
-
-    monkeypatch.setattr(connection, "_connect", lambda db_path=None: test_conn)
-    monkeypatch.setattr(snapshots, "_connect", lambda db_path=None: test_conn)
-    monkeypatch.setattr(db, "connect", lambda **kw: test_conn)
+    # no rows inserted, just run script
 
     # Run script
     from scripts.ci_validate_checksums import main
@@ -279,12 +239,9 @@ def test_no_snapshots_passes(tmp_path, monkeypatch, capsys):
     assert "No snapshots to validate" in output
 
 
-def test_output_format_shows_results(tmp_path, monkeypatch, capsys):
+def test_output_format_shows_results(test_db, tmp_path, capsys):
     """Stdout contains PASS/FAIL indicators and summary section."""
-    # Create test DB with snapshots table
-    db_path = tmp_path / "test.db"
-    conn = db.connect(db_path=str(db_path))
-    _create_snapshots_table(conn)
+    conn, db_path = test_db
 
     # Create snapshot files: 1 valid + 1 tampered
     snapshot_dir = tmp_path / "snapshots"
@@ -323,20 +280,8 @@ def test_output_format_shows_results(tmp_path, monkeypatch, capsys):
         checksum=checksum2_original,
     )
 
-    conn.close()
-
     # CRITICAL: Tamper with second file AFTER recording checksum
     snapshot2.write_text("TAMPERED DATA\n")
-
-    # Mock db.connect()
-    test_db_path = str(tmp_path / "test.db")
-    test_conn = db.connect(db_path=test_db_path)
-
-    from src.db import connection, snapshots
-
-    monkeypatch.setattr(connection, "_connect", lambda db_path=None: test_conn)
-    monkeypatch.setattr(snapshots, "_connect", lambda db_path=None: test_conn)
-    monkeypatch.setattr(db, "connect", lambda **kw: test_conn)
 
     # Run script
     from scripts.ci_validate_checksums import main
@@ -359,12 +304,9 @@ def test_output_format_shows_results(tmp_path, monkeypatch, capsys):
     assert exit_code == 1  # Failed validation → exit 1
 
 
-def test_archived_snapshots_ignored(tmp_path, monkeypatch):
+def test_archived_snapshots_ignored(test_db, tmp_path):
     """Archived snapshots (archived=1) are NOT validated."""
-    # Create test DB with snapshots table
-    db_path = tmp_path / "test.db"
-    conn = db.connect(db_path=str(db_path))
-    _create_snapshots_table(conn)
+    conn, db_path = test_db
 
     # Create snapshot file
     snapshot_dir = tmp_path / "snapshots"
@@ -387,20 +329,8 @@ def test_archived_snapshots_ignored(tmp_path, monkeypatch):
         archived=1,  # CRITICAL: archived snapshot should be ignored
     )
 
-    conn.close()
-
     # Tamper with file (but it should be ignored)
     snapshot1.write_text("TAMPERED BUT ARCHIVED\n")
-
-    # Mock db.connect()
-    test_db_path = str(tmp_path / "test.db")
-    test_conn = db.connect(db_path=test_db_path)
-
-    from src.db import connection, snapshots
-
-    monkeypatch.setattr(connection, "_connect", lambda db_path=None: test_conn)
-    monkeypatch.setattr(snapshots, "_connect", lambda db_path=None: test_conn)
-    monkeypatch.setattr(db, "connect", lambda **kw: test_conn)
 
     # Run script
     from scripts.ci_validate_checksums import main
@@ -412,12 +342,9 @@ def test_archived_snapshots_ignored(tmp_path, monkeypatch):
     assert exit_code == 0  # No validation failures
 
 
-def test_snapshots_without_checksum_skipped(tmp_path, monkeypatch, capsys):
+def test_snapshots_without_checksum_skipped(test_db, tmp_path, capsys):
     """Snapshots without checksum metadata are skipped."""
-    # Create test DB with snapshots table
-    db_path = tmp_path / "test.db"
-    conn = db.connect(db_path=str(db_path))
-    _create_snapshots_table(conn)
+    conn, db_path = test_db
 
     # Create snapshot file
     snapshot_dir = tmp_path / "snapshots"
@@ -439,17 +366,6 @@ def test_snapshots_without_checksum_skipped(tmp_path, monkeypatch, capsys):
         ("snap1", "PETR4", str(snapshot1), "2024-01-01T00:00:00Z", 0),
     )
     conn.commit()
-    conn.close()
-
-    # Mock db.connect()
-    test_db_path = str(tmp_path / "test.db")
-    test_conn = db.connect(db_path=test_db_path)
-
-    from src.db import connection, snapshots
-
-    monkeypatch.setattr(connection, "_connect", lambda db_path=None: test_conn)
-    monkeypatch.setattr(snapshots, "_connect", lambda db_path=None: test_conn)
-    monkeypatch.setattr(db, "connect", lambda **kw: test_conn)
 
     # Run script
     from scripts.ci_validate_checksums import main

@@ -16,7 +16,7 @@ Wave FINAL consisted of 4 parallel verification tasks:
 
 ### F4 Rejection Analysis
 
-#### FALSE POSITIVES (8/9 reported issues):
+#### FALSE POSITIVES (7/9 reported issues):
 
 1. **Task 4 "payload enrichment not realized"**
    - **CLAIM**: payload requirement not fully reflected in metadata population

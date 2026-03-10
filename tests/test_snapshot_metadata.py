@@ -11,6 +11,8 @@ Verifies all behaviors of snapshot metadata recording:
 
 from pathlib import Path
 
+import pandas as pd
+import pytest
 from typer.testing import CliRunner
 
 from src import db
@@ -19,9 +21,16 @@ from src.main import app
 from src.utils.checksums import sha256_file
 
 
-def test_metadata_registered_after_snapshot(sample_db, tmp_path, monkeypatch):
-    """After pipeline snapshot, DB has row with all fields populated."""
-    from src.db import prices, snapshots
+@pytest.fixture
+def snapshot_test_db(tmp_path, sample_db, monkeypatch):
+    """Prepare a fresh metadata DB and patch connections.
+
+    Returns
+    -------
+    pathlib.Path
+        Path to the metadata database file.
+    """
+    from src.db import prices
 
     db_path = tmp_path / "test.db"
     db.init_db(db_path=str(db_path))
@@ -31,10 +40,21 @@ def test_metadata_registered_after_snapshot(sample_db, tmp_path, monkeypatch):
 
     monkeypatch.setattr(prices, "_connect", lambda db_path=None: sample_db)
 
-    def mock_snapshots_connect(db_path=None):
-        return db.connect(db_path=str(tmp_path / "test.db"))
+    # ensure snapshots module uses same connect helper
+    from src.db import snapshots
+    # always connect to our prepared metadata DB regardless of passed db_path
+    monkeypatch.setattr(
+        snapshots,
+        "_connect",
+        lambda db_path=None, path=db_path: db.connect(db_path=str(path)),
+    )
 
-    monkeypatch.setattr(snapshots, "_connect", mock_snapshots_connect)
+    return db_path
+
+
+def test_metadata_registered_after_snapshot(snapshot_test_db, tmp_path):
+    """After pipeline snapshot, DB has row with all fields populated."""
+    db_path = snapshot_test_db
 
     runner = CliRunner()
     output_dir = tmp_path / "snapshots"
@@ -66,22 +86,10 @@ def test_metadata_registered_after_snapshot(sample_db, tmp_path, monkeypatch):
     assert row["job_id"] is not None, "job_id field should be populated"
 
 
-def test_checksum_matches_sha256_file(sample_db, tmp_path, monkeypatch):
+def test_checksum_matches_sha256_file(snapshot_test_db, tmp_path, monkeypatch):
     """checksum in DB equals sha256_file() of generated CSV."""
-    from src.db import prices, snapshots
 
-    db_path = tmp_path / "test.db"
-    db.init_db(db_path=str(db_path))
-    conn = db.connect(db_path=str(db_path))
-    apply_migrations(conn)
-    conn.close()
-
-    monkeypatch.setattr(prices, "_connect", lambda db_path=None: sample_db)
-
-    def mock_snapshots_connect(db_path=None):
-        return db.connect(db_path=str(tmp_path / "test.db"))
-
-    monkeypatch.setattr(snapshots, "_connect", mock_snapshots_connect)
+    db_path = snapshot_test_db
 
     runner = CliRunner()
     output_dir = tmp_path / "snapshots"
@@ -114,22 +122,9 @@ def test_checksum_matches_sha256_file(sample_db, tmp_path, monkeypatch):
     ), f"DB checksum {recorded_checksum} != file checksum {expected_checksum}"
 
 
-def test_checksum_sidecar_written(sample_db, tmp_path, monkeypatch):
+def test_checksum_sidecar_written(snapshot_test_db, tmp_path, monkeypatch):
     """.checksum sidecar file exists next to CSV."""
-    from src.db import prices, snapshots
 
-    db_path = tmp_path / "test.db"
-    db.init_db(db_path=str(db_path))
-    conn = db.connect(db_path=str(db_path))
-    apply_migrations(conn)
-    conn.close()
-
-    monkeypatch.setattr(prices, "_connect", lambda db_path=None: sample_db)
-
-    def mock_snapshots_connect(db_path=None):
-        return db.connect(db_path=str(tmp_path / "test.db"))
-
-    monkeypatch.setattr(snapshots, "_connect", mock_snapshots_connect)
 
     runner = CliRunner()
     output_dir = tmp_path / "snapshots"
@@ -149,7 +144,7 @@ def test_checksum_sidecar_written(sample_db, tmp_path, monkeypatch):
     assert result.exit_code == 0
 
     csv_path = output_dir / "PETR4_snapshot.csv"
-    checksum_file = Path(str(csv_path) + ".checksum")
+    checksum_file = Path(f"{str(csv_path)}.checksum")
 
     assert checksum_file.exists(), (
         f"Checksum sidecar file should exist: {checksum_file}"
@@ -159,8 +154,6 @@ def test_checksum_sidecar_written(sample_db, tmp_path, monkeypatch):
 
 def test_metadata_idempotent_on_rerun(sample_db, tmp_path, monkeypatch):
     """Running pipeline snapshot twice → single row in DB (INSERT OR REPLACE)."""
-    import pandas as pd
-
     from src.db import prices, snapshots
 
     # Create test DB and seed with PETR4 data from sample_db
@@ -241,24 +234,10 @@ def test_metadata_idempotent_on_rerun(sample_db, tmp_path, monkeypatch):
     )
 
 
-def test_metadata_rows_count_matches_df(sample_db, tmp_path, monkeypatch):
+def test_metadata_rows_count_matches_df(snapshot_test_db, tmp_path, monkeypatch):
     """rows field in DB matches len(df)."""
-    import pandas as pd
 
-    from src.db import prices, snapshots
-
-    db_path = tmp_path / "test.db"
-    db.init_db(db_path=str(db_path))
-    conn = db.connect(db_path=str(db_path))
-    apply_migrations(conn)
-    conn.close()
-
-    monkeypatch.setattr(prices, "_connect", lambda db_path=None: sample_db)
-
-    def mock_snapshots_connect(db_path=None):
-        return db.connect(db_path=str(tmp_path / "test.db"))
-
-    monkeypatch.setattr(snapshots, "_connect", mock_snapshots_connect)
+    db_path = snapshot_test_db
 
     runner = CliRunner()
     output_dir = tmp_path / "snapshots"
@@ -290,24 +269,10 @@ def test_metadata_rows_count_matches_df(sample_db, tmp_path, monkeypatch):
     )
 
 
-def test_metadata_size_bytes_matches_file(sample_db, tmp_path, monkeypatch):
-    """size_bytes in DB matches os.path.getsize() of CSV."""
-    import os
+def test_metadata_size_bytes_matches_file(snapshot_test_db, tmp_path, monkeypatch):
+    """size_bytes in DB matches file size of CSV."""
 
-    from src.db import prices, snapshots
-
-    db_path = tmp_path / "test.db"
-    db.init_db(db_path=str(db_path))
-    conn = db.connect(db_path=str(db_path))
-    apply_migrations(conn)
-    conn.close()
-
-    monkeypatch.setattr(prices, "_connect", lambda db_path=None: sample_db)
-
-    def mock_snapshots_connect(db_path=None):
-        return db.connect(db_path=str(tmp_path / "test.db"))
-
-    monkeypatch.setattr(snapshots, "_connect", mock_snapshots_connect)
+    db_path = snapshot_test_db
 
     runner = CliRunner()
     output_dir = tmp_path / "snapshots"
@@ -327,7 +292,7 @@ def test_metadata_size_bytes_matches_file(sample_db, tmp_path, monkeypatch):
     assert result.exit_code == 0
 
     csv_path = output_dir / "PETR4_snapshot.csv"
-    actual_size = os.path.getsize(csv_path)
+    actual_size = csv_path.stat().st_size
 
     metadata = db.list_snapshots(ticker="PETR4", db_path=str(db_path))
     assert len(metadata) >= 1
