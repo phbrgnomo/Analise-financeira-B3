@@ -177,6 +177,13 @@ Para os principais comandos da CLI e seus parâmetros, consulte `poetry run main
 poetry run ruff check src tests
 ```
 
+### Fechamento de histórias
+
+Para evitar drift entre implementação e tracking, cada story deve ser fechada usando o
+checklist em [`docs/playbooks/story-close-checklist.md`](docs/playbooks/story-close-checklist.md).
+Copie o conteúdo do arquivo para a descrição do pull request ou inclua um link direto nele.
+
+
 - Executar testes:
 
 ```bash
