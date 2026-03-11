@@ -6,7 +6,6 @@ comandos para ingestão, ETL e exportação de dados.
 Use ``poetry run main --help`` para ver todos os comandos disponíveis.
 """
 
-import json
 import logging
 import os
 from contextlib import suppress
@@ -337,83 +336,8 @@ def compute_returns_cmd(
         )
 
 
-@app.command("ingest-snapshot")
-def ingest_snapshot_cmd(
-    snapshot_path: str = typer.Argument(
-        ..., help="Caminho do arquivo CSV local a ser importado para o banco"
-    ),
-    ticker: str = typer.Option(
-        "",
-        help=(
-            "Ticker B3 associado ao snapshot quando o CSV não traz coluna ticker"
-        ),
-        is_flag=False,
-    ),
-    force_refresh: bool = typer.Option(
-        False, "--force-refresh", help="Ignora cache e processa novamente"
-    ),
-    ttl: float = typer.Option(
-        -1.0,
-        help="TTL do cache em segundos (usa SNAPSHOT_TTL se omitido)",
-        is_flag=False,
-    ),
-    cache_file: str = typer.Option(
-        "", help="Arquivo JSON usado para armazenar o cache", is_flag=False
-    ),
-    ticker_arg: Optional[str] = typer.Argument(None, hidden=True),
-) -> None:
-    """Importa CSV local no SQLite com cache/checksum e ingestão incremental."""
-    from src import ingest_cli
-
-    feedback = CliFeedback("ingest-snapshot")
-
-    effective_ticker = ticker or ticker_arg
-    normalized_ticker = (
-        _normalize_cli_ticker(effective_ticker) if effective_ticker else None
-    )
-    effective_force_refresh = as_bool(force_refresh)
-    # translate CLI defaults back to None semantics for the helper
-    ttl_arg = None if ttl < 0 else ttl
-    cache_arg = cache_file or None
-    feedback.start(
-        f"snapshot={snapshot_path} | ticker={normalized_ticker or '-'} | "
-        "force_refresh="
-        f"{effective_force_refresh} | "
-        f"ttl={ttl_arg if ttl_arg is not None else 'env'}"
-    )
-    step = feedback.start_step(
-        "processamento do snapshot",
-        detail=Path(snapshot_path).name,
-    )
-    try:
-        result = ingest_cli.ingest_snapshot(
-            snapshot_path,
-            normalized_ticker,
-            force_refresh=effective_force_refresh,
-            ttl=ttl_arg,
-            cache_file=cache_arg,
-        )
-    except Exception as e:
-        feedback.finish_step(step, status="error", detail=str(e))
-        raise
-    if result.get("cached"):
-        feedback.finish_step(
-            step,
-            status="skip",
-            detail="cache hit; nenhum processamento necessário",
-        )
-    else:
-        feedback.finish_step(
-            step,
-            detail=(
-                f"processed_rows={result.get('processed_rows', 0)} | "
-                f"skipped_rows={result.get('skipped_rows', 0)}"
-            ),
-        )
-
-    feedback.summary("Ingestão de snapshot concluída")
-    # exibir resultado em JSON formatado para legibilidade humana
-    typer.echo(json.dumps(result, indent=2, ensure_ascii=False))
+# `ingest-snapshot` foi removido: usar `main snapshots ingest`.
+# Atualize scripts e documentação que referenciem o comando antigo.
 
 
 @app.command("export-csv")

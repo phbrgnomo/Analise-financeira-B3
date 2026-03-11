@@ -15,7 +15,7 @@ aceitação:
 * validação de checksum antes de processar
 * logs estruturados sobre decisões de cache e contagem de registros
 * funções facilmente testáveis e CLI (ver `src.main`
-  comando ``ingest-snapshot``)
+    comando ``snapshots ingest``)
 
 A lógica é suficientemente simples para ser aplicada em arquivos locais
 (`dados/`) e pode ser estendida posteriormente para armazenamentos remotos

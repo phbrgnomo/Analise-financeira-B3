@@ -39,7 +39,7 @@ Implementar todas as 6 stories do Epic 2 (2-1 a 2-6) localizadas em `docs/implem
 **Research Findings**:
 - `write_snapshot()` já retorna SHA256 digest e escreve `.checksum` sidecar — Story 2-2 parcialmente implementada.
 - `_prune_old_snapshots()` já faz retenção básica (keep N latest) — Story 2-5 estende isso.
-- `ingest-snapshot` (em `src/ingest_cli.py`) faz CSV→DB (direção oposta de Story 2-1 que é DB→CSV).
+ - `snapshots ingest` (em `src/ingest_cli.py`) faz CSV→DB (direção oposta de Story 2-1 que é DB→CSV).
 - Duas mechanisms de checksum coexistem: `sha256_file()` vs `serialize_df_bytes()`.
 - `_upsert_snapshot_metadata()` gera `job_id` via SHA256 se não fornecido — importante para idempotência.
 

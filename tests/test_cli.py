@@ -28,17 +28,16 @@ def test_cli_help():
     assert "Usage:" in result.output
 
 def test_ingest_snapshot_help():
-    """Verifica que a ajuda do subcomando `ingest-snapshot` inclui novos
+    """Verifica que a ajuda do subcomando `snapshots ingest` inclui novos
     flags como --force-refresh, --ttl e --cache-file e retorna exit code 0.
     """
     runner = CliRunner()
-    result = runner.invoke(app, ["ingest-snapshot", "--help"])
+    result = runner.invoke(app, ["snapshots", "ingest", "--help"])
     assert result.exit_code == 0, (
         f"CLI help falhou (exit_code={result.exit_code}): "
         f"{result.exception}"
     )
     plain = _strip_ansi(result.output)
-    assert "ingest-snapshot" in plain
     # verify that the new flags appear
     assert "--force-refresh" in plain
     assert "--ttl" in plain
@@ -233,7 +232,7 @@ def test_export_csv_not_found(monkeypatch):
 
 
 def test_ingest_snapshot_command(monkeypatch, tmp_path):
-    """Invocar `ingest-snapshot` dispara ingest_snapshot() com argumentos."""
+    """Invocar `snapshots ingest` dispara ingest_snapshot() com argumentos."""
     from src.main import app
 
     called = []
@@ -252,7 +251,8 @@ def test_ingest_snapshot_command(monkeypatch, tmp_path):
     result = runner.invoke(
         app,
         [
-            "ingest-snapshot",
+            "snapshots",
+            "ingest",
             str(snapshot),
             "--ticker",
             "PETR4",
@@ -271,5 +271,4 @@ def test_ingest_snapshot_command(monkeypatch, tmp_path):
     # CLI provides numeric ttl which is converted to float
     assert called[0][3] == 123.0
     assert called[0][4] == "foo.json"
-    assert "ingest-snapshot" in result.output
     assert "Ingestão de snapshot concluída" in result.output

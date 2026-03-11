@@ -25,7 +25,7 @@ exemplo está em `.env.example` — copie para `.env` e ajuste conforme
 necessário.
 
 - **SNAPSHOT_TTL**: tempo em segundos que um cache de snapshot é considerado
-  válido. Padrão `86400` (um dia). Use com o comando `ingest-snapshot`.
+  válido. Padrão `86400` (um dia). Use com o comando `snapshots ingest`.
 - **SNAPSHOT_CACHE_FILE**: caminho para o arquivo JSON onde o cache é
   armazenado. Valor padrão `dados/snapshot_cache.json`.
 - **SNAPSHOTS_KEEP_LATEST**: quantidade de snapshots recentes por ticker a
@@ -148,7 +148,7 @@ As instruções completas e o playbook estão em `docs/playbooks/testing-network
 - No banco (`prices` e `returns`), os tickers são persistidos no padrão B3 (ex.: `PETR4`).
 - A coluna `date` nas tabelas canônicas usa afinidade `DATE`.
 - Cálculos anuais usam 252 dias úteis por convenção do projeto.
-- O pipeline agora suporta ingestão de snapshots via CLI usando `ingest-snapshot`.
+- O pipeline agora suporta ingestão de snapshots via CLI usando `snapshots ingest`.
   Esta rotina aplica cache com TTL e faz ingestão incremental no banco, evitando
   reprocessamento quando o arquivo não mudou. Veja abaixo para detalhes de
   flags.

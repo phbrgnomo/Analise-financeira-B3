@@ -17,7 +17,7 @@
 ## Critical Discoveries
 - `write_snapshot()` already writes `.checksum` sidecar — don't duplicate
 - `_prune_old_snapshots()` already handles basic retention (keep N latest) — extend with time-based policy
-- `ingest-snapshot` does CSV→DB (opposite direction of Story 2-1 which is DB→CSV)
+- `snapshots ingest` does CSV→DB (opposite direction of Story 2-1 which is DB→CSV)
 - TWO checksum mechanisms coexist: `sha256_file()` vs `serialize_df_bytes()` — they produce DIFFERENT hashes
 - `_upsert_snapshot_metadata()` has inline `CREATE TABLE` that must be removed after migration
 

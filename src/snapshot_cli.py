@@ -327,3 +327,86 @@ def export_snapshot(
         f"Snapshot exported ({requested_format}, {len(df)} rows, checksum="
         f"{metadata.get('checksum')}) to {target}"
     )
+
+
+@app.command("ingest")
+def ingest_snapshot(
+    snapshot_path: str = typer.Argument(
+        ..., help="Caminho do arquivo CSV local a ser importado para o banco"
+    ),
+    ticker: str = typer.Option(
+        "",
+        help=(
+            "Ticker B3 associado ao snapshot quando o CSV não traz coluna ticker"
+        ),
+        is_flag=False,
+    ),
+    force_refresh: bool = typer.Option(
+        False, "--force-refresh", help="Ignora cache e processa novamente"
+    ),
+    ttl: float = typer.Option(
+        -1.0,
+        help="TTL do cache em segundos (usa SNAPSHOT_TTL se omitido)",
+        is_flag=False,
+    ),
+    cache_file: str = typer.Option(
+        "", help="Arquivo JSON usado para armazenar o cache", is_flag=False
+    ),
+    ticker_arg: str | None = typer.Argument(None, hidden=True),
+) -> None:
+    """Importa um CSV de snapshot para o banco usando a função core de ingest.
+
+    Este subcomando é a nova localização canônica para ingestão de
+    snapshots: `main snapshots ingest`.
+    """
+    from src import ingest_cli
+
+    feedback = CliFeedback("snapshots ingest")
+
+    effective_ticker = ticker or ticker_arg
+    normalized_ticker = (
+        effective_ticker.strip().upper() if effective_ticker else None
+    )
+    effective_force_refresh = force_refresh
+    ttl_arg = None if ttl < 0 else ttl
+    cache_arg = cache_file or None
+
+    ttl_display = ttl_arg if ttl_arg is not None else "env"
+
+    feedback.start(
+        f"snapshot={snapshot_path} | ticker={normalized_ticker or '-'} | "
+        f"force_refresh={effective_force_refresh} | "
+        f"ttl={ttl_display}"
+    )
+    step = feedback.start_step(
+        "processamento do snapshot",
+        detail=Path(snapshot_path).name,
+    )
+    try:
+        result = ingest_cli.ingest_snapshot(
+            snapshot_path,
+            normalized_ticker,
+            force_refresh=effective_force_refresh,
+            ttl=ttl_arg,
+            cache_file=cache_arg,
+        )
+    except Exception as e:
+        feedback.finish_step(step, status="error", detail=str(e))
+        raise
+    if result.get("cached"):
+        feedback.finish_step(
+            step,
+            status="skip",
+            detail="cache hit; nenhum processamento necessário",
+        )
+    else:
+        feedback.finish_step(
+            step,
+            detail=(
+                f"processed_rows={result.get('processed_rows', 0)} | "
+                f"skipped_rows={result.get('skipped_rows', 0)}"
+            ),
+        )
+
+    feedback.summary("Ingestão de snapshot concluída")
+    typer.echo(json.dumps(result, indent=2, ensure_ascii=False))
