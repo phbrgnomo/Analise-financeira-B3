@@ -145,6 +145,41 @@ def mock_metadata_db(tmp_path, monkeypatch):
         metadata_conn.close()
 
 
+@pytest.fixture(autouse=True)
+def isolate_metadata_db(tmp_path, monkeypatch):
+    """Autouse fixture que garante que cada teste use um DB de metadata isolado.
+
+    Alguns testes podem esquecer de monkeypatchar conexões; esta fixture
+    força `db.connect` e o conector interno `src.db.connection._connect` a
+    retornarem uma conexão para um banco temporário por teste.
+    """
+    metadata_db_path = tmp_path / "metadata_isolated.db"
+    # create and migrate a fresh metadata database file (use real connect)
+    orig_connect = db.connect
+    # initialize DB file and apply migrations
+    conn_tmp = orig_connect(db_path=str(metadata_db_path))
+    try:
+        apply_migrations(conn_tmp)
+    finally:
+        conn_tmp.close()
+
+    def _test_connect(db_path=None, **kw):
+        # Redirect default (None) connections to our isolated metadata DB;
+        # explicit db_path requests are forwarded unchanged so tests that
+        # create their own DB files still work.
+        if db_path is None:
+            return orig_connect(db_path=str(metadata_db_path))
+        return orig_connect(db_path=db_path)
+
+    monkeypatch.setattr(db, "connect", _test_connect)
+
+    try:
+        yield
+    finally:
+        # nothing to close here; connect() returns fresh connections per call
+        pass
+
+
 @pytest.fixture(scope="function")
 def sample_db_multi():
     """Creates an in-memory SQLite DB seeded with tests/fixtures/sample_ticker_multi.csv
