@@ -2,7 +2,18 @@
 
 Este runbook consolida comandos importantes para gestão de snapshots, retenção,
 restauração e validação. Ele serve como guia rápido para operadores e desenvolvedores
-envolver processos críticos de produção.
+envolvendo processos críticos de produção.
+
+## Gerar e validar snapshot localmente
+
+### Aplicar migrações
+
+Use o utilitário `scripts/apply_migrations.py` para garantir que o banco
+esteja no schema correto antes de executar comandos que dependem dele.
+
+```bash
+python scripts/apply_migrations.py
+```
 
 ## Gerar e validar snapshot localmente
 

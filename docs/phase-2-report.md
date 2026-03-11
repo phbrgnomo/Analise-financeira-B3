@@ -15,7 +15,21 @@ Relatório operativo e checklist para o Epic 2 (Snapshots). Inclui comandos repr
 - Aplicar migrations (local, in-memory teste):
 
 ```bash
-poetry run python -c "from src.db_migrator import apply_migrations; import sqlite3; conn=sqlite3.connect(':memory:'); conn.executescript(open('migrations/0000_init_schema.sql').read()); conn.executescript(open('migrations/0001_create_returns.sql').read()); apply_migrations(conn); print('migrations applied')"
+poetry run python - << 'PY'
+from src.db_migrator import apply_migrations
+import sqlite3
+
+conn = sqlite3.connect(':memory:')
+
+with open('migrations/0000_init_schema.sql') as f:
+    conn.executescript(f.read())
+
+with open('migrations/0001_create_returns.sql') as f:
+    conn.executescript(f.read())
+
+apply_migrations(conn)
+print('migrations applied')
+PY
 ```
 
 - Gerar snapshot para `TICKER`:

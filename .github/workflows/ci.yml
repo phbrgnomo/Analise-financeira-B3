@@ -38,15 +38,8 @@ jobs:
           poetry install --no-interaction
       - name: Apply migrations to default DB
         run: |
-          python - <<'PYCODE'
-          from src.db_migrator import apply_migrations
-          import sqlite3, os
-          dbpath=os.getenv("DB_PATH","dados/data.db")
-          conn=sqlite3.connect(dbpath)
-          apply_migrations(conn)
-          conn.close()
-          print(f"migrations applied to {dbpath}")
-          PYCODE
+          # centralized migration helper script
+          python scripts/apply_migrations.py
 
       - run: |
           mkdir -p reports
@@ -83,15 +76,8 @@ jobs:
           poetry install --no-interaction
       - name: Apply migrations to default DB
         run: |
-          python - <<'PYCODE'
-          from src.db_migrator import apply_migrations
-          import sqlite3, os
-          dbpath=os.getenv("DB_PATH","dados/data.db")
-          conn=sqlite3.connect(dbpath)
-          apply_migrations(conn)
-          conn.close()
-          print(f"migrations applied to {dbpath}")
-          PYCODE
+          # centralized migration helper script
+          python scripts/apply_migrations.py
 
       - run: |
           mkdir -p "$RUNNER_TEMP/snapshots_test"
