@@ -36,6 +36,18 @@ jobs:
           python -m pip install poetry
           poetry config virtualenvs.in-project true
           poetry install --no-interaction
+      - name: Apply migrations to default DB
+        run: |
+          python - <<'PYCODE'
+          from src.db_migrator import apply_migrations
+          import sqlite3, os
+          dbpath=os.getenv("DB_PATH","dados/data.db")
+          conn=sqlite3.connect(dbpath)
+          apply_migrations(conn)
+          conn.close()
+          print(f"migrations applied to {dbpath}")
+          PYCODE
+
       - run: |
           mkdir -p reports
           NETWORK_MODE=playback poetry run pytest -q --maxfail=1 --junitxml=reports/junit.xml
@@ -69,6 +81,18 @@ jobs:
           python -m pip install poetry
           poetry config virtualenvs.in-project true
           poetry install --no-interaction
+      - name: Apply migrations to default DB
+        run: |
+          python - <<'PYCODE'
+          from src.db_migrator import apply_migrations
+          import sqlite3, os
+          dbpath=os.getenv("DB_PATH","dados/data.db")
+          conn=sqlite3.connect(dbpath)
+          apply_migrations(conn)
+          conn.close()
+          print(f"migrations applied to {dbpath}")
+          PYCODE
+
       - run: |
           mkdir -p "$RUNNER_TEMP/snapshots_test"
           export SNAPSHOT_DIR="$RUNNER_TEMP/snapshots_test"
