@@ -39,7 +39,7 @@ jobs:
       - name: Apply migrations to default DB
         run: |
           # centralized migration helper script
-          python scripts/apply_migrations.py
+          poetry run scripts/apply_migrations.py
 
       - run: |
           mkdir -p reports
