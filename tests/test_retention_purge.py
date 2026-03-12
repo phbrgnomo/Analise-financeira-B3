@@ -372,7 +372,6 @@ def test_purge_dryrun_no_side_effects(tmp_path, monkeypatch):
 
     Verify: DB and FS unchanged.
     """
-    from src.db import snapshots
 
     # Create test DB with migrations
     metadata_db_path = tmp_path / "metadata.db"
@@ -408,11 +407,15 @@ def test_purge_dryrun_no_side_effects(tmp_path, monkeypatch):
     metadata_conn.commit()
     metadata_conn.close()
 
-    # Patch snapshots._connect to use test DB
-    def mock_snapshots_connect(db_path=None):
-        return db.connect(db_path=str(metadata_db_path))
-
-    monkeypatch.setattr(snapshots, "_connect", mock_snapshots_connect)
+    # Redirect database connections used by purge command to our test DB.
+    # Prior implementation patched ``snapshots._connect`` but that helper no
+    # longer exists; instead we override the public ``db.connect``.
+    original_connect = db.connect
+    monkeypatch.setattr(
+        db,
+        "connect",
+        lambda db_path=None, **kw: original_connect(db_path=str(metadata_db_path)),
+    )
 
     # Set retention to 90 days (should find the old snapshot)
     monkeypatch.setenv("SNAPSHOT_RETENTION_DAYS", "90")

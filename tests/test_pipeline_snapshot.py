@@ -30,6 +30,7 @@ def test_snapshot_generates_csv_file(sample_db, tmp_path, monkeypatch):
     from src import db
 
     monkeypatch.setattr(db, "connect", lambda **kw: sample_db)
+    monkeypatch.setattr(db, "record_snapshot_metadata", lambda *a, **k: None)
 
     runner = CliRunner()
     output_dir = tmp_path / "snapshots"
@@ -60,6 +61,7 @@ def test_snapshot_csv_has_correct_columns(sample_db, tmp_path, monkeypatch):
     from src import db
 
     monkeypatch.setattr(db, "connect", lambda **kw: sample_db)
+    monkeypatch.setattr(db, "record_snapshot_metadata", lambda *a, **k: None)
 
     runner = CliRunner()
     output_dir = tmp_path / "snapshots"
@@ -98,6 +100,7 @@ def test_snapshot_with_date_range(sample_db, tmp_path, monkeypatch):
     # those calls, so we patch both helpers here.
     monkeypatch.setattr(prices, "_connect", lambda db_path=None: sample_db)
     monkeypatch.setattr(db, "connect", lambda **kw: sample_db)
+    monkeypatch.setattr(db, "record_snapshot_metadata", lambda *a, **k: None)
 
     runner = CliRunner()
     output_dir = tmp_path / "snapshots"
@@ -198,6 +201,7 @@ def test_snapshot_creates_output_dir(sample_db, tmp_path, monkeypatch):
     from src import db
 
     monkeypatch.setattr(db, "connect", lambda **kw: sample_db)
+    monkeypatch.setattr(db, "record_snapshot_metadata", lambda *a, **k: None)
 
     runner = CliRunner()
     output_dir = tmp_path / "does_not_exist" / "nested" / "snapshots"
@@ -231,6 +235,7 @@ def test_snapshot_default_output_dir(sample_db, tmp_path, monkeypatch):
     from src import db, pipeline
 
     monkeypatch.setattr(db, "connect", lambda **kw: sample_db)
+    monkeypatch.setattr(db, "record_snapshot_metadata", lambda *a, **k: None)
     test_snapshots_dir = tmp_path / "snapshots"
     monkeypatch.setattr(pipeline, "SNAPSHOTS_DIR", test_snapshots_dir)
 

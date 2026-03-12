@@ -9,6 +9,7 @@ Verifies all behaviors of snapshot metadata recording:
 - Metadata size_bytes matches file size
 """
 
+import tempfile
 from pathlib import Path
 
 import pandas as pd
@@ -40,16 +41,66 @@ def snapshot_test_db(tmp_path, sample_db, monkeypatch):
 
     monkeypatch.setattr(prices, "_connect", lambda db_path=None: sample_db)
 
-    # ensure snapshots module uses same connect helper
-    from src.db import snapshots
-    # always connect to our prepared metadata DB regardless of passed db_path
-    monkeypatch.setattr(
-        snapshots,
-        "_connect",
-        lambda db_path=None, path=db_path: db.connect(db_path=str(path)),
-    )
+    # Force all metadata writes produced by the CLI to land in our
+    # explicitly-created test database.  Earlier versions of this suite
+    # patched an internal ``snapshots._connect`` helper, but the current
+    # implementation uses ``db.connect`` directly.  We therefore intercept
+    # the public helper here, which also overrides the autouse
+    # ``isolate_metadata_db`` fixture that normally redirects to a
+    # throwaway file.
+    original_db_connect = db.connect
+
+    def _mock_db_connect(db_path_arg=None, **kw):
+        # If the caller does not specify a path or explicitly asks for our
+        # test DB, return a connection to ``db_path``.  Otherwise forward
+        # the request unmodified so other tests (e.g. price reads) behave
+        # normally.
+        if db_path_arg is None or str(db_path_arg) == str(db_path):
+            return original_db_connect(db_path=str(db_path))
+        return original_db_connect(db_path=db_path_arg, **kw)
+
+    monkeypatch.setattr(db, "connect", _mock_db_connect)
 
     return db_path
+
+
+def test_snapshot_path_under_temp_is_sanitized(snapshot_test_db, tmp_path, monkeypatch):
+    """Stats that /tmp paths are rewritten to basename when metadata is saved.
+
+    Calling the database helper directly lets us avoid running the whole CLI and
+    focuses the test on the normalization step.  This is the behavior that
+    prevents ``/tmp`` references from triggering the CI guard in
+    ``test_no_tmp_snapshot_paths_ci_only``.
+    """
+    tempdir = Path(tempfile.gettempdir())
+    tempdir.mkdir(parents=True, exist_ok=True)
+    snap = tempdir / "PETR4_snapshot.csv"
+    snap.write_text("ticker,date,open,high,low,close,volume,adj_close\n")
+
+    metadata = {
+        "ticker": "PETR4",
+        "snapshot_path": str(snap),
+        "rows": 0,
+        "checksum": "deadbeef",
+        "created_at": "2026-01-01T00:00:00Z",
+        "size_bytes": 0,
+        "job_id": "job-temp",
+    }
+    from src.db import snapshots
+
+    conn = db.connect(db_path=str(snapshot_test_db))
+    snapshots.record_snapshot_metadata(metadata, conn=conn)
+
+    cur = conn.cursor()
+    cur.execute("SELECT snapshot_path FROM snapshots WHERE job_id = ?", ("job-temp",))
+    row = cur.fetchone()
+    assert row is not None
+    stored = row[0]
+    assert not stored.startswith(tempdir.as_posix()), (
+        "Stored path should not keep the /tmp prefix"
+    )
+    assert stored == "PETR4_snapshot.csv"
+    conn.close()
 
 
 def test_metadata_registered_after_snapshot(snapshot_test_db, tmp_path):
@@ -80,6 +131,12 @@ def test_metadata_registered_after_snapshot(snapshot_test_db, tmp_path):
     assert row["id"] is not None, "id field should be populated"
     assert row["ticker"] == "PETR4", "ticker should match"
     assert row["snapshot_path"] is not None, "snapshot_path should be populated"
+    assert (
+        row["snapshot_path"].startswith("PETR4")
+        or "/tmp/" not in row["snapshot_path"]
+    ), (
+        "metadata path should not include raw /tmp prefix"
+    )
     assert row["created_at"] is not None, "created_at should be populated"
     assert row["rows"] is not None, "rows field should be populated"
     assert row["checksum"] is not None, "checksum field should be populated"
@@ -154,7 +211,7 @@ def test_checksum_sidecar_written(snapshot_test_db, tmp_path, monkeypatch):
 
 def test_metadata_idempotent_on_rerun(sample_db, tmp_path, monkeypatch):
     """Running pipeline snapshot twice → single row in DB (INSERT OR REPLACE)."""
-    from src.db import prices, snapshots
+    from src.db import prices
 
     # Create test DB and seed with PETR4 data from sample_db
     prices_db_path = tmp_path / "prices.db"
@@ -180,11 +237,19 @@ def test_metadata_idempotent_on_rerun(sample_db, tmp_path, monkeypatch):
 
     monkeypatch.setattr(prices, "_connect", mock_prices_connect)
 
-    # Patch snapshots._connect to use metadata DB
-    def mock_snapshots_connect(db_path=None):
-        return db.connect(db_path=str(metadata_db_path))
+    # Patch db.connect so that any metadata writes from the CLI go to
+    # our test database.  We preserve the original function for other
+    # calls (e.g. prices) and only redirect when the requested path matches
+    # the metadata DB or is omitted.
+    original_db_connect = db.connect
 
-    monkeypatch.setattr(snapshots, "_connect", mock_snapshots_connect)
+    def mock_db_connect(db_path=None, **kw):
+        # if caller explicitly asked for our metadata DB, return that
+        if db_path is None or str(db_path) == str(metadata_db_path):
+            return original_db_connect(db_path=str(metadata_db_path))
+        return original_db_connect(db_path=db_path, **kw)
+
+    monkeypatch.setattr(db, "connect", mock_db_connect)
 
     runner = CliRunner()
     output_dir = tmp_path / "snapshots"

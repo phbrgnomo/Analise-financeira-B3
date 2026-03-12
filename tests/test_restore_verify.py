@@ -476,6 +476,9 @@ def test_restore_verify_help():
     result = runner.invoke(app, ["pipeline", "restore-verify", "--help"])
 
     assert result.exit_code == 0
-    assert "restore-verify" in result.stdout
-    assert "--snapshot-path" in result.stdout
-    assert "--temp-db" in result.stdout
+    # remove ANSI color codes which can interfere with substring checks
+    clean = re.sub(r"\x1b\[[0-9;]*m", "", result.stdout)
+    assert "restore-verify" in clean
+    # some environments (CI) may render dashes differently; check keyword only
+    assert "snapshot-path" in clean
+    assert "temp-db" in clean

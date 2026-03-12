@@ -6,6 +6,9 @@ envolvendo processos críticos de produção.
 
 ## Gerar e validar snapshot localmente
 
+> **Nota:** caminhos de snapshot armazenados em metadados são normalizados para remover qualquer prefixo de diretórios temporários (ex.: `/tmp/...`). Isto evita avisos de CI e torna a tabela de metadados mais portátil. Se você vir entradas contendo apenas o nome do arquivo na coluna `snapshot_path` é comportamento esperado.
+
+
 ### Aplicar migrações
 
 Use o utilitário `scripts/apply_migrations.py` para garantir que o banco

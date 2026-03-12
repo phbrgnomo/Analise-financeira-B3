@@ -35,10 +35,9 @@ def _prepare_test_db(tmp_path: Path, monkeypatch):
     apply_migrations(conn)
 
     # patch all relevant connection entrypoints so CLI code uses our conn
-    from src.db import connection, snapshots
+    from src.db import connection
 
     monkeypatch.setattr(connection, "_connect", lambda db_path=None: conn)
-    monkeypatch.setattr(snapshots, "_connect", lambda db_path=None: conn)
     monkeypatch.setattr(db, "connect", lambda **kw: conn)
 
     return conn
@@ -248,12 +247,13 @@ def test_export_json_to_file(tmp_path, monkeypatch):
 
 def test_export_no_snapshot_exit_1(tmp_path, monkeypatch):
     """Unknown ticker produces exit code 1 with error message."""
-    conn = db.connect(db_path=str(tmp_path / "test.db"))
+    # initialize a proper schema before running the CLI helper
+    conn = _prepare_test_db(tmp_path, monkeypatch)
     try:
         from src import snapshot_cli
 
         monkeypatch.setattr(snapshot_cli, "SNAPSHOTS_DIR", tmp_path / "snapshots")
-        monkeypatch.setattr(db, "connect", lambda **kw: conn)
+        # ``_prepare_test_db`` already patched db.connect to return our conn
 
         runner = CliRunner()
         result = runner.invoke(
