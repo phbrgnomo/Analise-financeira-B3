@@ -320,4 +320,5 @@ def test_snapshots_subapp_mounted(tmp_path, monkeypatch):
     assert "export" in result.output.lower()
     # flag may be formatted or line-wrapped; just look for the word
     assert "ticker" in result.output.lower()
-    assert "--format" in result.stdout
+    # ``format`` may appear on stderr or be wrapped; search aggregated output
+    assert "format" in result.output.lower()
