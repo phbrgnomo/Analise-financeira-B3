@@ -318,5 +318,6 @@ def test_snapshots_subapp_mounted(tmp_path, monkeypatch):
     # some help text is printed to stderr depending on Typer version; use
     # `result.output` which concatenates both streams.
     assert "export" in result.output.lower()
-    assert "--ticker" in result.output
+    # flag may be formatted or line-wrapped; just look for the word
+    assert "ticker" in result.output.lower()
     assert "--format" in result.stdout
