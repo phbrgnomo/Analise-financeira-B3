@@ -314,7 +314,9 @@ def test_snapshots_subapp_mounted(tmp_path, monkeypatch):
     runner = CliRunner()
     result = runner.invoke(app, ["snapshots", "export", "--help"])
 
-    assert result.exit_code == 0, f"Help command failed: {result.stdout}"
-    assert "export" in result.stdout.lower()
-    assert "--ticker" in result.stdout
+    assert result.exit_code == 0, f"Help command failed: {result.output}"
+    # some help text is printed to stderr depending on Typer version; use
+    # `result.output` which concatenates both streams.
+    assert "export" in result.output.lower()
+    assert "--ticker" in result.output
     assert "--format" in result.stdout

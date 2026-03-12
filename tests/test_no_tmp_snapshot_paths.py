@@ -1,3 +1,4 @@
+import contextlib
 import os
 import sqlite3
 
@@ -22,6 +23,12 @@ def test_no_tmp_snapshot_paths_ci_only():
 
     conn = _connect_default_db()
     try:
+        # Ensure schema exists, migrating if necessary so the query below
+        # does not error on a fresh CI database.
+        from src.db_migrator import apply_migrations
+
+        with contextlib.suppress(Exception):
+            apply_migrations(conn)
         cur = conn.cursor()
         # On local developer machines we may have leftover rows in the
         # persistent `dados/data.db` from previous runs.  These do not

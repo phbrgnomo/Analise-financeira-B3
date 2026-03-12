@@ -137,8 +137,9 @@ def test_compute_returns_single_ticker(monkeypatch):
         return {"rows": 3, "persisted": True, "sample_df": None}
 
     monkeypatch.setattr("src.main._compute_returns_for_ticker", fake_compute)
-    # ensure no DB dependency when listing all tickers
+    # ensure no DB calls during command (neither list nor resolve)
     monkeypatch.setattr("src.db.list_price_tickers", lambda: ["PETR4"])
+    monkeypatch.setattr("src.db.resolve_existing_ticker", lambda t: t)
 
     runner = CliRunner()
     result = runner.invoke(app, ["compute-returns", "--ticker", "PETR4"])

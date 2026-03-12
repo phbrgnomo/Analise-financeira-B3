@@ -94,11 +94,12 @@ def test_snapshot_csv_has_correct_columns(sample_db, tmp_path, monkeypatch):
 def test_snapshot_with_date_range(sample_db, tmp_path, monkeypatch):
     """--start and --end filter data correctly."""
     from src import db
+    from src.db import connection
+    # price reads go through ``connection.connect`` and the name imported
+    # by ``prices``; patch both so snapshot commands see our sample_db.
+    monkeypatch.setattr(connection, "connect", lambda db_path=None: sample_db)
     from src.db import prices
-    # the date-range command path performs low-level price reads via
-    # ``prices._connect``; patching only ``db.connect`` does not intercept
-    # those calls, so we patch both helpers here.
-    monkeypatch.setattr(prices, "_connect", lambda db_path=None: sample_db)
+    monkeypatch.setattr(prices, "connect", lambda db_path=None: sample_db)
     monkeypatch.setattr(db, "connect", lambda **kw: sample_db)
     monkeypatch.setattr(db, "record_snapshot_metadata", lambda *a, **k: None)
 

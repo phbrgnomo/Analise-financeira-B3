@@ -31,7 +31,11 @@ def snapshot_test_db(tmp_path, sample_db, monkeypatch):
     pathlib.Path
         Path to the metadata database file.
     """
-    from src.db import prices
+    # ``sample_db`` contains price rows used by snapshot tests.  After
+    # refactoring price helpers to use ``src.db.connection.connect`` this
+    # fixture must intercept that public connector so snapshot generation
+    # reads from the in-memory sample database instead of the real file.
+    from src.db import connection
 
     db_path = tmp_path / "test.db"
     db.init_db(db_path=str(db_path))
@@ -39,15 +43,16 @@ def snapshot_test_db(tmp_path, sample_db, monkeypatch):
     apply_migrations(conn)
     conn.close()
 
-    monkeypatch.setattr(prices, "_connect", lambda db_path=None: sample_db)
+    # patch connection.connect to route price reads to sample_db
+    monkeypatch.setattr(connection, "connect", lambda db_path=None: sample_db)
+    # ``prices.read_prices`` imported the connector at import-time; patch
+    # that name as well so CLI commands pick up our sample DB.
+    from src.db import prices
+    monkeypatch.setattr(prices, "connect", lambda db_path=None: sample_db)
 
     # Force all metadata writes produced by the CLI to land in our
-    # explicitly-created test database.  Earlier versions of this suite
-    # patched an internal ``snapshots._connect`` helper, but the current
-    # implementation uses ``db.connect`` directly.  We therefore intercept
-    # the public helper here, which also overrides the autouse
-    # ``isolate_metadata_db`` fixture that normally redirects to a
-    # throwaway file.
+    # explicitly-created test database.  We patch ``db.connect`` separately so
+    # metadata operations are isolated from price reads.
     original_db_connect = db.connect
 
     def _mock_db_connect(db_path_arg=None, **kw):
@@ -231,11 +236,15 @@ def test_metadata_idempotent_on_rerun(sample_db, tmp_path, monkeypatch):
     apply_migrations(metadata_conn)
     metadata_conn.close()
 
-    # Patch prices._connect to use seeded prices DB
+    # Route price-read connections to our seeded prices DB by patching
+    # both the public connector and the reference imported in prices.
+    from src.db import connection
+
     def mock_prices_connect(db_path=None):
         return db.connect(db_path=str(prices_db_path))
 
-    monkeypatch.setattr(prices, "_connect", mock_prices_connect)
+    monkeypatch.setattr(connection, "connect", mock_prices_connect)
+    monkeypatch.setattr(prices, "connect", mock_prices_connect)
 
     # Patch db.connect so that any metadata writes from the CLI go to
     # our test database.  We preserve the original function for other

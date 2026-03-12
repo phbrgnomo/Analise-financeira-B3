@@ -10,7 +10,7 @@ from src.db._helpers import (
     _quote_identifier,
     _row_tuple_from_series,
 )
-from src.db.connection import _connect
+from src.db.connection import connect
 from src.db.schema import _ensure_schema, _get_upsert_sql, _load_canonical_schema
 from src.tickers import normalize_b3_ticker, ticker_variants
 
@@ -34,7 +34,7 @@ def write_prices(  # noqa: C901
         ticker = ticker.strip().upper().removesuffix(".SA")
     close_conn = False
     if conn is None:
-        conn = _connect(db_path)
+        conn = connect(db_path)
         close_conn = True
 
     try:
@@ -120,7 +120,7 @@ def read_prices(
     """
     close_conn = False
     if conn is None:
-        conn = _connect(db_path)
+        conn = connect(db_path)
         close_conn = True
 
     try:
@@ -191,7 +191,7 @@ def list_price_tickers(
     """Lista tickers existentes na tabela ``prices`` em ordem alfabética."""
     close_conn = False
     if conn is None:
-        conn = _connect(db_path)
+        conn = connect(db_path)
         close_conn = True
 
     try:
@@ -221,7 +221,7 @@ def resolve_existing_ticker(
 
     close_conn = False
     if conn is None:
-        conn = _connect(db_path)
+        conn = connect(db_path)
         close_conn = True
 
     try:
