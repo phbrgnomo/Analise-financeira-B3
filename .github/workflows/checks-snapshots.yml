@@ -26,6 +26,9 @@ jobs:
           poetry config virtualenvs.in-project true
           poetry install --no-interaction
 
+      - name: Ensure dados directory exists
+        run: mkdir -p dados
+
       - name: Generate deterministic snapshots
         run: |
           mkdir -p "$GITHUB_WORKSPACE/tmp_snapshots/snapshots_test"
