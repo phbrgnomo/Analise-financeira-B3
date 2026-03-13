@@ -41,8 +41,9 @@ jobs:
 
       - name: Apply migrations to default DB
         run: |
-          # centralized migration helper script
-          poetry run scripts/apply_migrations.py
+          # centralized migration helper script – run under poetry so `src` is
+          # on PYTHONPATH and dependencies are available.
+          poetry run python scripts/apply_migrations.py
 
       - run: |
           mkdir -p reports

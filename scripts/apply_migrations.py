@@ -18,6 +18,12 @@ from src.db_migrator import apply_migrations
 
 def main() -> None:
     dbpath = os.getenv("DB_PATH", "dados/data.db")
+    # ensure parent dir exists to avoid sqlite OperationalError on clean
+    # checkouts (the same logic used by src.db.connection._connect).
+    db_dir = os.path.dirname(dbpath)
+    if db_dir:
+        os.makedirs(db_dir, exist_ok=True)
+
     conn = sqlite3.connect(dbpath)
     apply_migrations(conn)
     conn.close()

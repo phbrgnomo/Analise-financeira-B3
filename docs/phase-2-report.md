@@ -4,7 +4,7 @@ created: 2026-03-11
 ---
 
 # Resumo
-Relatório operativo e checklist para o Epic 2 (Snapshots). Inclui comandos reproducíveis, critérios de aceitação e playbooks de restauração e retenção.
+Relatório operativo e checklist para o Epic 2 (Snapshots). Inclui comandos reproduzíveis, critérios de aceitação e playbooks de restauração e retenção.
 
 **Objetivo:** consolidar as ações restantes, passos operacionais e comandos para validar/operar `pipeline snapshot`, `snapshots export`, `snapshots purge` e scripts CI.
 
