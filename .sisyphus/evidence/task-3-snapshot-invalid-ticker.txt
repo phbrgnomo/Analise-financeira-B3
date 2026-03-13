@@ -1,4 +1,0 @@
-▶ pipeline snapshot: iniciando geração de snapshot
-✗ Nenhum dado encontrado para ZZZZ99
-
-EXIT_CODE=1

@@ -1,4 +1,0 @@
-▶ pipeline snapshot: iniciando geração de snapshot
-{"time": "2026-03-07T01:57:42.717778Z", "level": "WARNING", "logger": "src.etl.snapshot", "message": "_prune_old_snapshots: nome 'PETR4_snapshot.csv' não combina com padrão, pulando pruning", "taskName": null}
-✓ Snapshot gerado: /home/phbr/Projects/01-owned/Analise-financeira-B3/snapshots/PETR4_snapshot.csv (252 linhas, 42667 bytes)
--rw-rw-r-- 1 phbr phbr 42K Mar  6 22:57 snapshots/PETR4_snapshot.csv

@@ -1,8 +1,0 @@
-
- Usage: python -m src.main pipeline restore-verify [OPTIONS]
-
-╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ *  --snapshot-path        PATH  Path to snapshot CSV file [required]         │
-│    --temp-db              PATH  Temp DB path (default :memory:)              │
-│    --help                       Show this message and exit.                  │
-╰──────────────────────────────────────────────────────────────────────────────╯
