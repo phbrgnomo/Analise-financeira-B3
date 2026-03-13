@@ -83,7 +83,7 @@ jobs:
       - name: Apply migrations to default DB
         run: |
           # centralized migration helper script
-          python scripts/apply_migrations.py
+          poetry run python scripts/apply_migrations.py
 
       - run: |
           mkdir -p "$RUNNER_TEMP/snapshots_test"
