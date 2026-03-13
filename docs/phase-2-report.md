@@ -33,7 +33,7 @@ PY
 - Gerar snapshot para `TICKER`:
 
 ```bash
-poetry run main snapshot --ticker PETR4 --output-dir snapshots/
+poetry run main pipeline snapshot --ticker PETR4 --output-dir snapshots/
 ```
 
 - Exportar último snapshot (CSV ou JSON):

@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import os
 import time
-from datetime import datetime, timezone
 
 import pandas as pd
 
@@ -60,7 +59,7 @@ class DummyAdapter(Adapter):
                 if secs:
                     time.sleep(secs)
         dates = pd.date_range(
-            end=datetime.now(timezone.utc).date(), periods=3, freq="D"
+            end=pd.Timestamp.now(tz="UTC"), periods=3, freq="D", tz="UTC"
         )
         # choose values that satisfy the canonical schema requirement
         # (``high`` must be strictly greater than ``low`` unless one of them

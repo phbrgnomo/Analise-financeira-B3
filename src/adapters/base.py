@@ -360,7 +360,7 @@ class Adapter(ABC):
         required_columns: Optional[List[str]] = None,
         idempotent: bool = True,
         **kwargs,
-    ) -> pd.DataFrame:  # noqa: C901
+    ) -> pd.DataFrame:
         """
         Loop de retry/backoff que chama `_fetch_once` e aplica validações genéricas.
         Mapeia exceções para `NetworkError` / `FetchError`.

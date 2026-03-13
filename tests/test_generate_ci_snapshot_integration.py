@@ -4,13 +4,18 @@ from src import db
 
 
 def test_generate_ci_snapshot_writes_metadata(tmp_path, monkeypatch):
+    """Generate CI snapshot and verify metadata is written to the metadata DB.
+
+    The script should create a snapshot CSV and record a corresponding row in
+    the configured metadata database (via SNAPSHOT_DB).
+    """
+
     # prepare isolated DB
     db_path = tmp_path / "test.db"
     db.init_db(db_path=str(db_path))
     # apply migrations to ensure snapshots table exists
     from src.db_migrator import apply_migrations
 
-    db.init_db(db_path=str(db_path))
     apply_migrations(db.connect(db_path=str(db_path)))
 
     # ensure the script uses our temp DB by overriding the default path

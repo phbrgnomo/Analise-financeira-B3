@@ -11,10 +11,13 @@ Verifies all behaviors of the checksum validation script:
 Script tested: scripts/ci_validate_checksums.py
 """
 
+# ruff: noqa: I001
+
 import pytest
 
 from src import db
 from src.db_migrator import apply_migrations
+from src.db.snapshots import _normalize_snapshot_path
 from src.utils.checksums import sha256_file
 
 # The tests no longer create a table by hand; instead we initialize a
@@ -68,6 +71,12 @@ def _insert_snapshot_metadata(
     archived: int = 0,
 ) -> None:
     """Insert snapshot metadata row into snapshots table."""
+    from unittest.mock import patch
+
+    # Ensure normalization does not strip the snapshot path in test environments
+    # where pytest tmp_path is under the system temporary directory.
+    with patch("tempfile.gettempdir", return_value="/nonexistent-tempdir"):
+        normalized_path = _normalize_snapshot_path(snapshot_path)
     cur = conn.cursor()
     cur.execute(
         """
@@ -76,7 +85,7 @@ def _insert_snapshot_metadata(
         )
         VALUES (?, ?, ?, ?, ?, ?)
         """,
-        (snap_id, ticker, snapshot_path, checksum, created_at, archived),
+        (snap_id, ticker, normalized_path, checksum, created_at, archived),
     )
     conn.commit()
 

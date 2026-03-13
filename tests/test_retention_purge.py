@@ -241,9 +241,9 @@ def test_archive_snapshots_checksum_mismatch(tmp_path):
     assert len(results) == 1
     assert results[0]["checksum_ok"] is False
 
-    # Verify archived=1 still set (current behavior)
+    # Verify archived flag is NOT set when checksum mismatch (new behavior)
     row = conn.execute("SELECT archived FROM snapshots WHERE id = ?", ("1",)).fetchone()
-    assert row[0] == 1
+    assert row[0] == 0
 
     conn.close()
 

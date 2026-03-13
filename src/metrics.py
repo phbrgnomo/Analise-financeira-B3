@@ -100,6 +100,20 @@ def get_histogram(name: str, documentation: str = ""):
 
 
 def increment_counter(name: str, amount: int = 1) -> None:
+    """Increment a named counter metric.
+
+    Parameters
+    ----------
+    name : str
+        Metric name.
+    amount : int
+        Amount to increment the counter by.
+
+    Notes
+    -----
+    If Prometheus is not installed, this is a no-op. Exceptions during
+    metric updates are logged at debug level.
+    """
     try:
         get_counter(name).inc(amount)
     except Exception:
@@ -107,6 +121,20 @@ def increment_counter(name: str, amount: int = 1) -> None:
 
 
 def observe_histogram(name: str, value: float) -> None:
+    """Observe a value for a named histogram metric.
+
+    Parameters
+    ----------
+    name : str
+        Metric name.
+    value : float
+        Value to observe.
+
+    Notes
+    -----
+    If Prometheus is not installed, this is a no-op. Exceptions during
+    metric updates are logged at debug level.
+    """
     try:
         get_histogram(name).observe(value)
     except Exception:
@@ -114,6 +142,17 @@ def observe_histogram(name: str, value: float) -> None:
 
 
 def start_metrics_server(port: int = 8000) -> None:
+    """Start an HTTP server exposing Prometheus metrics.
+
+    Parameters
+    ----------
+    port : int
+        TCP port to bind the metrics endpoint to.
+
+    Notes
+    -----
+    If ``prometheus_client`` is not installed, this is a no-op.
+    """
     if not _HAS_PROM or start_http_server is None:
         msg = "prometheus_client não disponível; servidor de métricas não iniciado"
         logger.info(msg)

@@ -11,6 +11,8 @@ Verifies all behaviors of the snapshot restore-verify command:
 - Edge cases: missing file, corrupted data, missing metadata
 """
 
+# ruff: noqa: I001
+
 import json
 import re
 from datetime import UTC, datetime
@@ -22,6 +24,7 @@ from typer.testing import CliRunner
 from src import db
 from src.db_migrator import apply_migrations
 from src.main import app
+from src.db.snapshots import _normalize_snapshot_path
 from src.utils.checksums import sha256_file
 
 
@@ -94,6 +97,13 @@ def _create_test_snapshot_with_metadata(
     checksum = sha256_file(snapshot_path)
 
     # Register metadata in DB
+    from unittest.mock import patch
+
+    # Ensure normalization retains an absolute path in the test environment
+    # (pytest tmp_path typically lives under the system temp dir).
+    with patch("tempfile.gettempdir", return_value="/nonexistent-tempdir"):
+        normalized_path = _normalize_snapshot_path(str(snapshot_path))
+
     cur = conn.cursor()
     cur.execute(
         """
@@ -106,7 +116,7 @@ def _create_test_snapshot_with_metadata(
         (
             f"{ticker}-{timestamp}",
             ticker,
-            str(snapshot_path.resolve()),
+            normalized_path,
             checksum,
             len(df),
             snapshot_path.stat().st_size,
@@ -225,7 +235,7 @@ def test_restore_verify_invalid_csv(mock_metadata_db, tmp_path):
     snapshot_dir = tmp_path / "snapshots"
     snapshot_dir.mkdir()
     invalid_csv = snapshot_dir / "invalid.csv"
-    invalid_csv.write_text("not,valid,csv\nwith,unmatched\n")
+    invalid_csv.write_text('col1,col2\n"value_without_end\n')
 
     # Run restore-verify
     runner = CliRunner()
@@ -282,14 +292,14 @@ def test_restore_verify_missing_metadata(mock_metadata_db, tmp_path, monkeypatch
         ["pipeline", "restore-verify", "--snapshot-path", str(snapshot_path)],
     )
 
-    assert result.exit_code == 0, f"CLI failed: {result.output}"
+    assert result.exit_code == 2, f"CLI failed: {result.output}"
 
     report = _extract_json_from_cli_output(result.stdout)
-    assert report["overall_result"] == "PASS"
+    assert report["overall_result"] == "FAIL"
 
-    # Checksum should be n/a (no metadata)
+    # Missing metadata should be treated as a failure
     checks = report["checks"]
-    assert checks["checksum_match"] == "n/a"
+    assert checks["checksum_match"] == "fail"
 
 
 def test_restore_verify_json_report_structure(mock_metadata_db, tmp_path, monkeypatch):

@@ -43,17 +43,13 @@ def main() -> int:  # noqa: C901 - complexity acceptable in simple script
         conn = db.connect(db_path=db_path)
         snapshots = db.list_snapshots(archived=False, conn=conn)
     except Exception as exc:  # pragma: no cover - defensive
-        # report a clear message and exit non-zero
+        # report a clear message and return non-zero
         print(
             f"Error accessing database at {db_path}: {exc}",
             file=sys.stderr,
         )
-        if conn:
-            try:
-                conn.close()
-            except Exception:  # pragma: no cover - best effort
-                pass
-        sys.exit(1)
+        # conn is closed in the finally block below
+        return 1
     finally:
         if conn:
             conn.close()

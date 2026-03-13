@@ -30,7 +30,7 @@ def main() -> None:
     # use context manager so connection is closed even if migrations fail
     with sqlite3.connect(dbpath) as conn:
         apply_migrations(conn)
-    logger.info(f"migrations applied to {dbpath}")
+    logger.info("migrations applied to %s", dbpath)
 
 
 if __name__ == "__main__":

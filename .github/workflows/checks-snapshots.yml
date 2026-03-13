@@ -45,7 +45,7 @@ jobs:
       - name: Run snapshot-generation integration test (fast)
         run: |
           # run only the new integration test to fail fast on regressions
-          poetry run pytest -q tests/test_generate_ci_snapshot_integration.py::test_generate_ci_snapshot_writes_metadata -q
+          poetry run pytest -q tests/test_generate_ci_snapshot_integration.py::test_generate_ci_snapshot_writes_metadata
 
       - name: Run tests
         run: |

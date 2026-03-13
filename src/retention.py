@@ -27,7 +27,10 @@ def get_retention_days() -> int:
     """
     raw = os.getenv("SNAPSHOT_RETENTION_DAYS", "90").strip()
     try:
-        return int(raw)
+        days = int(raw)
+        if days <= 0:
+            return 90
+        return days
     except ValueError:
         return 90
 
@@ -142,14 +145,13 @@ def archive_snapshots(
         actual_checksum = sha256_file(archived_path)
         checksum_ok = actual_checksum == str(expected_checksum or "")
 
-        # mark row as archived regardless of checksum_ok; callers can inspect
-        # the returned ``checksum_ok`` flag to decide if the copy matched
-        # the expected value.  this keeps archival state in sync even when
-        # integrity checks fail.
-        _ = cur.execute(
-            "UPDATE snapshots SET archived = 1, archived_at = ? WHERE id = ?",
-            (now_iso, snapshot_id),
-        )
+        # Only mark row as archived when we have a matching checksum. This avoids
+        # hiding cases where the snapshot copy does not match metadata.
+        if checksum_ok:
+            _ = cur.execute(
+                "UPDATE snapshots SET archived = 1, archived_at = ? WHERE id = ?",
+                (now_iso, snapshot_id),
+            )
 
         results.append(
             {

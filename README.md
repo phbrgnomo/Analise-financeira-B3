@@ -28,6 +28,8 @@ necessário.
   válido. Padrão `86400` (um dia). Use com o comando `snapshots ingest`.
 - **SNAPSHOT_CACHE_FILE**: caminho para o arquivo JSON onde o cache é
   armazenado. Valor padrão `dados/snapshot_cache.json`.
+- **SNAPSHOT_RETENTION_DAYS**: número de dias de retenção para snapshots antes de
+  serem considerados elegíveis para purge/arquivamento. Valor padrão `90`.
 - **SNAPSHOTS_KEEP_LATEST**: quantidade de snapshots recentes por ticker a
   manter no diretório de snapshots. Padrão `1`.
 - **DEFAULT_TICKERS**: tickers padrão usados no `main run` quando `--ticker`
@@ -158,6 +160,23 @@ As instruções completas e o playbook estão em `docs/playbooks/testing-network
 
 Para os principais comandos da CLI e seus parâmetros, consulte `poetry run main --help` ou o playbook detalhado em `docs/playbooks/quickstart-cli.md`.
 
+Alguns comandos úteis para snapshots e validação:
+
+```bash
+# gerar um snapshot de um ticker (grava CSV e metadata)
+poetry run main pipeline snapshot --ticker PETR4 --output-dir snapshots/
+
+# exportar o último snapshot para CSV/JSON
+poetry run main snapshots export --ticker PETR4 --format csv --output snapshots/PETR4_export.csv
+poetry run main snapshots export --ticker PETR4 --format json --output snapshots/PETR4_export.json
+
+# purgar snapshots antigos (baseado em SNAPSHOT_RETENTION_DAYS, modifique com --older-than)
+poetry run main snapshots purge --confirm
+
+# verificar restauração/validar snapshot contra metadados
+poetry run main pipeline restore-verify --snapshot-path snapshots/PETR4_snapshot.csv
+```
+
 ## Estrutura do repositório (resumo)
 - `src/` — código principal
   - `src/main.py` — entrypoint do CLI (usa `src.adapters.factory` para selecionar provedores)
@@ -246,9 +265,19 @@ poetry run python scripts/validate_snapshots.py \
 - Arquivos CSV raw são gravados em `raw/<provider>/` com o padrão `<ticker>-YYYYMMDDTHHMMSSZ.csv`.
 - Um checksum SHA256 é gerado e gravado ao lado de cada CSV como `*.checksum`.
 - Metadados de ingestão são persistidos em `metadata/ingest_logs.jsonl` (JSON Lines, append-only).
-- Recomenda-se proteger artefatos sensíveis com permissões apenas do dono (owner-only). Para aplicar localmente:
+- Recomenda-se proteger artefatos sensíveis com permissões apenas do dono (owner-only). Para aplicar localmente, ajuste permissões de arquivos e diretórios separadamente (para não impedir travessia de diretórios):
 
 ```bash
-# tornar arquivos de metadados e raw inacessíveis a outros usuários
-chmod -R 600 metadata dados/raw
+# para arquivos: somente leitura/escrita para o dono
+find metadata dados/raw -type f -exec chmod 600 {} +
+# para diretórios: permitir travessia/execução para o dono
+find metadata dados/raw -type d -exec chmod 700 {} +
 ```
+
+Como alternativa, você pode usar o modo ``X`` do chmod para ativar a permissão de execução apenas quando apropriado:
+
+```bash
+chmod -R u=rwX,go= metadata dados/raw
+```
+
+> ⚠️ Teste os comandos localmente para garantir que você ainda consegue acessar e navegar nas pastas desejadas.

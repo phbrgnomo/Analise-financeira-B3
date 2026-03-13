@@ -75,8 +75,9 @@ def _extract_invalid_rows_from_schema_errors(
         )
 
     # Constrói invalid_df a partir dos índices coletados e retorna
+    # Use deterministic ordering so test outputs remain stable across runs.
     invalid_df = (
-        df.loc[list(invalid_indices)].copy() if invalid_indices else pd.DataFrame()
+        df.loc[sorted(invalid_indices)].copy() if invalid_indices else pd.DataFrame()
     )
 
     return invalid_df, error_records

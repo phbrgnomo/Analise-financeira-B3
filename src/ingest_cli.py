@@ -52,9 +52,9 @@ DEFAULT_CACHE_FILE = os.getenv("SNAPSHOT_CACHE_FILE") or "dados/snapshot_cache.j
 def _read_checksum(path: Path) -> str:
     """Return the SHA256 checksum for ``path``.
 
-        If a companion ``.checksum`` file exists it will be compared against the
-        computed value; um mismatch causa erro para evitar ingestões silenciosas
-    de arquivos corrompidos.
+    If a companion ``.checksum`` file exists it will be compared against the
+    computed value; a mismatch raises ``ValueError`` to prevent ingesting
+    corrupted files silently.
     """
     actual = sha256_file(path)
     check_path = path.with_name(f"{path.name}.checksum")

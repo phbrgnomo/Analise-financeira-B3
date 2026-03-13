@@ -9,7 +9,6 @@ Verifies all behaviors of snapshot metadata recording:
 - Metadata size_bytes matches file size
 """
 
-import tempfile
 from pathlib import Path
 
 import pandas as pd
@@ -78,10 +77,7 @@ def test_snapshot_path_under_temp_is_sanitized(snapshot_test_db, tmp_path, monke
     prevents ``/tmp`` references from triggering the CI guard in
     ``test_no_tmp_snapshot_paths_ci_only``.
     """
-    tempdir = Path(tempfile.gettempdir())
-    # tempfile.gettempdir() always returns an existing directory, so the
-    # explicit mkdir call is unnecessary.
-    snap = tempdir / "PETR4_snapshot.csv"
+    snap = tmp_path / "PETR4_snapshot.csv"
     snap.write_text("ticker,date,open,high,low,close,volume,adj_close\n")
 
     metadata = {
@@ -103,9 +99,6 @@ def test_snapshot_path_under_temp_is_sanitized(snapshot_test_db, tmp_path, monke
     row = cur.fetchone()
     assert row is not None
     stored = row[0]
-    assert not stored.startswith(tempdir.as_posix()), (
-        "Stored path should not keep the /tmp prefix"
-    )
     assert stored == "PETR4_snapshot.csv"
     conn.close()
 

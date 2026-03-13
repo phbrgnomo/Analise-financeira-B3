@@ -76,9 +76,15 @@ def _restore_snapshot_into_temp_db(
 
     temp_conn = sqlite3.connect(temp_db_target)
     try:
+        # Ensure the temp DB is clean between invocations; old state can cause
+        # spurious row count mismatches or PK conflicts when reusing the same
+        # temp_db_target.
+        temp_conn.execute("DROP TABLE IF EXISTS prices")
+        temp_conn.commit()
+
         temp_conn.execute(
             """
-            CREATE TABLE IF NOT EXISTS prices (
+            CREATE TABLE prices (
                 ticker TEXT NOT NULL,
                 date DATE NOT NULL,
                 open REAL,
@@ -91,6 +97,7 @@ def _restore_snapshot_into_temp_db(
             )
             """
         )
+        temp_conn.commit()
 
         df = pd.read_csv(snapshot_path)
         rows_restored = len(df)
@@ -385,7 +392,7 @@ def restore_verify_cmd(
         lookups (default is ``:memory:``).
     """
     from src import db
-    from src.db.snapshots import get_snapshot_by_path
+    from src.db.snapshots import _normalize_snapshot_path, get_snapshot_by_path
     from src.utils.checksums import sha256_file
 
     fb = CliFeedback("pipeline restore-verify")
@@ -400,7 +407,13 @@ def restore_verify_cmd(
     metadata_conn = db.connect(db_path=None)
     try:
         resolved_path = str(snapshot_path.resolve())
-        metadata = get_snapshot_by_path(resolved_path, conn=metadata_conn)
+        normalized_path = _normalize_snapshot_path(resolved_path) or resolved_path
+        metadata = get_snapshot_by_path(normalized_path, conn=metadata_conn)
+
+        # fall back to other variants for compatibility with differing stored
+        # formats (absolute vs basename etc.)
+        if metadata is None and normalized_path != resolved_path:
+            metadata = get_snapshot_by_path(resolved_path, conn=metadata_conn)
         if metadata is None:
             metadata = get_snapshot_by_path(str(snapshot_path), conn=metadata_conn)
     finally:
@@ -443,15 +456,18 @@ def restore_verify_cmd(
         fb.info(json.dumps(report, indent=2))
         raise typer.Exit(code=2) from exc
 
-    if metadata and metadata.get("checksum"):
+    metadata_missing = metadata is None or not metadata.get("checksum")
+
+    if metadata_missing:
+        checks["checksum_match"] = "fail"
+    else:
         checks["checksum_match"] = (
             "pass" if actual_checksum == metadata["checksum"] else "fail"
         )
-    else:
-        checks["checksum_match"] = "n/a"
 
     if (
-        checks["columns_present"] == "fail"
+        metadata_missing
+        or checks["columns_present"] == "fail"
         or checks["row_count"] == "fail"
         or checks["sample_row_check"] == "fail"
     ):

@@ -104,6 +104,10 @@ def _extract_date_range_from_payload(  # noqa: C901 - multiple fallback strategi
         start = normalized_matches[0]
     if not end and len(normalized_matches) >= 2:
         end = normalized_matches[1]
+
+    # Ensure any partial dates are normalized for consistent ID generation.
+    start = _normalize_date_string(start) if start else ""
+    end = _normalize_date_string(end) if end else ""
     return start, end
 
 

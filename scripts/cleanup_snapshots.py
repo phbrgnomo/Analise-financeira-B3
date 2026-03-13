@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import Any
 
 from src.logging_config import configure_logging
+from src.time_utils import now_utc_iso
 
 # configure a basic structured logger for the script
 configure_logging()
@@ -127,7 +128,7 @@ def inspect_and_plan(
                 "id": sid,
                 "ticker": tkr,
                 "old_path": str(path),
-                "candidate_path": str(candidate),
+                "candidate_path": str(candidate.resolve(strict=False)),
                 "checksum": checksum,
                 "action": action,
                 "reason": reason,
@@ -163,8 +164,9 @@ def apply_plan(db_path: Path, plan: list[dict[str, Any]], apply_archive: bool = 
                     (new_path, sid),
                 )
             elif apply_archive:
-                # use timezone-aware timestamp consistent with other helpers
-                archived_at = f"{datetime.now(timezone.utc).isoformat()}Z"
+                # use project-wide UTC timestamp formatter to ensure consistent
+                # stored format across snapshot rows
+                archived_at = now_utc_iso()
                 query = (
                     "UPDATE snapshots SET archived = 1, archived_at = ? WHERE id = ?"
                 )
@@ -198,12 +200,22 @@ def main() -> None:
         help="Apply updates (without this flag only dry-run)",
     )
     p.add_argument(
+        "--dry-run",
+        action="store_true",
+        dest="dry_run",
+        help="Report actions without applying changes",
+    )
+    p.add_argument(
         "--no-backup",
         action="store_true",
         help="Do not backup DB before applying (not recommended)",
     )
 
     args = p.parse_args()
+    if args.apply and args.dry_run:
+        p.error("Cannot specify both --apply and --dry-run")
+    apply_changes = args.apply and not args.dry_run
+
     db_path = Path(args.db)
     snapshots_dir = Path(args.snapshots_dir)
 
@@ -233,7 +245,7 @@ def main() -> None:
         len(archives),
     )
 
-    if args.apply:
+    if apply_changes:
         if not args.no_backup:
             bak = backup_db(db_path)
             logger.info("Backup created: %s", bak)

@@ -137,7 +137,7 @@ def mock_metadata_db(tmp_path, monkeypatch):
 
     def mock_db_connect(db_path=None, **kw):
         # ignore any requested path, always return connection to our test DB
-        return original_connect(db_path=str(metadata_db_path))
+        return original_connect(db_path=str(metadata_db_path), **kw)
 
     monkeypatch.setattr(db, "connect", mock_db_connect)
 
@@ -219,7 +219,11 @@ def isolate_metadata_db(tmp_path, monkeypatch):
     """
     metadata_db_path = tmp_path / "metadata_isolated.db"
     # create and migrate a fresh metadata database file (use real connect)
-    orig_connect = db.connect
+    # Use the low-level connector so we can redirect all calls (including
+    # ones that import `db.connect` at import-time) to the isolated metadata DB.
+    from src.db import connection
+
+    orig_connect = connection._connect
     # initialize DB file and apply migrations
     conn_tmp = orig_connect(db_path=str(metadata_db_path))
     try:
@@ -232,10 +236,10 @@ def isolate_metadata_db(tmp_path, monkeypatch):
         # explicit db_path requests are forwarded unchanged so tests that
         # create their own DB files still work.
         if db_path is None:
-            return orig_connect(db_path=str(metadata_db_path))
-        return orig_connect(db_path=db_path)
+            return orig_connect(db_path=str(metadata_db_path), **kw)
+        return orig_connect(db_path=db_path, **kw)
 
-    monkeypatch.setattr(db, "connect", _test_connect)
+    monkeypatch.setattr(connection, "_connect", _test_connect)
 
     try:
         yield

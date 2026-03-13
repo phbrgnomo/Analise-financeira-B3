@@ -57,25 +57,10 @@ poetry run main snapshots purge --older-than 90 --confirm
 poetry run main snapshots purge --older-than 365 --confirm --archive-dir snapshots/archive
 ```
 
-A política padrão lê a variável `SNAPSHOT_RETENTION_POLICY` (JSON/YAML) ou usa
-valores embutidos: `daily_keep_days=90`, `keep_monthly=12`, `keep_yearly=7`.
-
-Exemplos de formato válidos:
-
-```bash
-# JSON inline
-export SNAPSHOT_RETENTION_POLICY='{"daily_keep_days":90,"keep_monthly":12,"keep_yearly":7}'
-```
-
-```yaml
-# YAML block (export depends on shell handling multiline strings)
-export SNAPSHOT_RETENTION_POLICY="# YAML
-{
-  daily_keep_days: 90
-  keep_monthly: 12
-  keep_yearly: 7
-}"
-```
+A política padrão usa a variável `SNAPSHOT_RETENTION_DAYS` (número de dias)
+para determinar quais snapshots são elegíveis para purge/arquivamento. O valor
+padrão é **90 dias**. Para manter apenas os snapshots mais recentes por ticker,
+use `SNAPSHOTS_KEEP_LATEST` (padrão `1`).
 
 
 ## Restore / verificação de snapshot
@@ -83,7 +68,7 @@ export SNAPSHOT_RETENTION_POLICY="# YAML
 Para verificar que um snapshot pode ser restaurado com integridade:
 
 ```bash
-poetry run main pipeline restore-verify --snapshot snapshots/PETR4_snapshot.csv
+poetry run main pipeline restore-verify --snapshot-path snapshots/PETR4_snapshot.csv
 ```
 
 O comando devolve código de saída `0` (OK), `1` (aviso) ou `2` (falha). Ele cria

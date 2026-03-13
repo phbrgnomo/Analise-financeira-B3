@@ -160,6 +160,7 @@ def test_export_json_to_stdout(tmp_path, monkeypatch):
 
         _assert_snapshot_json(data, ticker="PETR4")
         # additional content-specific checks
+        assert data["checksum"] == checksum
         assert data["rows"] == 3
         assert len(data["data"]) == 3
     finally:

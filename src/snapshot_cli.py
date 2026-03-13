@@ -53,6 +53,22 @@ class _SnapshotExportFeedback(CliFeedback):
 
 
 def _resolve_snapshot_path(raw_path: str) -> Path:
+    """Resolve a snapshot path string to an actual filesystem path.
+
+    If `raw_path` is absolute, it is returned unchanged. Otherwise it is
+    treated as relative to the configured `SNAPSHOTS_DIR` (the default
+    snapshots directory used by the application).
+
+    Parameters
+    ----------
+    raw_path : str
+        Raw path string stored in snapshot metadata.
+
+    Returns
+    -------
+    Path
+        Resolved filesystem path to the snapshot CSV.
+    """
     candidate = Path(raw_path)
     return candidate if candidate.is_absolute() else SNAPSHOTS_DIR / candidate
 
@@ -61,6 +77,25 @@ def _load_latest_snapshot(
     ticker: str,
     fb: _SnapshotExportFeedback,
 ) -> tuple[dict[str, object], pd.DataFrame]:
+    """Load metadata and DataFrame for the latest snapshot of a ticker.
+
+    Parameters
+    ----------
+    ticker : str
+        B3 ticker symbol to locate.
+    fb : _SnapshotExportFeedback
+        Feedback helper for reporting errors and progress.
+
+    Returns
+    -------
+    tuple[dict[str, object], pd.DataFrame]
+        Tuple of (metadata dict, snapshot DataFrame).
+
+    Raises
+    ------
+    typer.Exit
+        If no snapshot metadata exists or the snapshot file cannot be read.
+    """
     snapshots = db.list_snapshots(ticker=ticker, archived=False)
     if not snapshots:
         fb.error(f"No snapshots found for ticker {ticker}")
@@ -93,6 +128,31 @@ def _serialize_export(
     df: pd.DataFrame,
     fb: _SnapshotExportFeedback,
 ) -> str:
+    """Serialize snapshot data into the requested output format.
+
+    Parameters
+    ----------
+    requested_format : str
+        Output format, either ``"csv"`` or ``"json"``.
+    normalized_ticker : str
+        Ticker symbol normalized for output metadata.
+    metadata : dict[str, object]
+        Snapshot metadata dictionary stored in the DB.
+    df : pd.DataFrame
+        Snapshot data.
+    fb : _SnapshotExportFeedback
+        Feedback helper used to report serialization errors.
+
+    Returns
+    -------
+    str
+        Serialized content as a string.
+
+    Raises
+    ------
+    typer.Exit
+        If serialization fails.
+    """
     if requested_format == "csv":
         return df.to_csv(index=False)
 
@@ -112,6 +172,15 @@ def _serialize_export(
 
 
 def _emit_export(content: str, output_path: Path | None) -> None:
+    """Write exported snapshot content to stdout or a file.
+
+    Parameters
+    ----------
+    content : str
+        Serialized snapshot content (CSV or JSON).
+    output_path : Path | None
+        If provided, write to this file path; otherwise write to stdout.
+    """
     if output_path is None:
         _ = sys.stdout.write(content)
         return
@@ -126,6 +195,17 @@ def _show_candidates(
     *,
     older_than: int,
 ) -> None:
+    """Display a list of snapshots eligible for purge.
+
+    Parameters
+    ----------
+    feedback : CliFeedback
+        Feedback helper used to emit informational messages.
+    candidates : list[dict[str, object]]
+        List of snapshot metadata dicts returned by :func:`find_purge_candidates`.
+    older_than : int
+        Age threshold (in days) used to filter candidates.
+    """
     if not candidates:
         feedback.info(
             f"Nenhum snapshot elegível para purge (older-than={older_than} dias)."

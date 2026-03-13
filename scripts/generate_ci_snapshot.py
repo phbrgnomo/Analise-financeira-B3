@@ -267,7 +267,7 @@ def validate_snapshot_dir(
     raise ValueError("Diretório de snapshot fora dos diretórios permitidos")
 
 
-def _compute_and_persist_metadata(out_path: Path, df) -> str:
+def _compute_and_persist_metadata(out_path: Path, df: pd.DataFrame) -> str:
     """Compute checksum/size/rows and persist metadata to DB for CI.
 
     Returns the checksum string on success or empty string on failure.
@@ -302,6 +302,7 @@ def _compute_and_persist_metadata(out_path: Path, df) -> str:
                 db.record_snapshot_metadata(metadata)
         except Exception as rec_exc:
             print(f"Aviso: falha ao gravar metadata no DB: {rec_exc}", file=sys.stderr)
+            return ""
         return checksum
     except Exception as exc:
         print(f"Falha ao computar checksum/metadata: {exc}", file=sys.stderr)

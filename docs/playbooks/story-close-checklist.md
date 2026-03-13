@@ -11,6 +11,6 @@ Use este checklist sempre que uma história (story) for concluída. O objetivo �
 - [ ] Validar artefatos gerados (ex.: cálculos de checksum, arquivos CSV/JSON) manualmente ou via testes automatizados.
 - [ ] Atualizar documentação relevante (`docs/playbooks/*`, `README.md`, etc.) com novo comando ou mudança de processo.
 - [ ] Adicionar notas no pull request descrevendo como a história foi validada e qualquer dependência para epics futuros.
-- [ ] Marcar o owner da história como responsável por monitorar ações de follow-up (se houver) e atualizar o campo `owner` no arquivo de história.
+- [ ] Marcar o owner da história como responsável por monitorar ações de acompanhamento (se houver) e atualizar o campo `owner` no arquivo de história.
 
 > **Dica**: inclua este checklist na descrição do PR usando `docs/playbooks/story-close-checklist.md` como referência ou copiando o conteúdo diretamente.
