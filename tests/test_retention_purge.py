@@ -367,52 +367,13 @@ def test_delete_snapshots_missing_file_no_crash(tmp_path):
     conn.close()
 
 
-def test_purge_dryrun_no_side_effects(tmp_path, monkeypatch):
+def test_purge_dryrun_no_side_effects(purge_test_setup, monkeypatch):
     """Invoke `snapshots purge --dry-run`.
 
     Verify: DB and FS unchanged.
     """
-    from src.db import snapshots
 
-    # Create test DB with migrations
-    metadata_db_path = tmp_path / "metadata.db"
-    db.init_db(db_path=str(metadata_db_path))
-    metadata_conn = db.connect(db_path=str(metadata_db_path))
-    apply_migrations(metadata_conn)
-
-    # Create test CSV file
-    test_csv = tmp_path / "PETR4_snapshot.csv"
-    df = pd.DataFrame({
-        "date": ["2023-01-01"],
-        "open": [10.0],
-        "high": [11.0],
-        "low": [9.0],
-        "close": [10.5],
-        "volume": [1000],
-        "ticker": ["PETR4"],
-    })
-    df.to_csv(test_csv, index=False)
-    checksum = sha256_file(test_csv)
-
-    # Insert old snapshot (100 days ago)
-    old_date = (
-        datetime.now(timezone.utc) - timedelta(days=100)
-    ).isoformat()
-    cur = metadata_conn.cursor()
-    cur.execute(
-        "INSERT INTO snapshots (id, ticker, snapshot_path, checksum, "
-        "size_bytes, created_at, archived) VALUES (?, ?, ?, ?, ?, ?, ?)",
-        ("1", "PETR4", str(test_csv), checksum, test_csv.stat().st_size,
-         old_date, 0),
-    )
-    metadata_conn.commit()
-    metadata_conn.close()
-
-    # Patch snapshots._connect to use test DB
-    def mock_snapshots_connect(db_path=None):
-        return db.connect(db_path=str(metadata_db_path))
-
-    monkeypatch.setattr(snapshots, "_connect", mock_snapshots_connect)
+    test_csv, metadata_db_path, checksum = purge_test_setup
 
     # Set retention to 90 days (should find the old snapshot)
     monkeypatch.setenv("SNAPSHOT_RETENTION_DAYS", "90")
@@ -440,53 +401,13 @@ def test_purge_dryrun_no_side_effects(tmp_path, monkeypatch):
     metadata_conn.close()
 
 
-def test_purge_confirm_deletes_candidates(tmp_path, monkeypatch):
+def test_purge_confirm_deletes_candidates(purge_test_setup, monkeypatch):
     """Invoke `snapshots purge --confirm` (without --archive-dir).
 
     Verify: old snapshots removed from DB and FS.
     """
 
-    # Create test DB with migrations
-    metadata_db_path = tmp_path / "metadata.db"
-    db.init_db(db_path=str(metadata_db_path))
-    metadata_conn = db.connect(db_path=str(metadata_db_path))
-    apply_migrations(metadata_conn)
-
-    # Create test CSV file
-    test_csv = tmp_path / "PETR4_snapshot.csv"
-    df = pd.DataFrame({
-        "date": ["2023-01-01"],
-        "open": [10.0],
-        "high": [11.0],
-        "low": [9.0],
-        "close": [10.5],
-        "volume": [1000],
-        "ticker": ["PETR4"],
-    })
-    df.to_csv(test_csv, index=False)
-    checksum = sha256_file(test_csv)
-
-    # Insert old snapshot (100 days ago)
-    old_date = (
-        datetime.now(timezone.utc) - timedelta(days=100)
-    ).isoformat()
-    cur = metadata_conn.cursor()
-    cur.execute(
-        "INSERT INTO snapshots (id, ticker, snapshot_path, checksum, "
-        "size_bytes, created_at, archived) VALUES (?, ?, ?, ?, ?, ?, ?)",
-        ("1", "PETR4", str(test_csv), checksum, test_csv.stat().st_size,
-         old_date, 0),
-    )
-    metadata_conn.commit()
-    metadata_conn.close()
-
-    # Patch db.connect to use test DB (CLI calls db.connect() directly)
-    original_connect = db.connect
-
-    def mock_db_connect(db_path=None):
-        return original_connect(db_path=str(metadata_db_path))
-
-    monkeypatch.setattr(db, "connect", mock_db_connect)
+    test_csv, metadata_db_path, checksum = purge_test_setup
 
     # Set retention to 90 days
     monkeypatch.setenv("SNAPSHOT_RETENTION_DAYS", "90")
@@ -513,53 +434,14 @@ def test_purge_confirm_deletes_candidates(tmp_path, monkeypatch):
     metadata_conn.close()
 
 
-def test_purge_confirm_archives_candidates(tmp_path, monkeypatch):
+def test_purge_confirm_archives_candidates(purge_test_setup, monkeypatch, tmp_path):
     """Invoke `snapshots purge --confirm --archive-dir`.
 
     Verify: old snapshots archived and marked archived=1.
     """
 
-    # Create test DB with migrations
-    metadata_db_path = tmp_path / "metadata.db"
-    db.init_db(db_path=str(metadata_db_path))
-    metadata_conn = db.connect(db_path=str(metadata_db_path))
-    apply_migrations(metadata_conn)
+    test_csv, metadata_db_path, checksum = purge_test_setup
 
-    # Create test CSV file
-    test_csv = tmp_path / "PETR4_snapshot.csv"
-    df = pd.DataFrame({
-        "date": ["2023-01-01"],
-        "open": [10.0],
-        "high": [11.0],
-        "low": [9.0],
-        "close": [10.5],
-        "volume": [1000],
-        "ticker": ["PETR4"],
-    })
-    df.to_csv(test_csv, index=False)
-    checksum = sha256_file(test_csv)
-
-    # Insert old snapshot (100 days ago)
-    old_date = (
-        datetime.now(timezone.utc) - timedelta(days=100)
-    ).isoformat()
-    cur = metadata_conn.cursor()
-    cur.execute(
-        "INSERT INTO snapshots (id, ticker, snapshot_path, checksum, "
-        "size_bytes, created_at, archived) VALUES (?, ?, ?, ?, ?, ?, ?)",
-        ("1", "PETR4", str(test_csv), checksum, test_csv.stat().st_size,
-         old_date, 0),
-    )
-    metadata_conn.commit()
-    metadata_conn.close()
-
-    # Patch db.connect to use test DB (CLI calls db.connect() directly)
-    original_connect = db.connect
-
-    def mock_db_connect(db_path=None):
-        return original_connect(db_path=str(metadata_db_path))
-
-    monkeypatch.setattr(db, "connect", mock_db_connect)
 
     # Set retention to 90 days
     monkeypatch.setenv("SNAPSHOT_RETENTION_DAYS", "90")

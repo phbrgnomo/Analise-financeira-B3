@@ -30,14 +30,14 @@ development_status:
   1-11-definir-esquema-canonico-de-dados-e-documentacao-do-modelo-schema-examples: completed
   epic-1-retrospective: completed
 
-  epic-2: in-progress
-  2-1-gerar-snapshot-csv-a-partir-de-dados-persistidos: ready-for-dev
-  2-2-calcular-sha256-e-registrar-metadados-do-snapshot: ready-for-dev
-  2-3-exportar-snapshot-como-csv-json-via-cli-api: ready-for-dev
-  2-4-ci-validation-job-para-checar-checksums-de-snapshots: ready-for-dev
-  2-5-politica-de-retencao-e-purge-de-snapshots: ready-for-dev
-  2-6-verificacao-de-restauracao-a-partir-de-snapshot: ready-for-dev
-  epic-2-retrospective: optional
+  epic-2: completed
+  2-1-gerar-snapshot-csv-a-partir-de-dados-persistidos: completed
+  2-2-calcular-sha256-e-registrar-metadados-do-snapshot: completed
+  2-3-exportar-snapshot-como-csv-json-via-cli-api: completed
+  2-4-ci-validation-job-para-checar-checksums-de-snapshots: completed
+  2-5-politica-de-retencao-e-purge-de-snapshots: completed
+  2-6-verificacao-de-restauracao-a-partir-de-snapshot: completed
+  epic-2-retrospective: completed
 
   epic-3: in-progress
   3-1-implementar-quickstart-cli-end-to-end: ready-for-dev

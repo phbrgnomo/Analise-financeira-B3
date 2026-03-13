@@ -4,7 +4,7 @@ story_key: 2-5-politica-de-retencao-e-purge-de-snapshots
 epic: 2
 story_num: 5
 status: ready-for-dev
-owner: TBD
+owner: Dev/Ops
 ---
 
 # Story 2.5: Política de Retenção e Purge de Snapshots

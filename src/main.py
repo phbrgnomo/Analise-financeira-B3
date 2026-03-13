@@ -8,6 +8,7 @@ Use ``poetry run main --help`` para ver todos os comandos disponíveis.
 
 import logging
 import os
+import sqlite3
 from contextlib import suppress
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional, TypedDict
@@ -280,13 +281,33 @@ def compute_returns_cmd(
     targets: list[str]
     if effective_ticker is not None:
         normalized = _normalize_cli_ticker(effective_ticker)
-        targets = [_db.resolve_existing_ticker(normalized) or normalized]
+        # resolve_existing_ticker may hit the DB; guard against missing
+        # schema so the CLI remains usable even if migrations haven't run.
+        try:
+            resolved = _db.resolve_existing_ticker(normalized)
+        except sqlite3.OperationalError as e:
+            # log the error so we can investigate schema issues in CI
+            logging.getLogger(__name__).error(
+                "erro ao resolver ticker existente %s: %s", normalized, e
+            )
+            resolved = None
+        targets = [resolved or normalized]
         feedback.start(
             f"ticker={targets[0]} | dry_run={effective_dry_run} | "
             f"start={start or '-'} | end={end or '-'}"
         )
     else:
-        targets = _db.list_price_tickers()
+        try:
+            targets = _db.list_price_tickers()
+        except sqlite3.OperationalError as exc:
+            msg = str(exc).lower()
+            if "no such table" in msg and "prices" in msg:
+                feedback.start("processando todos os tickers do banco")
+                feedback.warn("Nenhuma tabela prices encontrada")
+                return
+            # unexpected operational error; re-raise so callers/CI see the
+            # real problem rather than silently treating it as empty DB.
+            raise
         if not targets:
             feedback.start("processando todos os tickers do banco")
             feedback.warn("Nenhum ticker encontrado na tabela prices")

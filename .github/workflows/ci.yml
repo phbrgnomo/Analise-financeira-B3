@@ -36,6 +36,15 @@ jobs:
           python -m pip install poetry
           poetry config virtualenvs.in-project true
           poetry install --no-interaction
+      - name: Ensure dados directory exists
+        run: mkdir -p dados
+
+      - name: Apply migrations to default DB
+        run: |
+          # centralized migration helper script – run under poetry so `src` is
+          # on PYTHONPATH and dependencies are available.
+          poetry run python scripts/apply_migrations.py
+
       - run: |
           mkdir -p reports
           NETWORK_MODE=playback poetry run pytest -q --maxfail=1 --junitxml=reports/junit.xml
@@ -69,6 +78,11 @@ jobs:
           python -m pip install poetry
           poetry config virtualenvs.in-project true
           poetry install --no-interaction
+      - name: Apply migrations to default DB
+        run: |
+          # centralized migration helper script
+          poetry run python scripts/apply_migrations.py
+
       - run: |
           mkdir -p "$RUNNER_TEMP/snapshots_test"
           export SNAPSHOT_DIR="$RUNNER_TEMP/snapshots_test"

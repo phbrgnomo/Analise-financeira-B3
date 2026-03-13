@@ -28,8 +28,13 @@ def _strip_ansi(s: str) -> str:
 def test_snapshot_generates_csv_file(sample_db, tmp_path, monkeypatch):
     """Valid ticker generates CSV file in output directory."""
     from src import db
+    from src.db import connection, prices
 
+    # patch both public connector and price module reference
+    monkeypatch.setattr(connection, "connect", lambda db_path=None: sample_db)
+    monkeypatch.setattr(prices, "connect", lambda db_path=None: sample_db)
     monkeypatch.setattr(db, "connect", lambda **kw: sample_db)
+    monkeypatch.setattr(db, "record_snapshot_metadata", lambda *a, **k: None)
 
     runner = CliRunner()
     output_dir = tmp_path / "snapshots"
@@ -58,8 +63,12 @@ def test_snapshot_csv_has_correct_columns(sample_db, tmp_path, monkeypatch):
     Snapshot includes all DB columns sorted alphabetically by serialize_df_bytes.
     """
     from src import db
+    from src.db import connection, prices
 
+    monkeypatch.setattr(connection, "connect", lambda db_path=None: sample_db)
+    monkeypatch.setattr(prices, "connect", lambda db_path=None: sample_db)
     monkeypatch.setattr(db, "connect", lambda **kw: sample_db)
+    monkeypatch.setattr(db, "record_snapshot_metadata", lambda *a, **k: None)
 
     runner = CliRunner()
     output_dir = tmp_path / "snapshots"
@@ -91,13 +100,17 @@ def test_snapshot_csv_has_correct_columns(sample_db, tmp_path, monkeypatch):
 
 def test_snapshot_with_date_range(sample_db, tmp_path, monkeypatch):
     """--start and --end filter data correctly."""
+    # import all relevant db modules first so monkeypatching order matches
+    # other snapshot tests.
     from src import db
-    from src.db import prices
-    # the date-range command path performs low-level price reads via
-    # ``prices._connect``; patching only ``db.connect`` does not intercept
-    # those calls, so we patch both helpers here.
-    monkeypatch.setattr(prices, "_connect", lambda db_path=None: sample_db)
+    from src.db import connection, prices
+
+    # price reads go through ``connection.connect`` and the name imported by
+    # ``prices``; patch both so snapshot commands see our sample_db.
+    monkeypatch.setattr(connection, "connect", lambda db_path=None: sample_db)
+    monkeypatch.setattr(prices, "connect", lambda db_path=None: sample_db)
     monkeypatch.setattr(db, "connect", lambda **kw: sample_db)
+    monkeypatch.setattr(db, "record_snapshot_metadata", lambda *a, **k: None)
 
     runner = CliRunner()
     output_dir = tmp_path / "snapshots"
@@ -196,8 +209,12 @@ def test_snapshot_empty_date_range_exit_code_1(sample_db, tmp_path, monkeypatch)
 def test_snapshot_creates_output_dir(sample_db, tmp_path, monkeypatch):
     """Non-existent output directory is created automatically."""
     from src import db
+    from src.db import connection, prices
 
+    monkeypatch.setattr(connection, "connect", lambda db_path=None: sample_db)
+    monkeypatch.setattr(prices, "connect", lambda db_path=None: sample_db)
     monkeypatch.setattr(db, "connect", lambda **kw: sample_db)
+    monkeypatch.setattr(db, "record_snapshot_metadata", lambda *a, **k: None)
 
     runner = CliRunner()
     output_dir = tmp_path / "does_not_exist" / "nested" / "snapshots"
@@ -229,8 +246,12 @@ def test_snapshot_default_output_dir(sample_db, tmp_path, monkeypatch):
     Monkeypatch SNAPSHOTS_DIR in pipeline module since it's imported there.
     """
     from src import db, pipeline
+    from src.db import connection, prices
 
+    monkeypatch.setattr(connection, "connect", lambda db_path=None: sample_db)
+    monkeypatch.setattr(prices, "connect", lambda db_path=None: sample_db)
     monkeypatch.setattr(db, "connect", lambda **kw: sample_db)
+    monkeypatch.setattr(db, "record_snapshot_metadata", lambda *a, **k: None)
     test_snapshots_dir = tmp_path / "snapshots"
     monkeypatch.setattr(pipeline, "SNAPSHOTS_DIR", test_snapshots_dir)
 

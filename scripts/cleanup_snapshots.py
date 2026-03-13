@@ -10,19 +10,38 @@ seguras: atualizar `snapshot_path` para `snapshots/<basename>` quando o
 arquivo existir e o checksum bater; caso contrário marca como archived).
 """
 
+
 from __future__ import annotations
 
 import argparse
 import hashlib
 import json
+import logging
 import shutil
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from src.logging_config import configure_logging
+
+# configure a basic structured logger for the script
+configure_logging()
+logger = logging.getLogger(__name__)
+
 
 def sha256_file(path: Path) -> str:
+    """Compute SHA-256 checksum of a file.
+
+    Parameters:
+        path (Path): Path to the file to hash.
+
+    Returns:
+        str: Hexadecimal SHA-256 digest of the file contents.
+
+    Raises:
+        OSError: Propagated if the file cannot be opened or read.
+    """
     h = hashlib.sha256()
     with path.open("rb") as f:
         for chunk in iter(lambda: f.read(8192), b""):
@@ -31,7 +50,18 @@ def sha256_file(path: Path) -> str:
 
 
 def backup_db(db_path: Path) -> Path:
-    ts = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+    """Create a timestamped copy of the database file.
+
+    Parameters:
+        db_path (Path): Path to the original database.
+
+    Returns:
+        Path: Path to the created backup file.
+
+    Raises:
+        OSError: If the copy operation fails.
+    """
+    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     dest = db_path.with_suffix(f".bak.{ts}")
     shutil.copy2(db_path, dest)
     return dest
@@ -40,6 +70,22 @@ def backup_db(db_path: Path) -> Path:
 def inspect_and_plan(
     db_path: Path, snapshots_dir: Path, ticker: str | None = None
 ) -> list[dict[str, Any]]:
+    """Query `/tmp/` entries and determine remediation actions.
+
+    Parameters:
+        db_path (Path): Location of the SQLite database.
+        snapshots_dir (Path): Directory holding project snapshots for file
+            candidate checks.
+        ticker (str | None): Optional ticker filter; when provided only rows
+            matching this ticker are examined.
+
+    Returns:
+        list[dict[str, Any]]: A plan describing each row and suggested
+        action (`update_path` or `archive`) along with reasoning.
+
+    Raises:
+        sqlite3.DatabaseError: On DB access problems.
+    """
     conn = sqlite3.connect(str(db_path))
     try:
         cur = conn.cursor()
@@ -92,6 +138,20 @@ def inspect_and_plan(
 
 
 def apply_plan(db_path: Path, plan: list[dict[str, Any]], apply_archive: bool = True):
+    """Execute the inspection plan against the database.
+
+    Parameters:
+        db_path (Path): Path to the SQLite database to update.
+        plan (list[dict]): Plan as returned by :func:`inspect_and_plan`.
+        apply_archive (bool): If True, rows not eligible for path updates
+            will be marked archived.
+
+    Returns:
+        None
+
+    Raises:
+        sqlite3.DatabaseError: Propagated from SQL execution.
+    """
     conn = sqlite3.connect(str(db_path))
     try:
         cur = conn.cursor()
@@ -103,20 +163,29 @@ def apply_plan(db_path: Path, plan: list[dict[str, Any]], apply_archive: bool = 
                     "UPDATE snapshots SET snapshot_path = ? WHERE id = ?",
                     (new_path, sid),
                 )
-            else:
-                if apply_archive:
-                    archived_at = datetime.utcnow().isoformat() + "Z"
-                    query = (
-                        "UPDATE snapshots SET archived = 1, "
-                        "archived_at = ? WHERE id = ?"
-                    )
-                    cur.execute(query, (archived_at, sid))
+            elif apply_archive:
+                # use timezone-aware timestamp consistent with other helpers
+                archived_at = f"{datetime.now(timezone.utc).isoformat()}Z"
+                query = (
+                    "UPDATE snapshots SET archived = 1, "
+                    "archived_at = ? WHERE id = ?"
+                )
+                cur.execute(query, (archived_at, sid))
         conn.commit()
     finally:
         conn.close()
 
 
 def main() -> None:
+    """Command‑line entry point for snapshot cleanup.
+
+    Parses CLI arguments, computes an inspection plan, prints a summary, and
+    optionally applies the plan (with backup). Exits with code 2 if the
+    database path is missing.
+
+    Returns:
+        None
+    """
     p = argparse.ArgumentParser()
     p.add_argument("--db", default="dados/data.db", help="Path to DB")
     p.add_argument(
@@ -141,33 +210,39 @@ def main() -> None:
     snapshots_dir = Path(args.snapshots_dir)
 
     if not db_path.exists():
-        print(f"DB not found: {db_path}")
+        logger.warning("DB not found: %s", db_path)
         raise SystemExit(2)
 
     plan = inspect_and_plan(db_path, snapshots_dir, ticker=args.ticker)
 
-    print(json.dumps({"summary_count": len(plan)}, indent=2))
+    logger.info(json.dumps({"summary_count": len(plan)}, indent=2))
     if not plan:
-        print("No /tmp snapshot_path entries found.")
+        logger.info("No /tmp snapshot_path entries found.")
         return
 
-    print("\nSample plan (first 20):")
+    logger.info("\nSample plan (first 20):")
     for item in plan[:20]:
-        print(json.dumps(item, ensure_ascii=False))
+        logger.info(json.dumps(item, ensure_ascii=False))
 
     updates = [i for i in plan if i["action"] == "update_path"]
     archives = [i for i in plan if i["action"] != "update_path"]
 
-    print(f"\nWill update {len(updates)} rows and archive {len(archives)} rows.")
+    # report planned actions using separate arguments to avoid long
+    # formatted strings triggering the line‑length linter.
+    logger.info(
+        "\nWill update %d rows and archive %d rows.",
+        len(updates),
+        len(archives),
+    )
 
     if args.apply:
         if not args.no_backup:
             bak = backup_db(db_path)
-            print(f"Backup created: {bak}")
+            logger.info("Backup created: %s", bak)
         apply_plan(db_path, plan, apply_archive=True)
-        print("Applied changes to DB.")
+        logger.info("Applied changes to DB.")
     else:
-        print("Dry-run: no changes applied. Use --apply to modify DB.")
+        logger.info("Dry-run: no changes applied. Use --apply to modify DB.")
 
 
 if __name__ == "__main__":

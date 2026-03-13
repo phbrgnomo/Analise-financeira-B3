@@ -24,7 +24,6 @@ from src.utils.checksums import sha256_file
 
 
 @pytest.fixture
-
 def test_db(tmp_path, monkeypatch):
     """Create and migrate a temporary metadata database.
 
@@ -47,10 +46,11 @@ def test_db(tmp_path, monkeypatch):
 
     # patch environment and helpers
     monkeypatch.setenv("DB_PATH", str(db_path))
-    from src.db import connection, snapshots
+    from src.db import connection
 
+    # redirect both the low-level connector and the public helper so that
+    # every part of the application uses our temporary database file.
     monkeypatch.setattr(connection, "_connect", lambda db_path=None: test_conn)
-    monkeypatch.setattr(snapshots, "_connect", lambda db_path=None: test_conn)
     monkeypatch.setattr(db, "connect", lambda **kw: test_conn)
 
     yield test_conn, db_path
@@ -66,7 +66,7 @@ def _insert_snapshot_metadata(
     checksum: str,
     created_at: str = "2024-01-01T00:00:00Z",
     archived: int = 0,
-):
+) -> None:
     """Insert snapshot metadata row into snapshots table."""
     cur = conn.cursor()
     cur.execute(
