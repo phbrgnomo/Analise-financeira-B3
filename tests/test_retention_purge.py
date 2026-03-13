@@ -407,7 +407,7 @@ def test_purge_confirm_deletes_candidates(purge_test_setup, monkeypatch):
     Verify: old snapshots removed from DB and FS.
     """
 
-    test_csv, metadata_db_path = purge_test_setup
+    test_csv, metadata_db_path, checksum = purge_test_setup
 
     # Set retention to 90 days
     monkeypatch.setenv("SNAPSHOT_RETENTION_DAYS", "90")
