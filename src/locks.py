@@ -228,9 +228,7 @@ def acquire_lock(
             flags = portalocker.LockFlags.EXCLUSIVE
             if not wait:
                 flags |= portalocker.LockFlags.NON_BLOCKING
-            _acquire_with_portalocker(
-                fh, flags, wait, timeout_seconds, start, ticker
-            )
+            _acquire_with_portalocker(fh, flags, wait, timeout_seconds, start, ticker)
         else:
             _acquire_with_fcntl(fh, wait, timeout_seconds, start, ticker)
 

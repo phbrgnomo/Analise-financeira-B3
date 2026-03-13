@@ -122,7 +122,6 @@ def test_valid_checksums_pass(test_db, tmp_path):
         checksum=checksum2,
     )
 
-
     # 6. Import and run script's main() function
     from scripts.ci_validate_checksums import main
 

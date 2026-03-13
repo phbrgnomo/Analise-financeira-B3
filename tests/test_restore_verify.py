@@ -76,16 +76,18 @@ def _create_test_snapshot_with_metadata(
     snapshot_path = snapshot_dir / snapshot_filename
 
     # Write CSV with all required columns
-    df = pd.DataFrame({
-        "ticker": [ticker] * 3,
-        "date": ["2024-01-01", "2024-01-02", "2024-01-03"],
-        "open": [10.0, 11.0, 12.0],
-        "high": [10.5, 11.5, 12.5],
-        "low": [9.5, 10.5, 11.5],
-        "close": [10.2, 11.2, 12.2],
-        "volume": [1000, 1100, 1200],
-        "adj_close": [10.2, 11.2, 12.2],
-    })
+    df = pd.DataFrame(
+        {
+            "ticker": [ticker] * 3,
+            "date": ["2024-01-01", "2024-01-02", "2024-01-03"],
+            "open": [10.0, 11.0, 12.0],
+            "high": [10.5, 11.5, 12.5],
+            "low": [9.5, 10.5, 11.5],
+            "close": [10.2, 11.2, 12.2],
+            "volume": [1000, 1100, 1200],
+            "adj_close": [10.2, 11.2, 12.2],
+        }
+    )
     df.to_csv(snapshot_path, index=False)
 
     # Compute checksum
@@ -132,7 +134,6 @@ def test_restore_verify_pass(mock_metadata_db, tmp_path):
     )
     metadata_conn.close()
 
-
     # Run restore-verify
     runner = CliRunner()
     result = runner.invoke(
@@ -171,7 +172,6 @@ def test_restore_verify_missing_file(mock_metadata_db, tmp_path):
     """Non-existent snapshot file → exit 2, overall_result=FAIL."""
     _, metadata_db_path = mock_metadata_db
 
-
     # Run restore-verify with non-existent path
     missing_path = tmp_path / "does_not_exist.csv"
     runner = CliRunner()
@@ -197,7 +197,6 @@ def test_restore_verify_checksum_mismatch(mock_metadata_db, tmp_path):
     )
     metadata_conn.close()
 
-
     # Run restore-verify
     runner = CliRunner()
     result = runner.invoke(
@@ -221,7 +220,6 @@ def test_restore_verify_checksum_mismatch(mock_metadata_db, tmp_path):
 def test_restore_verify_invalid_csv(mock_metadata_db, tmp_path):
     """Malformed CSV file → exit 2, overall_result=FAIL."""
     _, metadata_db_path = mock_metadata_db
-
 
     # Create invalid CSV
     snapshot_dir = tmp_path / "snapshots"
@@ -263,16 +261,18 @@ def test_restore_verify_missing_metadata(mock_metadata_db, tmp_path, monkeypatch
     snapshot_dir.mkdir()
     snapshot_path = snapshot_dir / "PETR4-20240101T000000Z.csv"
 
-    df = pd.DataFrame({
-        "ticker": ["PETR4"] * 3,
-        "date": ["2024-01-01", "2024-01-02", "2024-01-03"],
-        "open": [10.0, 11.0, 12.0],
-        "high": [10.5, 11.5, 12.5],
-        "low": [9.5, 10.5, 11.5],
-        "close": [10.2, 11.2, 12.2],
-        "volume": [1000, 1100, 1200],
-        "adj_close": [10.2, 11.2, 12.2],
-    })
+    df = pd.DataFrame(
+        {
+            "ticker": ["PETR4"] * 3,
+            "date": ["2024-01-01", "2024-01-02", "2024-01-03"],
+            "open": [10.0, 11.0, 12.0],
+            "high": [10.5, 11.5, 12.5],
+            "low": [9.5, 10.5, 11.5],
+            "close": [10.2, 11.2, 12.2],
+            "volume": [1000, 1100, 1200],
+            "adj_close": [10.2, 11.2, 12.2],
+        }
+    )
     df.to_csv(snapshot_path, index=False)
 
     # Run restore-verify
@@ -343,8 +343,12 @@ def test_restore_verify_json_report_structure(mock_metadata_db, tmp_path, monkey
 
     # Validate checks dict structure
     checks = report["checks"]
-    required_checks = {"row_count", "columns_present",
-                       "checksum_match", "sample_row_check"}
+    required_checks = {
+        "row_count",
+        "columns_present",
+        "checksum_match",
+        "sample_row_check",
+    }
     missing_checks = required_checks - checks.keys()
     assert not missing_checks, f"Missing check(s): {sorted(missing_checks)}"
     # all recorded values must be one of the accepted statuses
@@ -370,14 +374,16 @@ def test_restore_verify_missing_columns(tmp_path, monkeypatch):
     snapshot_dir.mkdir()
     snapshot_path = snapshot_dir / "PETR4-20240101T000000Z.csv"
 
-    df = pd.DataFrame({
-        "ticker": ["PETR4"] * 3,
-        "date": ["2024-01-01", "2024-01-02", "2024-01-03"],
-        "open": [10.0, 11.0, 12.0],
-        "high": [10.5, 11.5, 12.5],
-        "low": [9.5, 10.5, 11.5],
-        # Missing 'close', 'volume', 'adj_close'
-    })
+    df = pd.DataFrame(
+        {
+            "ticker": ["PETR4"] * 3,
+            "date": ["2024-01-01", "2024-01-02", "2024-01-03"],
+            "open": [10.0, 11.0, 12.0],
+            "high": [10.5, 11.5, 12.5],
+            "low": [9.5, 10.5, 11.5],
+            # Missing 'close', 'volume', 'adj_close'
+        }
+    )
     df.to_csv(snapshot_path, index=False)
 
     # Run restore-verify

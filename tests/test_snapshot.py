@@ -9,6 +9,7 @@ from src.etl import snapshot as snapshot_module
 # quando nenhum timestamp explícito é fornecido.
 _contador_arquivos = 0
 
+
 def _make_file(path: Path, mtime: Optional[float] = None) -> Path:
     """Cria um arquivo vazio e ajusta seu tempo de modificação.
 

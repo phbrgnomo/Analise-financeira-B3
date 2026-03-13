@@ -63,8 +63,7 @@ def test_no_tmp_snapshot_paths_ci_only():
         cur.execute(query)
         row = cur.fetchone()
         assert row is None, (
-            "Found snapshot metadata pointing to /tmp in metadata DB: "
-            f"{row}"
+            f"Found snapshot metadata pointing to /tmp in metadata DB: {row}"
         )
     finally:
         conn.close()

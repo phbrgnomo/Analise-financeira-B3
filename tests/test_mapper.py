@@ -8,7 +8,6 @@ Covers:
 - Validation using pandera schema
 """
 
-
 import hashlib
 
 import pandas as pd
@@ -127,6 +126,7 @@ class TestToCanonical:
     def test_mapper_allows_zero_high_low(self):
         """Rows where high==low==0 should pass validation (holiday markers)."""
         import pandas as pd
+
         dates = pd.date_range("2026-01-01", periods=2, freq="D")
         raw_df = pd.DataFrame(
             {

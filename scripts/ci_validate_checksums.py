@@ -81,26 +81,17 @@ def main() -> int:  # noqa: C901 - complexity acceptable in simple script
 
         path_obj = Path(snapshot_path)
         if not path_obj.exists():
-            print(
-                f"FAIL: {ticker} (id={snap_id}) - "
-                f"File not found at {snapshot_path}"
-            )
+            print(f"FAIL: {ticker} (id={snap_id}) - File not found at {snapshot_path}")
             missing += 1
             failed += 1
             continue
 
         computed = sha256_file(path_obj)
         if computed == stored_checksum:
-            print(
-                f"PASS: {ticker} (id={snap_id}) - "
-                f"checksum: {computed[:12]}..."
-            )
+            print(f"PASS: {ticker} (id={snap_id}) - checksum: {computed[:12]}...")
             passed += 1
         else:
-            print(
-                f"FAIL: {ticker} (id={snap_id}) - "
-                f"Checksum mismatch"
-            )
+            print(f"FAIL: {ticker} (id={snap_id}) - Checksum mismatch")
             print(f"  Expected: {stored_checksum}")
             print(f"  Computed: {computed}")
             failed += 1

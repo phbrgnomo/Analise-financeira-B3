@@ -173,8 +173,7 @@ class YFinanceAdapter(Adapter):
         # casting to str to avoid tuple-typed column names.
         if isinstance(df.columns, pd.MultiIndex):
             df.columns = [
-                str(c[0]) if isinstance(c, tuple) else str(c)
-                for c in df.columns
+                str(c[0]) if isinstance(c, tuple) else str(c) for c in df.columns
             ]
 
         # Adicionar metadados

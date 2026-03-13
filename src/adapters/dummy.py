@@ -59,8 +59,9 @@ class DummyAdapter(Adapter):
             else:
                 if secs:
                     time.sleep(secs)
-        dates = pd.date_range(end=datetime.now(timezone.utc).date(), periods=3,
-                              freq="D")
+        dates = pd.date_range(
+            end=datetime.now(timezone.utc).date(), periods=3, freq="D"
+        )
         # choose values that satisfy the canonical schema requirement
         # (``high`` must be strictly greater than ``low`` unless one of them
         # is NaN or both are zero).  using a small offset keeps the sequence

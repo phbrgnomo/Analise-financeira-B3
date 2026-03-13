@@ -171,8 +171,7 @@ def ingest_cmd(
     src_key = source.lower()
     if src_key not in prov_map:
         raise typer.BadParameter(
-            "unknown provider %r, choose from %s"
-            % (source, ", ".join(provs)),
+            "unknown provider %r, choose from %s" % (source, ", ".join(provs)),
         )
     src_name = prov_map[src_key]
     try:
@@ -213,9 +212,7 @@ def pull_sample_cmd(
     output: str | None = typer.Option(
         None,
         "--output",
-        help=(
-            "CSV canônico de saída (padrão: dados/samples/<ticker>_sample.csv)"
-        ),
+        help=("CSV canônico de saída (padrão: dados/samples/<ticker>_sample.csv)"),
     ),
 ) -> None:
     """Gera artefatos raw/canônico de amostra via adapter sem persistir no DB."""
@@ -233,8 +230,7 @@ def pull_sample_cmd(
         src_key = raw_source.lower()
         if src_key not in prov_map:
             raise typer.BadParameter(
-                "unknown provider %r, choose from %s"
-                % (source, ", ".join(provs)),
+                "unknown provider %r, choose from %s" % (source, ", ".join(provs)),
             )
         src_name = prov_map[src_key]
 
@@ -357,8 +353,7 @@ def snapshot(
     db.record_snapshot_metadata(metadata, db_path=None)
 
     success_message = (
-        f"Snapshot gerado: {out_path} "
-        f"({len(df)} linhas, {size_bytes} bytes)"
+        f"Snapshot gerado: {out_path} ({len(df)} linhas, {size_bytes} bytes)"
     )
     fb.success(success_message)
 

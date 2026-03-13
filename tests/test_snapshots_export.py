@@ -98,8 +98,7 @@ def _assert_snapshot_json(data: dict, ticker: str = "PETR4") -> None:
     """Common assertions for JSON export metadata structure."""
     required_fields = {"ticker", "checksum", "rows", "data"}
     assert required_fields.issubset(data.keys()), (
-        "Missing required field(s): "
-        f"{required_fields - set(data.keys())}"
+        f"Missing required field(s): {required_fields - set(data.keys())}"
     )
     assert data.get("ticker") == ticker
     assert isinstance(data.get("data"), list)
@@ -299,8 +298,7 @@ def test_export_json_has_metadata_fields(tmp_path, monkeypatch):
         required_fields = {"ticker", "checksum", "rows", "data"}
         # verify all required keys are present
         assert required_fields.issubset(data.keys()), (
-            "Missing required field(s): "
-            f"{required_fields - set(data.keys())}"
+            f"Missing required field(s): {required_fields - set(data.keys())}"
         )
 
         assert isinstance(data["ticker"], str)

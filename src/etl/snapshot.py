@@ -66,6 +66,7 @@ _SNAPSHOT_FILENAME_RE = re.compile(
     re.VERBOSE,
 )
 
+
 def _parse_snapshot_timestamp(path: Path) -> tuple[datetime | None, float]:
     """Tenta extrair o timestamp a partir do nome do arquivo.
 

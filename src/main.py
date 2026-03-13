@@ -72,7 +72,7 @@ try:
         pipeline_module.app,
         name="pipeline",
         help="Comandos do pipeline: operações de ingest e "
-             "amostragem sem execução completa do ETL.",
+        "amostragem sem execução completa do ETL.",
     )
     app.add_typer(
         snapshot_cli_module.app,
@@ -95,13 +95,10 @@ def _normalize_cli_ticker(value: str) -> str:
         raise typer.BadParameter(str(exc)) from exc
 
 
-
-
 class _ComputeResult(TypedDict):
     rows: int
     persisted: bool
     sample_df: "pd.DataFrame | None"  # pandas.DataFrame or None
-
 
 
 def _compute_returns_for_ticker(
@@ -136,8 +133,6 @@ def _compute_returns_for_ticker(
     sample_df = df.head(5) if rows > 5 else df
 
     return {"rows": rows, "persisted": persisted, "sample_df": sample_df}
-
-
 
 
 @app.command("run")
@@ -176,9 +171,7 @@ def run_cmd(
     tickers: list[str]
     if effective_ticker is None:
         tickers = list(DEFAULT_TICKERS)
-        feedback.start(
-            f"processando tickers padrão com provider={effective_provider}"
-        )
+        feedback.start(f"processando tickers padrão com provider={effective_provider}")
         feedback.info(f"Tickers: {', '.join(tickers)}")
         feedback.info("Para ticker específico, execute: main run --ticker <ticker>")
     else:
@@ -444,9 +437,7 @@ if __name__ == "__main__":
         configure_logging()
     except Exception as e:  # pragma: no cover - very unlikely, but safe
         # usar logger disponível, mesmo que básico
-        logging.getLogger(__name__).exception(
-            "falha ao configurar logging: %s", e
-        )
+        logging.getLogger(__name__).exception("falha ao configurar logging: %s", e)
 
     if os.getenv("PROMETHEUS_METRICS"):
         raw_port = os.getenv("PROMETHEUS_METRICS_PORT", "8000")

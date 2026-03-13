@@ -37,8 +37,8 @@ def format_duration(seconds: float) -> str:
     return f"{hours}h {remaining_minutes}m"
 
 
-
 StepStatus = Literal["success", "error", "warning", "skip"]
+
 
 class CliFeedback:
     """Helper simples para exibir progresso, etapas e resumos na CLI."""

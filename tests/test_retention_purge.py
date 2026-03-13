@@ -56,9 +56,7 @@ def test_find_purge_candidates_returns_old_snapshots(tmp_path):
     apply_migrations(conn)
 
     # Insert old snapshot (100 days ago)
-    old_date = (
-        datetime.now(timezone.utc) - timedelta(days=100)
-    ).isoformat()
+    old_date = (datetime.now(timezone.utc) - timedelta(days=100)).isoformat()
     cur = conn.cursor()
     cur.execute(
         "INSERT INTO snapshots (id, ticker, snapshot_path, checksum, "
@@ -67,9 +65,7 @@ def test_find_purge_candidates_returns_old_snapshots(tmp_path):
     )
 
     # Insert recent snapshot (10 days ago)
-    recent_date = (
-        datetime.now(timezone.utc) - timedelta(days=10)
-    ).isoformat()
+    recent_date = (datetime.now(timezone.utc) - timedelta(days=10)).isoformat()
     cur.execute(
         "INSERT INTO snapshots (id, ticker, snapshot_path, checksum, "
         "size_bytes, created_at, archived) VALUES (?, ?, ?, ?, ?, ?, ?)",
@@ -96,9 +92,7 @@ def test_find_purge_candidates_excludes_archived(tmp_path):
     apply_migrations(conn)
 
     # Insert old archived snapshot
-    old_date = (
-        datetime.now(timezone.utc) - timedelta(days=100)
-    ).isoformat()
+    old_date = (datetime.now(timezone.utc) - timedelta(days=100)).isoformat()
     cur = conn.cursor()
     cur.execute(
         "INSERT INTO snapshots (id, ticker, snapshot_path, checksum, "
@@ -136,15 +130,17 @@ def test_archive_snapshots_copies_and_marks(tmp_path):
 
     # Create test CSV file
     test_csv = tmp_path / "PETR4_snapshot.csv"
-    df = pd.DataFrame({
-        "date": ["2023-01-01", "2023-01-02"],
-        "open": [10.0, 10.5],
-        "high": [11.0, 11.5],
-        "low": [9.0, 9.5],
-        "close": [10.5, 11.0],
-        "volume": [1000, 1500],
-        "ticker": ["PETR4", "PETR4"],
-    })
+    df = pd.DataFrame(
+        {
+            "date": ["2023-01-01", "2023-01-02"],
+            "open": [10.0, 10.5],
+            "high": [11.0, 11.5],
+            "low": [9.0, 9.5],
+            "close": [10.5, 11.0],
+            "volume": [1000, 1500],
+            "ticker": ["PETR4", "PETR4"],
+        }
+    )
     df.to_csv(test_csv, index=False)
 
     # Calculate checksum
@@ -155,8 +151,15 @@ def test_archive_snapshots_copies_and_marks(tmp_path):
     cur.execute(
         "INSERT INTO snapshots (id, ticker, snapshot_path, checksum, "
         "size_bytes, created_at, archived) VALUES (?, ?, ?, ?, ?, ?, ?)",
-        ("1", "PETR4", str(test_csv), checksum, test_csv.stat().st_size,
-         datetime.now(timezone.utc).isoformat(), 0),
+        (
+            "1",
+            "PETR4",
+            str(test_csv),
+            checksum,
+            test_csv.stat().st_size,
+            datetime.now(timezone.utc).isoformat(),
+            0,
+        ),
     )
     conn.commit()
 
@@ -197,15 +200,17 @@ def test_archive_snapshots_checksum_mismatch(tmp_path):
 
     # Create test CSV file
     test_csv = tmp_path / "PETR4_snapshot.csv"
-    df = pd.DataFrame({
-        "date": ["2023-01-01"],
-        "open": [10.0],
-        "high": [11.0],
-        "low": [9.0],
-        "close": [10.5],
-        "volume": [1000],
-        "ticker": ["PETR4"],
-    })
+    df = pd.DataFrame(
+        {
+            "date": ["2023-01-01"],
+            "open": [10.0],
+            "high": [11.0],
+            "low": [9.0],
+            "close": [10.5],
+            "volume": [1000],
+            "ticker": ["PETR4"],
+        }
+    )
     df.to_csv(test_csv, index=False)
 
     # Wrong checksum in DB
@@ -216,9 +221,15 @@ def test_archive_snapshots_checksum_mismatch(tmp_path):
     cur.execute(
         "INSERT INTO snapshots (id, ticker, snapshot_path, checksum, "
         "size_bytes, created_at, archived) VALUES (?, ?, ?, ?, ?, ?, ?)",
-        ("1", "PETR4", str(test_csv), wrong_checksum,
-         test_csv.stat().st_size,
-         datetime.now(timezone.utc).isoformat(), 0),
+        (
+            "1",
+            "PETR4",
+            str(test_csv),
+            wrong_checksum,
+            test_csv.stat().st_size,
+            datetime.now(timezone.utc).isoformat(),
+            0,
+        ),
     )
     conn.commit()
 
@@ -231,9 +242,7 @@ def test_archive_snapshots_checksum_mismatch(tmp_path):
     assert results[0]["checksum_ok"] is False
 
     # Verify archived=1 still set (current behavior)
-    row = conn.execute(
-        "SELECT archived FROM snapshots WHERE id = ?", ("1",)
-    ).fetchone()
+    row = conn.execute("SELECT archived FROM snapshots WHERE id = ?", ("1",)).fetchone()
     assert row[0] == 1
 
     conn.close()
@@ -251,8 +260,15 @@ def test_archive_snapshots_missing_source_continues(tmp_path):
     cur.execute(
         "INSERT INTO snapshots (id, ticker, snapshot_path, checksum, "
         "size_bytes, created_at, archived) VALUES (?, ?, ?, ?, ?, ?, ?)",
-        ("1", "PETR4", "/nonexistent/path.csv", "abc", 0,
-         datetime.now(timezone.utc).isoformat(), 0),
+        (
+            "1",
+            "PETR4",
+            "/nonexistent/path.csv",
+            "abc",
+            0,
+            datetime.now(timezone.utc).isoformat(),
+            0,
+        ),
     )
     conn.commit()
 
@@ -264,9 +280,7 @@ def test_archive_snapshots_missing_source_continues(tmp_path):
     assert "error" in results[0]
 
     # DB should not be marked archived because copy failed
-    row = conn.execute(
-        "SELECT archived FROM snapshots WHERE id = ?", ("1",)
-    ).fetchone()
+    row = conn.execute("SELECT archived FROM snapshots WHERE id = ?", ("1",)).fetchone()
     assert row[0] == 0
 
     conn.close()
@@ -284,15 +298,17 @@ def test_delete_snapshots_removes_files_and_db(tmp_path):
 
     # Create test CSV file
     test_csv = tmp_path / "PETR4_snapshot.csv"
-    df = pd.DataFrame({
-        "date": ["2023-01-01"],
-        "open": [10.0],
-        "high": [11.0],
-        "low": [9.0],
-        "close": [10.5],
-        "volume": [1000],
-        "ticker": ["PETR4"],
-    })
+    df = pd.DataFrame(
+        {
+            "date": ["2023-01-01"],
+            "open": [10.0],
+            "high": [11.0],
+            "low": [9.0],
+            "close": [10.5],
+            "volume": [1000],
+            "ticker": ["PETR4"],
+        }
+    )
     df.to_csv(test_csv, index=False)
 
     # Create checksum sidecar
@@ -304,8 +320,15 @@ def test_delete_snapshots_removes_files_and_db(tmp_path):
     cur.execute(
         "INSERT INTO snapshots (id, ticker, snapshot_path, checksum, "
         "size_bytes, created_at, archived) VALUES (?, ?, ?, ?, ?, ?, ?)",
-        ("1", "PETR4", str(test_csv), "abc123", test_csv.stat().st_size,
-         datetime.now(timezone.utc).isoformat(), 0),
+        (
+            "1",
+            "PETR4",
+            str(test_csv),
+            "abc123",
+            test_csv.stat().st_size,
+            datetime.now(timezone.utc).isoformat(),
+            0,
+        ),
     )
     conn.commit()
 
@@ -321,9 +344,7 @@ def test_delete_snapshots_removes_files_and_db(tmp_path):
     assert not checksum_file.exists()
 
     # Verify DB record removed
-    row = conn.execute(
-        "SELECT * FROM snapshots WHERE id = ?", ("1",)
-    ).fetchone()
+    row = conn.execute("SELECT * FROM snapshots WHERE id = ?", ("1",)).fetchone()
     assert row is None
 
     conn.close()
@@ -345,8 +366,15 @@ def test_delete_snapshots_missing_file_no_crash(tmp_path):
     cur.execute(
         "INSERT INTO snapshots (id, ticker, snapshot_path, checksum, "
         "size_bytes, created_at, archived) VALUES (?, ?, ?, ?, ?, ?, ?)",
-        ("1", "PETR4", str(nonexistent_path), "abc123", 1000,
-         datetime.now(timezone.utc).isoformat(), 0),
+        (
+            "1",
+            "PETR4",
+            str(nonexistent_path),
+            "abc123",
+            1000,
+            datetime.now(timezone.utc).isoformat(),
+            0,
+        ),
     )
     conn.commit()
 
@@ -359,9 +387,7 @@ def test_delete_snapshots_missing_file_no_crash(tmp_path):
     assert results[0]["deleted"] is True
 
     # Verify DB record removed
-    row = conn.execute(
-        "SELECT * FROM snapshots WHERE id = ?", ("1",)
-    ).fetchone()
+    row = conn.execute("SELECT * FROM snapshots WHERE id = ?", ("1",)).fetchone()
     assert row is None
 
     conn.close()
@@ -441,7 +467,6 @@ def test_purge_confirm_archives_candidates(purge_test_setup, monkeypatch, tmp_pa
     """
 
     test_csv, metadata_db_path, checksum = purge_test_setup
-
 
     # Set retention to 90 days
     monkeypatch.setenv("SNAPSHOT_RETENTION_DAYS", "90")

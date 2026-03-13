@@ -23,7 +23,7 @@ try:
     # Only patch when the original signature does *not* accept arbitrary
     # extra args/kwargs (which is the behaviour fixed in newer Typer/Click
     # versions).  Inspecting the signature avoids overriding a future
-    #-compatible implementation.
+    # -compatible implementation.
     try:
         sig = inspect.signature(_orig_make_metavar)
         params = list(sig.parameters.values())[1:]  # skip self
@@ -36,6 +36,7 @@ try:
         supports_extra = False
 
     if not supports_extra:
+
         def _patched_make_metavar(self, *args, **kwargs):
             # drop any extra arguments (e.g. ctx) and call original
             return _orig_make_metavar(self)

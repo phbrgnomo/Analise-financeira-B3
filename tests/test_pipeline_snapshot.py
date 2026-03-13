@@ -139,8 +139,7 @@ def test_snapshot_with_date_range(sample_db, tmp_path, monkeypatch):
     df = pd.read_csv(csv_path)
 
     assert len(df) == 2, (
-        f"Expected 2 rows in filtered range [2023-01-03, 2023-01-04], "
-        f"got {len(df)}"
+        f"Expected 2 rows in filtered range [2023-01-03, 2023-01-04], got {len(df)}"
     )
     dates = df["date"].tolist()
     assert "2023-01-03" in dates
@@ -171,9 +170,7 @@ def test_snapshot_invalid_ticker_exit_code_1(sample_db, tmp_path, monkeypatch):
 
     assert result.exit_code == 1, "Expected exit code 1 for invalid ticker"
     plain_output = _strip_ansi(result.output).lower()
-    assert (
-        "ticker inválido" in plain_output or "nenhum dado encontrado" in plain_output
-    )
+    assert "ticker inválido" in plain_output or "nenhum dado encontrado" in plain_output
 
 
 def test_snapshot_empty_date_range_exit_code_1(sample_db, tmp_path, monkeypatch):

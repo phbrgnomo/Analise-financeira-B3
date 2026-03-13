@@ -27,6 +27,7 @@ def test_cli_help():
     # usage line is present rather than hard-coding the "Options" label.
     assert "Usage:" in result.output
 
+
 def test_ingest_snapshot_help():
     """Verifica que a ajuda do subcomando `snapshots ingest` inclui novos
     flags como --force-refresh, --ttl e --cache-file e retorna exit code 0.
@@ -34,8 +35,7 @@ def test_ingest_snapshot_help():
     runner = CliRunner()
     result = runner.invoke(app, ["snapshots", "ingest", "--help"])
     assert result.exit_code == 0, (
-        f"CLI help falhou (exit_code={result.exit_code}): "
-        f"{result.exception}"
+        f"CLI help falhou (exit_code={result.exit_code}): {result.exception}"
     )
     plain = _strip_ansi(result.output)
     # verify that the new flags appear
@@ -125,8 +125,7 @@ def test_run_uses_ingest_pipeline(monkeypatch):
     norm_ingest = {t.rstrip(".SA") for t in ingest_tickers}
     norm_compute = {t.rstrip(".SA") for t in calls_to_compute}
     assert norm_compute.issubset(norm_ingest), (
-        f"ticker inesperado para cálculo de retornos: "
-        f"{norm_compute - norm_ingest}"
+        f"ticker inesperado para cálculo de retornos: {norm_compute - norm_ingest}"
     )
     # e não deve haver chamadas extras
     assert len(calls_to_compute) == len(ingest_tickers)
@@ -213,6 +212,7 @@ def test_export_csv_success(tmp_path, monkeypatch):
     )
     # intercept default DATA_DIR in main module so file lands in tmp_path
     import src.main as mainmod
+
     monkeypatch.setattr(mainmod, "DATA_DIR", tmp_path)
 
     runner = CliRunner()
@@ -227,6 +227,7 @@ def test_export_csv_success(tmp_path, monkeypatch):
 def test_export_csv_not_found(monkeypatch):
     """CLI falha se o ticker válido não estiver no banco nem na variante."""
     from src.main import app
+
     # use a valid ticker so normalization passes
     monkeypatch.setattr("src.db.resolve_existing_ticker", lambda t: None)
     monkeypatch.setattr("src.tickers.ticker_variants", lambda t: (t, f"{t}.SA"))

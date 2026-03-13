@@ -126,9 +126,7 @@ def to_utc_naive_datetime_index(index: pd.Index) -> pd.DatetimeIndex:
     return dt_index.tz_convert(None)
 
 
-def rows_to_ingest(
-    df: pd.DataFrame, existing: Optional[pd.DataFrame]
-) -> pd.DataFrame:
+def rows_to_ingest(df: pd.DataFrame, existing: Optional[pd.DataFrame]) -> pd.DataFrame:
     """Return the subset of *df* that should be written to the database.
 
     New rows (dates not in *existing*) and changed rows (same date but
@@ -216,13 +214,10 @@ def _load_last_snapshot_meta(
             try:
                 return json.loads(payload_str)
             except json.JSONDecodeError as exc:
-                logger.warning(
-                    "invalid snapshot metadata JSON for %s: %s", ticker, exc
-                )
+                logger.warning("invalid snapshot metadata JSON for %s: %s", ticker, exc)
     except (OSError, sqlite3.DatabaseError) as exc:
         logger.warning(
-            "snapshot metadata cache fallback; failed to read metadata for"
-            " %s: %s",
+            "snapshot metadata cache fallback; failed to read metadata for %s: %s",
             ticker,
             exc,
         )

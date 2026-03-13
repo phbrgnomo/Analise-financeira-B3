@@ -3,6 +3,7 @@
 This module provides no-op implementations when `prometheus_client` is not
 installed so tests and minimal environments don't require the package.
 """
+
 import logging
 from typing import Dict
 
@@ -114,10 +115,7 @@ def observe_histogram(name: str, value: float) -> None:
 
 def start_metrics_server(port: int = 8000) -> None:
     if not _HAS_PROM or start_http_server is None:
-        msg = (
-            "prometheus_client não disponível; servidor de métricas "
-            "não iniciado"
-        )
+        msg = "prometheus_client não disponível; servidor de métricas não iniciado"
         logger.info(msg)
         return
     try:

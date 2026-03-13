@@ -48,6 +48,7 @@ def snapshot_test_db(tmp_path, sample_db, monkeypatch) -> Path:
     # ``prices.read_prices`` imported the connector at import-time; patch
     # that name as well so CLI commands pick up our sample DB.
     from src.db import prices
+
     monkeypatch.setattr(prices, "connect", lambda db_path=None: sample_db)
 
     # Force all metadata writes produced by the CLI to land in our
@@ -138,11 +139,8 @@ def test_metadata_registered_after_snapshot(snapshot_test_db, tmp_path):
     assert row["ticker"] == "PETR4", "ticker should match"
     assert row["snapshot_path"] is not None, "snapshot_path should be populated"
     assert (
-        row["snapshot_path"].startswith("PETR4")
-        or "/tmp/" not in row["snapshot_path"]
-    ), (
-        "metadata path should not include raw /tmp prefix"
-    )
+        row["snapshot_path"].startswith("PETR4") or "/tmp/" not in row["snapshot_path"]
+    ), "metadata path should not include raw /tmp prefix"
     assert row["created_at"] is not None, "created_at should be populated"
     assert row["rows"] is not None, "rows field should be populated"
     assert row["checksum"] is not None, "checksum field should be populated"
@@ -180,14 +178,13 @@ def test_checksum_matches_sha256_file(snapshot_test_db, tmp_path):
     assert len(metadata) >= 1
     recorded_checksum = metadata[0]["checksum"]
 
-    assert (
-        recorded_checksum == expected_checksum
-    ), f"DB checksum {recorded_checksum} != file checksum {expected_checksum}"
+    assert recorded_checksum == expected_checksum, (
+        f"DB checksum {recorded_checksum} != file checksum {expected_checksum}"
+    )
 
 
 def test_checksum_sidecar_written(snapshot_test_db, tmp_path, monkeypatch):
     """.checksum sidecar file exists next to CSV."""
-
 
     runner = CliRunner()
     output_dir = tmp_path / "snapshots"

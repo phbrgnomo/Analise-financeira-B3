@@ -10,7 +10,6 @@ seguras: atualizar `snapshot_path` para `snapshots/<basename>` quando o
 arquivo existir e o checksum bater; caso contrário marca como archived).
 """
 
-
 from __future__ import annotations
 
 import argparse
@@ -167,8 +166,7 @@ def apply_plan(db_path: Path, plan: list[dict[str, Any]], apply_archive: bool = 
                 # use timezone-aware timestamp consistent with other helpers
                 archived_at = f"{datetime.now(timezone.utc).isoformat()}Z"
                 query = (
-                    "UPDATE snapshots SET archived = 1, "
-                    "archived_at = ? WHERE id = ?"
+                    "UPDATE snapshots SET archived = 1, archived_at = ? WHERE id = ?"
                 )
                 cur.execute(query, (archived_at, sid))
         conn.commit()

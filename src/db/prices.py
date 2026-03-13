@@ -101,9 +101,7 @@ def write_prices(  # noqa: C901
             df["date"] = pd.to_datetime(df["date"]).dt.tz_localize(None)
             df = df.set_index("date")
         if not isinstance(df.index, pd.DatetimeIndex):
-            raise ValueError(
-                "DataFrame must have a DatetimeIndex or a 'date' column"
-            )
+            raise ValueError("DataFrame must have a DatetimeIndex or a 'date' column")
 
         cols_map = {c.lower(): c for c in df.columns}
 
@@ -239,14 +237,9 @@ def _read_prices_core(
     # names. Column names used as DataFrame columns remain unquoted.
     quoted_select = [_quote_identifier(c) for c in select_cols]
     if len(candidates) == 2:
-        sql = (
-            f"SELECT {', '.join(quoted_select)} FROM prices "
-            "WHERE ticker IN (?, ?)"
-        )
+        sql = f"SELECT {', '.join(quoted_select)} FROM prices WHERE ticker IN (?, ?)"
     else:
-        sql = (
-            f"SELECT {', '.join(quoted_select)} FROM prices WHERE ticker = ?"
-        )
+        sql = f"SELECT {', '.join(quoted_select)} FROM prices WHERE ticker = ?"
     if start and end:
         sql += " AND date BETWEEN ? AND ?"
         params.extend([start, end])

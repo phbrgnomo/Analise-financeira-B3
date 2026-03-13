@@ -67,9 +67,7 @@ def test_acceptance_snapshot(tmp_path: Path):
     # Monta o caminho do script relativo a este arquivo de teste
     # para não depender do CWD
     verify = (
-        Path(__file__).resolve().parent.parent.parent
-        / "scripts"
-        / "verify_snapshot.py"
+        Path(__file__).resolve().parent.parent.parent / "scripts" / "verify_snapshot.py"
     )
     validate_cmd = [
         sys.executable,
@@ -82,7 +80,5 @@ def test_acceptance_snapshot(tmp_path: Path):
     ]
     proc = subprocess.run(validate_cmd, capture_output=True, text=True, timeout=60)
     assert proc.returncode == 0, (
-        "Snapshot validation failed:\n"
-        f"STDOUT: {proc.stdout}\n"
-        f"STDERR: {proc.stderr}"
+        f"Snapshot validation failed:\nSTDOUT: {proc.stdout}\nSTDERR: {proc.stderr}"
     )

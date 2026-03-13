@@ -32,9 +32,9 @@ def test_save_raw_csv_and_register(tmp_path):
         )
         # ensure we got a deprecation warning and that the warning points to
         # the caller (this test file) rather than raw_storage itself.
-        assert any(
-            isinstance(i.message, DeprecationWarning) for i in w
-        ), "expected deprecation warning"
+        assert any(isinstance(i.message, DeprecationWarning) for i in w), (
+            "expected deprecation warning"
+        )
         last = w[-1]
         # filename should not mention raw_storage; it should refer to this test
         assert "raw_storage.py" not in last.filename

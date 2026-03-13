@@ -60,6 +60,7 @@ class JSONFormatter(logging.Formatter):
     -----------------
     - format(record): formata o `LogRecord` e retorna uma string JSON.
     """
+
     def format(self, record: logging.LogRecord) -> str:
         """Format a LogRecord as a compact JSON string.
 

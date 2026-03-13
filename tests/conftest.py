@@ -148,7 +148,6 @@ def mock_metadata_db(tmp_path, monkeypatch):
 
 
 @pytest.fixture
-
 def purge_test_setup(tmp_path, monkeypatch):
     """Prepare a metadata DB with one old snapshot and return paths.
 
@@ -168,21 +167,21 @@ def purge_test_setup(tmp_path, monkeypatch):
 
     # create CSV and checksum
     test_csv = tmp_path / "PETR4_snapshot.csv"
-    df = pd.DataFrame({
-        "date": ["2023-01-01"],
-        "open": [10.0],
-        "high": [11.0],
-        "low": [9.0],
-        "close": [10.5],
-        "volume": [1000],
-        "ticker": ["PETR4"],
-    })
+    df = pd.DataFrame(
+        {
+            "date": ["2023-01-01"],
+            "open": [10.0],
+            "high": [11.0],
+            "low": [9.0],
+            "close": [10.5],
+            "volume": [1000],
+            "ticker": ["PETR4"],
+        }
+    )
     df.to_csv(test_csv, index=False)
     checksum = sha256_file(test_csv)
 
-    old_date = (
-        datetime.now(timezone.utc) - timedelta(days=100)
-    ).isoformat()
+    old_date = (datetime.now(timezone.utc) - timedelta(days=100)).isoformat()
     cur = metadata_conn.cursor()
     cur.execute(
         "INSERT INTO snapshots (id, ticker, snapshot_path, checksum, "

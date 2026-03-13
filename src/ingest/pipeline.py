@@ -48,11 +48,10 @@ from src.tickers import normalize_b3_ticker
 DEFAULT_SAMPLES_DIR = Path("dados") / "samples"
 
 
-
-
 def _now_iso() -> str:
     """Return current UTC time as an RFC3339 string with Z suffix."""
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
 
 logger = logging.getLogger(__name__)
 
@@ -252,6 +251,7 @@ _record_ingest_metadata = record_ingest_metadata
 
 
 # helper for building metadata dictionaries used in ingest()
+
 
 def _make_metadata(
     job_id: str,

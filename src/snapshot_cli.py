@@ -128,8 +128,7 @@ def _show_candidates(
 ) -> None:
     if not candidates:
         feedback.info(
-            "Nenhum snapshot elegível para purge "
-            f"(older-than={older_than} dias)."
+            f"Nenhum snapshot elegível para purge (older-than={older_than} dias)."
         )
         return
 
@@ -223,9 +222,7 @@ def purge_snapshots(
             return
 
         snapshot_ids = [
-            str(candidate.get("id"))
-            for candidate in candidates
-            if "id" in candidate
+            str(candidate.get("id")) for candidate in candidates if "id" in candidate
         ]
 
         if archive_dir is not None:
@@ -234,8 +231,7 @@ def purge_snapshots(
                 snapshot_ids,
                 archive_dir,
             )
-            ok_count = sum(bool(row.get("checksum_ok"))
-                       for row in archived)
+            ok_count = sum(bool(row.get("checksum_ok")) for row in archived)
             feedback.success(
                 f"Arquivamento concluído: {len(archived)} snapshot(s), "
                 f"checksums OK: {ok_count}"
@@ -243,8 +239,7 @@ def purge_snapshots(
             return
 
         deleted = delete_snapshots(conn, snapshot_ids)
-        deleted_count = sum(bool(row.get("deleted"))
-                        for row in deleted)
+        deleted_count = sum(bool(row.get("deleted")) for row in deleted)
         feedback.success(
             f"Purge concluído: {len(deleted)} snapshot(s) processado(s), "
             f"arquivos removidos: {deleted_count}"
@@ -336,9 +331,7 @@ def ingest_snapshot(
     ),
     ticker: str = typer.Option(
         "",
-        help=(
-            "Ticker B3 associado ao snapshot quando o CSV não traz coluna ticker"
-        ),
+        help=("Ticker B3 associado ao snapshot quando o CSV não traz coluna ticker"),
         is_flag=False,
     ),
     force_refresh: bool = typer.Option(
@@ -364,9 +357,7 @@ def ingest_snapshot(
     feedback = CliFeedback("snapshots ingest")
 
     effective_ticker = ticker or ticker_arg
-    normalized_ticker = (
-        effective_ticker.strip().upper() if effective_ticker else None
-    )
+    normalized_ticker = effective_ticker.strip().upper() if effective_ticker else None
     effective_force_refresh = force_refresh
     ttl_arg = None if ttl < 0 else ttl
     cache_arg = cache_file or None

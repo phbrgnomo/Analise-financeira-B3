@@ -80,7 +80,6 @@ def test_concurrent_writes_file_backed(tmp_path: Path):
 
         futures = [make_task(w) for w in range(workers)]
 
-
         # gather results via comprehension rather than explicit loop
         results = [f.result() for f in as_completed(futures)]
         errors.extend(e for e in results if e)

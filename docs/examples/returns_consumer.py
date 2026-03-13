@@ -2,6 +2,7 @@
 Small script example for consumers showing how to read `returns` and
 compute cumulative return.
 """
+
 import logging
 import sqlite3
 from contextlib import closing
@@ -32,8 +33,7 @@ def main(db_path: str = "dados/data.db", ticker: str = "PETR4.SA"):
     with closing(sqlite3.connect(db_path)) as conn:
         try:
             sql = (
-                "SELECT date, return_value FROM returns "
-                "WHERE ticker = ? ORDER BY date"
+                "SELECT date, return_value FROM returns WHERE ticker = ? ORDER BY date"
             )
             df = pd.read_sql_query(
                 sql,

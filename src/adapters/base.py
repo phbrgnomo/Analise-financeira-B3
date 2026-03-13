@@ -360,7 +360,7 @@ class Adapter(ABC):
         required_columns: Optional[List[str]] = None,
         idempotent: bool = True,
         **kwargs,
-    ) -> pd.DataFrame:    # noqa: C901
+    ) -> pd.DataFrame:  # noqa: C901
         """
         Loop de retry/backoff que chama `_fetch_once` e aplica validações genéricas.
         Mapeia exceções para `NetworkError` / `FetchError`.
@@ -374,9 +374,7 @@ class Adapter(ABC):
         # Allow zero to be specified by configuration (interpreted as
         # "no additional retries"). Only negative values are invalid.
         if max_retries < 0:
-            raise ValueError(
-                f"max_retries deve ser >= 0, recebido: {max_retries}"
-            )
+            raise ValueError(f"max_retries deve ser >= 0, recebido: {max_retries}")
 
         last_exception = None
         if log_context is None:

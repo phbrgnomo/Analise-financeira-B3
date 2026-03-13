@@ -1,6 +1,5 @@
 """Snapshot metadata persistence."""
 
-
 import hashlib
 import json
 import os
@@ -57,6 +56,7 @@ def _extract_date_range_from_payload(  # noqa: C901 - multiple fallback strategi
     "end_date": "2023-01-02"}'})
     ("2023-01-01", "2023-01-02")
     """
+
     def _normalize_date_string(date_str: str) -> str:
         """Normalize date strings to ``YYYY-MM-DD`` format.
 
@@ -335,14 +335,11 @@ def get_snapshot_metadata(
         close_conn = True
     try:
         cur = conn.cursor()
-        cur.execute("SELECT * FROM snapshots WHERE id = ? LIMIT 1",
-                    (snapshot_id,))
+        cur.execute("SELECT * FROM snapshots WHERE id = ? LIMIT 1", (snapshot_id,))
         row = cur.fetchone()
         if row is None:
             return None
-        return dict(zip(
-            [col[0] for col in cur.description], row, strict=False
-        ))
+        return dict(zip([col[0] for col in cur.description], row, strict=False))
     finally:
         if close_conn:
             conn.close()
@@ -408,15 +405,14 @@ def _query_snapshots(_conn, archived, ticker):
     archived_int = 1 if archived else 0
     if ticker is None:
         cur.execute(
-            "SELECT * FROM snapshots WHERE archived = ? "
-            "ORDER BY created_at DESC",
-            (archived_int,)
+            "SELECT * FROM snapshots WHERE archived = ? ORDER BY created_at DESC",
+            (archived_int,),
         )
     else:
         cur.execute(
             "SELECT * FROM snapshots WHERE archived = ? AND ticker = ? "
             "ORDER BY created_at DESC",
-            (archived_int, ticker)
+            (archived_int, ticker),
         )
     rows = cur.fetchall()
     cols = [col[0] for col in cur.description]
@@ -483,7 +479,7 @@ def _update_archived_status(_conn, snapshot_ids):
     cur.execute(
         f"UPDATE snapshots SET archived = 1, archived_at = ? "
         f"WHERE id IN ({placeholders})",
-        (archived_at, *snapshot_ids)
+        (archived_at, *snapshot_ids),
     )
     _conn.commit()
     return cur.rowcount
@@ -520,10 +516,7 @@ def delete_snapshots(
     try:
         cur = conn.cursor()
         placeholders = ",".join("?" * len(snapshot_ids))
-        cur.execute(
-            f"DELETE FROM snapshots WHERE id IN ({placeholders})",
-            snapshot_ids
-        )
+        cur.execute(f"DELETE FROM snapshots WHERE id IN ({placeholders})", snapshot_ids)
         conn.commit()
         return cur.rowcount
     finally:
@@ -560,15 +553,12 @@ def get_snapshot_by_path(
     try:
         cur = conn.cursor()
         cur.execute(
-            "SELECT * FROM snapshots WHERE snapshot_path = ? LIMIT 1",
-            (snapshot_path,)
+            "SELECT * FROM snapshots WHERE snapshot_path = ? LIMIT 1", (snapshot_path,)
         )
         row = cur.fetchone()
         if row is None:
             return None
-        return dict(zip(
-            [col[0] for col in cur.description], row, strict=False
-        ))
+        return dict(zip([col[0] for col in cur.description], row, strict=False))
     finally:
         if close_conn:
             conn.close()

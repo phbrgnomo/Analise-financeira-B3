@@ -59,9 +59,7 @@ def test_ensure_schema_skips_migration_when_version_set(monkeypatch):
         called["count"] += 1
 
     # migration helper now lives in migrations module
-    monkeypatch.setattr(
-        "src.db.migrations._migrate_prices_date_column", fake_migrate
-    )
+    monkeypatch.setattr("src.db.migrations._migrate_prices_date_column", fake_migrate)
 
     # second call should skip the migration completely
     _ensure_schema(conn)
@@ -71,6 +69,7 @@ def test_ensure_schema_skips_migration_when_version_set(monkeypatch):
 def test_apply_migrations_failure_preserves_cause(tmp_path):
     """A broken SQL file should raise MigrationError with original cause."""
     from src import db_migrator
+
     # create a migrations directory with invalid SQL
     migdir = tmp_path / "migrations"
     migdir.mkdir()

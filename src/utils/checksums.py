@@ -138,4 +138,5 @@ def serialize_df_bytes(
 
     return csv_str.encode("utf-8")
 
+
 __all__ = ["sha256_file", "sha256_bytes", "serialize_df_bytes"]

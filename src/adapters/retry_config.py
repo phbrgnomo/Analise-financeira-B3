@@ -63,24 +63,16 @@ class RetryConfig:
         """
         config = cls(
             max_attempts=int(os.getenv(f"{prefix}_MAX_ATTEMPTS", "3")),
-            initial_delay_ms=int(
-                os.getenv(f"{prefix}_INITIAL_DELAY_MS", "1000")
-            ),
-            max_delay_ms=int(
-                os.getenv(f"{prefix}_MAX_DELAY_MS", "30000")
-            ),
-            backoff_factor=float(
-                os.getenv(f"{prefix}_BACKOFF_FACTOR", "2.0")
-            ),
+            initial_delay_ms=int(os.getenv(f"{prefix}_INITIAL_DELAY_MS", "1000")),
+            max_delay_ms=int(os.getenv(f"{prefix}_MAX_DELAY_MS", "30000")),
+            backoff_factor=float(os.getenv(f"{prefix}_BACKOFF_FACTOR", "2.0")),
             retry_on_status_codes=cls._parse_status_codes(
                 os.getenv(
                     f"{prefix}_ON_STATUS_CODES",
                     "429,500,502,503,504",
                 )
             ),
-            timeout_seconds=int(
-                os.getenv(f"{prefix}_TIMEOUT_SECONDS", "30")
-            ),
+            timeout_seconds=int(os.getenv(f"{prefix}_TIMEOUT_SECONDS", "30")),
         )
         config._validate()
         return config
@@ -93,18 +85,15 @@ class RetryConfig:
         """
         if self.max_attempts < 1:
             raise ValueError(
-                f"max_attempts deve ser >= 1, recebido: "
-                f"{self.max_attempts}"
+                f"max_attempts deve ser >= 1, recebido: {self.max_attempts}"
             )
         if self.initial_delay_ms < 0:
             raise ValueError(
-                f"initial_delay_ms deve ser >= 0, recebido: "
-                f"{self.initial_delay_ms}"
+                f"initial_delay_ms deve ser >= 0, recebido: {self.initial_delay_ms}"
             )
         if self.max_delay_ms < 0:
             raise ValueError(
-                f"max_delay_ms deve ser >= 0, recebido: "
-                f"{self.max_delay_ms}"
+                f"max_delay_ms deve ser >= 0, recebido: {self.max_delay_ms}"
             )
         # ensure sane relation: maximum delay cannot be smaller than initial
         if self.max_delay_ms < self.initial_delay_ms:
@@ -114,13 +103,11 @@ class RetryConfig:
             )
         if self.backoff_factor <= 0:
             raise ValueError(
-                f"backoff_factor deve ser > 0, recebido: "
-                f"{self.backoff_factor}"
+                f"backoff_factor deve ser > 0, recebido: {self.backoff_factor}"
             )
         if self.timeout_seconds < 0:
             raise ValueError(
-                f"timeout_seconds deve ser >= 0, recebido: "
-                f"{self.timeout_seconds}"
+                f"timeout_seconds deve ser >= 0, recebido: {self.timeout_seconds}"
             )
 
     @staticmethod
