@@ -285,7 +285,11 @@ def compute_returns_cmd(
         # schema so the CLI remains usable even if migrations haven't run.
         try:
             resolved = _db.resolve_existing_ticker(normalized)
-        except sqlite3.OperationalError:
+        except sqlite3.OperationalError as e:
+            # log the error so we can investigate schema issues in CI
+            logging.getLogger(__name__).error(
+                "erro ao resolver ticker existente %s: %s", normalized, e
+            )
             resolved = None
         targets = [resolved or normalized]
         feedback.start(
@@ -296,9 +300,14 @@ def compute_returns_cmd(
         try:
             targets = _db.list_price_tickers()
         except sqlite3.OperationalError as exc:
-            feedback.start("processando todos os tickers do banco")
-            feedback.warn(f"Erro ao acessar tabela prices: {exc}")
-            return
+            msg = str(exc).lower()
+            if "no such table" in msg and "prices" in msg:
+                feedback.start("processando todos os tickers do banco")
+                feedback.warn("Nenhuma tabela prices encontrada")
+                return
+            # unexpected operational error; re-raise so callers/CI see the
+            # real problem rather than silently treating it as empty DB.
+            raise
         if not targets:
             feedback.start("processando todos os tickers do banco")
             feedback.warn("Nenhum ticker encontrado na tabela prices")

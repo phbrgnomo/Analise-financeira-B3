@@ -122,7 +122,7 @@ def _create_test_snapshot_with_metadata(
     return snapshot_path, checksum
 
 
-def test_restore_verify_pass(mock_metadata_db, tmp_path, monkeypatch):
+def test_restore_verify_pass(mock_metadata_db, tmp_path):
     """Valid snapshot with all checks passing → exit 0, overall_result=PASS."""
     metadata_conn, metadata_db_path = mock_metadata_db
 
@@ -167,7 +167,7 @@ def test_restore_verify_pass(mock_metadata_db, tmp_path, monkeypatch):
     assert "sucesso" in result.output.lower()
 
 
-def test_restore_verify_missing_file(mock_metadata_db, tmp_path, monkeypatch):
+def test_restore_verify_missing_file(mock_metadata_db, tmp_path):
     """Non-existent snapshot file → exit 2, overall_result=FAIL."""
     _, metadata_db_path = mock_metadata_db
 
@@ -187,7 +187,7 @@ def test_restore_verify_missing_file(mock_metadata_db, tmp_path, monkeypatch):
     assert "not found" in result.output.lower()
 
 
-def test_restore_verify_checksum_mismatch(mock_metadata_db, tmp_path, monkeypatch):
+def test_restore_verify_checksum_mismatch(mock_metadata_db, tmp_path):
     """Valid structure but tampered file → exit 1, overall_result=WARN."""
     metadata_conn, metadata_db_path = mock_metadata_db
 
@@ -218,7 +218,7 @@ def test_restore_verify_checksum_mismatch(mock_metadata_db, tmp_path, monkeypatc
     assert "alerta" in result.output.lower() or "warn" in result.output.lower()
 
 
-def test_restore_verify_invalid_csv(mock_metadata_db, tmp_path, monkeypatch):
+def test_restore_verify_invalid_csv(mock_metadata_db, tmp_path):
     """Malformed CSV file → exit 2, overall_result=FAIL."""
     _, metadata_db_path = mock_metadata_db
 

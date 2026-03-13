@@ -24,7 +24,6 @@ from src.utils.checksums import sha256_file
 
 
 @pytest.fixture
-
 def test_db(tmp_path, monkeypatch):
     """Create and migrate a temporary metadata database.
 
@@ -67,7 +66,7 @@ def _insert_snapshot_metadata(
     checksum: str,
     created_at: str = "2024-01-01T00:00:00Z",
     archived: int = 0,
-):
+) -> None:
     """Insert snapshot metadata row into snapshots table."""
     cur = conn.cursor()
     cur.execute(

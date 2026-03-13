@@ -12,21 +12,19 @@ Relatório operativo e checklist para o Epic 2 (Snapshots). Inclui comandos repr
 
 **Comandos úteis**
 
-- Aplicar migrations (local, in-memory teste):
+- Aplicar migrations (local, usando um banco in-memory de teste):
 
 ```bash
 poetry run python - << 'PY'
+# the helper apply_migrations walks the `migrations/` directory and
+# executes any pending SQL files after the current schema, so a fresh
+# test database doesn’t need manual bootstrapping.
 from src.db_migrator import apply_migrations
 import sqlite3
 
 conn = sqlite3.connect(':memory:')
 
-with open('migrations/0000_init_schema.sql') as f:
-    conn.executescript(f.read())
-
-with open('migrations/0001_create_returns.sql') as f:
-    conn.executescript(f.read())
-
+# apply all pending migrations from 0000_init_schema.sql onward
 apply_migrations(conn)
 print('migrations applied')
 PY
@@ -96,11 +94,7 @@ sha256sum snapshots/PETR4_snapshot.csv
 cat snapshots/PETR4_snapshot.csv.checksum
 ```
 
-3. Executar `restore-verify` para checar integridade e simular ingest:
-
-```bash
-poetry run main pipeline restore-verify --snapshot-path snapshots/PETR4_snapshot.csv
-```
+3. Executar `restore-verify` para checar integridade e simular ingest (veja o exemplo na seção **Comandos úteis**, onde o mesmo comando é apresentado).
 
 4. Se validado, importar CSV para DB de staging seguindo o processo de ingest (adotar fluxo `db.write_prices()` com conn de staging) e rodar checks (row counts, amostras de valores).
 

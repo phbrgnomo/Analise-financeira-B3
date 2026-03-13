@@ -10,24 +10,27 @@ The script is intentionally simple so it can be executed via ``python`` or
 made executable in a shell pipeline.
 """
 
+import logging
 import os
 import sqlite3
 
 from src.db_migrator import apply_migrations
+from src.logging_config import configure_logging
+
+# configure global logging before doing any work; tests may override level
+configure_logging()
+logger = logging.getLogger(__name__)
 
 
 def main() -> None:
     dbpath = os.getenv("DB_PATH", "dados/data.db")
-    # ensure parent dir exists to avoid sqlite OperationalError on clean
-    # checkouts (the same logic used by src.db.connection._connect).
-    db_dir = os.path.dirname(dbpath)
-    if db_dir:
+    if db_dir := os.path.dirname(dbpath):
         os.makedirs(db_dir, exist_ok=True)
 
-    conn = sqlite3.connect(dbpath)
-    apply_migrations(conn)
-    conn.close()
-    print(f"migrations applied to {dbpath}")
+    # use context manager so connection is closed even if migrations fail
+    with sqlite3.connect(dbpath) as conn:
+        apply_migrations(conn)
+    logger.info(f"migrations applied to {dbpath}")
 
 
 if __name__ == "__main__":

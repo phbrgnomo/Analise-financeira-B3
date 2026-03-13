@@ -70,6 +70,12 @@ def test_main_help_exit_code_and_output():
 
 
 def test_run_uses_ingest_pipeline(monkeypatch):
+    """Verifica que o comando `run` da CLI invoca o pipeline de ingest e
+    prossegue para o cálculo de retornos.
+
+    O teste substitui as funções reais por **mocks** que registram as
+    chamadas, permitindo asserts sobre ticker, fonte e fluxo geral.
+    """
     from src.main import app
 
     calls = []

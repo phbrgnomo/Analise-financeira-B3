@@ -18,15 +18,17 @@ esteja no schema correto antes de executar comandos que dependem dele.
 poetry run python scripts/apply_migrations.py
 ```
 
-## Gerar e validar snapshot localmente
 
 ```bash
 # gerar um snapshot para PETR4 usando pipeline
 poetry run main pipeline snapshot --ticker PETR4
+# -> Snapshot generated successfully at snapshots/PETR4_snapshot.csv
 
 # calcular checksum e garantir que o arquivo sidecar existe
 sha256sum snapshots/PETR4_snapshot.csv
+# -> e.g. 3a7f1d5b...  snapshots/PETR4_snapshot.csv
 ls -l snapshots/PETR4_snapshot.csv.checksum
+# -> -rw-r--r-- 1 user user 64 Mar 12 12:34 snapshots/PETR4_snapshot.csv.checksum
 ```
 
 ## Validar checksums em CI
@@ -36,8 +38,8 @@ Para reproduzir localmente:
 
 ```bash
 # simular o job de CI
-python scripts/generate_ci_snapshot.py --dir tmp_snapshots/snapshots_test
-python scripts/validate_snapshots.py --dir tmp_snapshots/snapshots_test --manifest snapshots/checksums.json
+poetry run python scripts/generate_ci_snapshot.py --dir tmp_snapshots/snapshots_test
+poetry run python scripts/validate_snapshots.py --dir tmp_snapshots/snapshots_test --manifest snapshots/checksums.json
 ```
 
 ## Purge / retenção de snapshots
@@ -57,6 +59,24 @@ poetry run main snapshots purge --older-than 365 --confirm --archive-dir snapsho
 
 A política padrão lê a variável `SNAPSHOT_RETENTION_POLICY` (JSON/YAML) ou usa
 valores embutidos: `daily_keep_days=90`, `keep_monthly=12`, `keep_yearly=7`.
+
+Exemplos de formato válidos:
+
+```bash
+# JSON inline
+export SNAPSHOT_RETENTION_POLICY='{"daily_keep_days":90,"keep_monthly":12,"keep_yearly":7}'
+```
+
+```yaml
+# YAML block (export depends on shell handling multiline strings)
+export SNAPSHOT_RETENTION_POLICY="# YAML
+{
+  daily_keep_days: 90
+  keep_monthly: 12
+  keep_yearly: 7
+}"
+```
+
 
 ## Restore / verificação de snapshot
 

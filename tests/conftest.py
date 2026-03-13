@@ -6,7 +6,9 @@ Define fixtures úteis para integração e playback de rede.
 from __future__ import annotations
 
 import os
+import sqlite3
 import sys
+from datetime import datetime, timedelta, timezone
 from typing import Callable, Generator
 
 import pandas as pd
@@ -15,6 +17,7 @@ import pytest
 from src import db
 from src.adapters.retry_metrics import get_global_metrics
 from src.db_migrator import apply_migrations
+from src.utils.checksums import sha256_file
 
 # Ensure tests directory is importable when pytest runs the tests as a script
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
@@ -108,7 +111,6 @@ def sqlite_version_override(monkeypatch):
     recompiling Python. The test suite uses this to exercise upsert vs
     fallback code paths deterministically.
     """
-    import sqlite3
 
     if ver := os.environ.get("SQLITE_VERSION"):
         monkeypatch.setattr(sqlite3, "sqlite_version", ver)
@@ -143,6 +145,69 @@ def mock_metadata_db(tmp_path, monkeypatch):
         yield metadata_conn, metadata_db_path
     finally:
         metadata_conn.close()
+
+
+@pytest.fixture
+
+def purge_test_setup(tmp_path, monkeypatch):
+    """Prepare a metadata DB with one old snapshot and return paths.
+
+    This mirrors the setup previously duplicated across multiple retention
+    purge tests.  The returned tuple contains:
+
+    * ``test_csv``: Path to the created snapshot CSV file
+    * ``metadata_db_path``: Path to the temporary metadata database file
+
+    The fixture also monkeypatches :func:`src.db.connect` so that calls from
+    the CLI under test will always use this database.
+    """
+    metadata_db_path = tmp_path / "metadata.db"
+    db.init_db(db_path=str(metadata_db_path))
+    metadata_conn = db.connect(db_path=str(metadata_db_path))
+    apply_migrations(metadata_conn)
+
+    # create CSV and checksum
+    test_csv = tmp_path / "PETR4_snapshot.csv"
+    df = pd.DataFrame({
+        "date": ["2023-01-01"],
+        "open": [10.0],
+        "high": [11.0],
+        "low": [9.0],
+        "close": [10.5],
+        "volume": [1000],
+        "ticker": ["PETR4"],
+    })
+    df.to_csv(test_csv, index=False)
+    checksum = sha256_file(test_csv)
+
+    old_date = (
+        datetime.now(timezone.utc) - timedelta(days=100)
+    ).isoformat()
+    cur = metadata_conn.cursor()
+    cur.execute(
+        "INSERT INTO snapshots (id, ticker, snapshot_path, checksum, "
+        "size_bytes, created_at, archived) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (
+            "1",
+            "PETR4",
+            str(test_csv),
+            checksum,
+            test_csv.stat().st_size,
+            old_date,
+            0,
+        ),
+    )
+    metadata_conn.commit()
+    metadata_conn.close()
+
+    original_connect = db.connect
+
+    def patched_connect(db_path=None, **kw):
+        return original_connect(db_path=str(metadata_db_path), **kw)
+
+    monkeypatch.setattr(db, "connect", patched_connect)
+
+    return test_csv, metadata_db_path, checksum
 
 
 @pytest.fixture(autouse=True)

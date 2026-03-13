@@ -10,6 +10,7 @@ Verifies all behaviors of the snapshot export command:
 """
 
 import json
+import sqlite3
 from pathlib import Path
 from typing import Any
 
@@ -21,7 +22,7 @@ from src.etl.snapshot import write_snapshot
 from src.main import app
 
 
-def _prepare_test_db(tmp_path: Path, monkeypatch):
+def _prepare_test_db(tmp_path: Path, monkeypatch) -> sqlite3.Connection:
     """Initialize a temp database, apply migrations, and monkeypatch connections.
 
     Returns a live ``sqlite3.Connection`` which the caller should close.

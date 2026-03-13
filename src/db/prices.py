@@ -24,8 +24,64 @@ def write_prices(  # noqa: C901
     db_path: Optional[str] = None,
     source: str = "provider",
     fetched_at: Optional[str] = None,
-):
-    """Persist price DataFrame into ``prices`` table with upsert semantics."""
+) -> None:
+    """Write or update price rows in the ``prices`` database table.
+
+    The supplied ``df`` must contain a ``DatetimeIndex`` (or a ``date``
+    column which will be converted) and any subset of columns defined by
+    the canonical schema.  Rows for the given ``ticker`` are upserted using
+    SQLite's ``INSERT ... ON CONFLICT`` logic.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        DataFrame containing price data indexed by date.  Accepted column
+        names are case-insensitive and must match the schema (e.g.
+        ``open``, ``high``, ``low``, ``close``, ``volume``).
+    ticker : str
+        B3-style ticker identifier (``"PETR4"`` or ``"PETR4.SA"``) which
+        will be normalized to the base form for storage.
+    conn : Optional[sqlite3.Connection]
+        Active SQLite connection.  If ``None`` the helper will open a new
+        connection using ``db_path``.
+    db_path : Optional[str]
+        Path or URI to an SQLite database file; ignored if ``conn`` is
+        provided.
+    source : str
+        String describing the data source/provider (recorded in the row
+        metadata).
+    fetched_at : Optional[str]
+        Timestamp (ISO 8601) when the data was fetched; if provided,
+        stored in the ``fetched_at`` column.
+
+    Returns
+    -------
+    None
+        The function has no return value; it commits the transaction
+        before closing any connection it opened.
+
+    Raises
+    ------
+    ValueError
+        If ``df`` lacks a ``DatetimeIndex`` or ``date`` column, or if
+        required columns are missing or have incorrect types.
+    sqlite3.DatabaseError
+        Propagated from any underlying database error during upsert.
+
+    Example
+    -------
+    ```python
+    import sqlite3
+    import pandas as pd
+    from src.db.prices import write_prices
+
+    conn = sqlite3.connect('dados/data.db')
+    df = pd.DataFrame(...)
+    df['date'] = pd.to_datetime(df['date'])
+    df = df.set_index('date')
+    write_prices(df, 'PETR4', conn=conn)
+    ```
+    """
     # normalize ticker to base B3 form (strip .SA) for storage consistency
     try:
         ticker = normalize_b3_ticker(ticker)
@@ -136,6 +192,35 @@ def _read_prices_core(
     start: Optional[str],
     end: Optional[str],
 ) -> pd.DataFrame:
+    """Retrieve price rows from the database for a ticker and date range.
+
+    Parameters
+    ----------
+    conn : sqlite3.Connection
+        Open connection to a metadata/database file.
+    ticker : str
+        Ticker identifier used in the ``prices`` table; may include
+        provider suffix (e.g. ``"PETR4.SA"``) which is normalized internally.
+    start : Optional[str]
+        Lower date bound in ``YYYY-MM-DD`` format; if ``None`` no lower bound
+        is applied.
+    end : Optional[str]
+        Upper date bound in ``YYYY-MM-DD`` format; if ``None`` no upper bound
+        is applied.
+
+    Returns
+    -------
+    pandas.DataFrame
+        DataFrame indexed by ``date`` containing all columns from the
+        canonical prices schema.  If the query returns no rows an empty
+        DataFrame is returned.  Caller is responsible for any further
+        filtering or type conversions.
+
+    Raises
+    ------
+    sqlite3.DatabaseError
+        Propagated from underlying SQLite operations if the query fails.
+    """
     cur = conn.cursor()
     try:
         base, provider = ticker_variants(ticker)

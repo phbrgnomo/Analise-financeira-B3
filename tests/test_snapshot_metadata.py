@@ -23,7 +23,7 @@ from src.utils.checksums import sha256_file
 
 
 @pytest.fixture
-def snapshot_test_db(tmp_path, sample_db, monkeypatch):
+def snapshot_test_db(tmp_path, sample_db, monkeypatch) -> Path:
     """Prepare a fresh metadata DB and patch connections.
 
     Returns
@@ -70,7 +70,7 @@ def snapshot_test_db(tmp_path, sample_db, monkeypatch):
 
 
 def test_snapshot_path_under_temp_is_sanitized(snapshot_test_db, tmp_path, monkeypatch):
-    """Stats that /tmp paths are rewritten to basename when metadata is saved.
+    """Asserts that /tmp paths are rewritten to basename when metadata is saved.
 
     Calling the database helper directly lets us avoid running the whole CLI and
     focuses the test on the normalization step.  This is the behavior that
@@ -78,7 +78,8 @@ def test_snapshot_path_under_temp_is_sanitized(snapshot_test_db, tmp_path, monke
     ``test_no_tmp_snapshot_paths_ci_only``.
     """
     tempdir = Path(tempfile.gettempdir())
-    tempdir.mkdir(parents=True, exist_ok=True)
+    # tempfile.gettempdir() always returns an existing directory, so the
+    # explicit mkdir call is unnecessary.
     snap = tempdir / "PETR4_snapshot.csv"
     snap.write_text("ticker,date,open,high,low,close,volume,adj_close\n")
 
@@ -148,7 +149,7 @@ def test_metadata_registered_after_snapshot(snapshot_test_db, tmp_path):
     assert row["job_id"] is not None, "job_id field should be populated"
 
 
-def test_checksum_matches_sha256_file(snapshot_test_db, tmp_path, monkeypatch):
+def test_checksum_matches_sha256_file(snapshot_test_db, tmp_path):
     """checksum in DB equals sha256_file() of generated CSV."""
 
     db_path = snapshot_test_db
@@ -254,6 +255,7 @@ def test_metadata_idempotent_on_rerun(sample_db, tmp_path, monkeypatch):
 
     def mock_db_connect(db_path=None, **kw):
         # if caller explicitly asked for our metadata DB, return that
+        # sourcery skip: no-conditionals-in-tests
         if db_path is None or str(db_path) == str(metadata_db_path):
             return original_db_connect(db_path=str(metadata_db_path))
         return original_db_connect(db_path=db_path, **kw)
@@ -308,7 +310,7 @@ def test_metadata_idempotent_on_rerun(sample_db, tmp_path, monkeypatch):
     )
 
 
-def test_metadata_rows_count_matches_df(snapshot_test_db, tmp_path, monkeypatch):
+def test_metadata_rows_count_matches_df(snapshot_test_db, tmp_path):
     """rows field in DB matches len(df)."""
 
     db_path = snapshot_test_db
