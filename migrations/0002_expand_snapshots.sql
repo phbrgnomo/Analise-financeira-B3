@@ -8,6 +8,10 @@ ALTER TABLE snapshots ADD COLUMN snapshot_path TEXT;
 CREATE INDEX IF NOT EXISTS snapshots_snapshot_path_idx
     ON snapshots(snapshot_path);
 
+-- index to accelerate queries by ticker + created_at (used by incremental cache and other lookups)
+CREATE INDEX IF NOT EXISTS snapshots_ticker_created_at_idx
+    ON snapshots(ticker, created_at);
+
 ALTER TABLE snapshots ADD COLUMN rows INTEGER;
 
 ALTER TABLE snapshots ADD COLUMN checksum TEXT;

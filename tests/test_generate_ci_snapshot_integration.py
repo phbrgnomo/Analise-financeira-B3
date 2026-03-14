@@ -1,9 +1,13 @@
 from pathlib import Path
 
+import pytest
+
 from src import db
 
 
-def test_generate_ci_snapshot_writes_metadata(tmp_path, monkeypatch):
+def test_generate_ci_snapshot_writes_metadata(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Generate CI snapshot and verify metadata is written to the metadata DB.
 
     The script should create a snapshot CSV and record a corresponding row in
@@ -16,7 +20,11 @@ def test_generate_ci_snapshot_writes_metadata(tmp_path, monkeypatch):
     # apply migrations to ensure snapshots table exists
     from src.db_migrator import apply_migrations
 
-    apply_migrations(db.connect(db_path=str(db_path)))
+    conn = db.connect(db_path=str(db_path))
+    try:
+        apply_migrations(conn)
+    finally:
+        conn.close()
 
     # ensure the script uses our temp DB by overriding the default path
     from src.db import connection as conn_module
@@ -44,20 +52,21 @@ def test_generate_ci_snapshot_writes_metadata(tmp_path, monkeypatch):
 
     # verify metadata row exists in our test DB
     conn2 = db.connect(db_path=str(db_path))
-    cur = conn2.cursor()
-    cur.execute(
-        "SELECT id, ticker, snapshot_path, checksum FROM snapshots "
-        "WHERE ticker = ? LIMIT 1",
-        ("PETR4",),
-    )
-    row = cur.fetchone()
-    assert row is not None, "No snapshot metadata recorded"
-    _id, ticker, snapshot_path, checksum = row
-    assert ticker == "PETR4"
-    sp = Path(snapshot_path)
-    if not sp.is_absolute():
-        sp = snap_dir / sp
-    assert sp.exists()
-    assert isinstance(checksum, str) and len(checksum) == 64
-
-    conn2.close()
+    try:
+        cur = conn2.cursor()
+        cur.execute(
+            "SELECT id, ticker, snapshot_path, checksum FROM snapshots "
+            "WHERE ticker = ? LIMIT 1",
+            ("PETR4",),
+        )
+        row = cur.fetchone()
+        assert row is not None, "No snapshot metadata recorded"
+        _id, ticker, snapshot_path, checksum = row
+        assert ticker == "PETR4"
+        sp = Path(snapshot_path)
+        if not sp.is_absolute():
+            sp = snap_dir / sp
+        assert sp.exists()
+        assert isinstance(checksum, str) and len(checksum) == 64
+    finally:
+        conn2.close()

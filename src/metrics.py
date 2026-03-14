@@ -39,25 +39,22 @@ def get_counter(name: str, documentation: str = ""):
     Parameters
     ----------
     name : str
-        Nome da métrica (usado para registrar/recuperar do cache).
+        Metric name (used to look up the metric cache).
     documentation : str, optional
-        Texto descritivo da métrica (padrão: "").
+        Documentation string for the metric (default: ``""``).
 
     Returns
     -------
     Counter | _NoopMetric
-        Quando `prometheus_client` estiver disponível (`_HAS_PROM is True`),
-        retorna uma instância de `Counter` (do cliente Prometheus). Caso o
-        pacote não esteja disponível, retorna um `_NoopMetric` que aceita as
-        mesmas chamadas (`inc`) sem efeitos colaterais.
+        When `prometheus_client` is available (`_HAS_PROM` is True), returns
+        a real `Counter`. Otherwise returns a `_NoopMetric` that implements
+        the same interface without side effects.
 
     Side effects
     ------------
-    - Se `_HAS_PROM` for True e a métrica não existir em `_counters`, a
-      função cria e armazena uma nova `Counter` em `_counters` sob a chave
-      `name`.
-    - Se `_HAS_PROM` for False, nenhum registro é criado e a função é
-      efetivamente um no-op.
+    - If `_HAS_PROM` is True and the metric is not already cached, a new
+      `Counter` is created and stored in `_counters`.
+    - If `_HAS_PROM` is False, this is a no-op.
     """
     if not _HAS_PROM:
         return _NoopMetric()
@@ -72,25 +69,22 @@ def get_histogram(name: str, documentation: str = ""):
     Parameters
     ----------
     name : str
-        Nome da métrica (usado para registrar/recuperar do cache).
+        Metric name (used to look up the metric cache).
     documentation : str, optional
-        Texto descritivo da métrica (padrão: "").
+        Documentation string for the metric (default: ``""``).
 
     Returns
     -------
     Histogram | _NoopMetric
-        Quando `prometheus_client` estiver disponível (`_HAS_PROM is True`),
-        retorna uma instância de `Histogram` (do cliente Prometheus). Caso o
-        pacote não esteja disponível, retorna um `_NoopMetric` que aceita as
-        mesmas chamadas (`observe`) sem efeitos colaterais.
+        When `prometheus_client` is available (`_HAS_PROM` is True), returns
+        a real `Histogram`. Otherwise returns a `_NoopMetric` that implements
+        the same interface without side effects.
 
     Side effects
     ------------
-    - Se `_HAS_PROM` for True e a métrica não existir em `_histograms`, a
-      função cria e armazena uma nova `Histogram` em `_histograms` sob a chave
-      `name`.
-    - Se `_HAS_PROM` for False, nenhum registro é criado e a função é
-      efetivamente um no-op.
+    - If `_HAS_PROM` is True and the metric is not already cached, a new
+      `Histogram` is created and stored in `_histograms`.
+    - If `_HAS_PROM` is False, this is a no-op.
     """
     if not _HAS_PROM:
         return _NoopMetric()
@@ -147,18 +141,18 @@ def start_metrics_server(port: int = 8000) -> None:
     Parameters
     ----------
     port : int
-        TCP port to bind the metrics endpoint to.
+        TCP port to bind the metrics endpoint to (default: 8000).
 
     Notes
     -----
     If ``prometheus_client`` is not installed, this is a no-op.
     """
     if not _HAS_PROM or start_http_server is None:
-        msg = "prometheus_client não disponível; servidor de métricas não iniciado"
+        msg = "prometheus_client not available; metrics server not started"
         logger.info(msg)
         return
     try:
         start_http_server(port)
-        logger.info("servidor de métricas Prometheus iniciado", extra={"port": port})
+        logger.info("Prometheus metrics server started", extra={"port": port})
     except Exception:
-        logger.exception("falha ao iniciar o servidor de métricas Prometheus")
+        logger.exception("failed to start Prometheus metrics server")

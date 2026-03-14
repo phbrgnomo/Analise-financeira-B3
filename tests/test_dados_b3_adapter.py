@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Any, Optional
 
 import pandas as pd
 import pytest
@@ -7,7 +7,7 @@ from src.adapters.factory import get_adapter, register_adapter
 from src.adapters.yfinance_adapter import YFinanceAdapter
 
 
-def test_factory_returns_adapter_and_provider_override(monkeypatch):
+def test_factory_returns_adapter_and_provider_override(monkeypatch: Any) -> None:
     """O factory deve criar instâncias e respeitar o provider argument."""
 
     class Dummy(YFinanceAdapter):
@@ -23,7 +23,7 @@ def test_factory_returns_adapter_and_provider_override(monkeypatch):
     assert not df.empty
 
 
-def test_register_adapter_and_get(monkeypatch):
+def test_register_adapter_and_get(monkeypatch: pytest.MonkeyPatch) -> None:
     """Verifica o registro de um adapter customizado e sua recuperação."""
     # isolar o registro global para que outros testes não sejam afetados
     monkeypatch.setattr("src.adapters.factory._ADAPTER_REGISTRY", {})
@@ -44,7 +44,7 @@ def test_register_adapter_and_get(monkeypatch):
     assert isinstance(adapter, Dummy)
 
 
-def test_register_adapter_raises_for_invalid_classes():
+def test_register_adapter_raises_for_invalid_classes() -> None:
     """Garante que registrar classes inválidas dispara TypeError.
 
     O teste tenta registrar um objeto simples, uma classe sem herança e

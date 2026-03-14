@@ -7,7 +7,7 @@ import re
 import sqlite3
 import tempfile
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Dict, List, Optional, Sequence
 
 from src import db
 from src.time_utils import now_utc_iso
@@ -227,6 +227,17 @@ def _normalize_snapshot_path(path: Optional[str]) -> Optional[str]:
     return cand_str
 
 
+def normalize_snapshot_path(path: Optional[str]) -> Optional[str]:
+    """Normalize a snapshot path for storage in metadata.
+
+    This is the public equivalent of the internal helper ``_normalize_snapshot_path``.
+    It exists so callers can depend on a stable public API rather than a
+    private implementation detail.
+    """
+
+    return _normalize_snapshot_path(path)
+
+
 def record_snapshot_metadata(
     metadata: dict[str, Any],
     conn: Optional[sqlite3.Connection] = None,
@@ -277,10 +288,6 @@ def _upsert_snapshot_metadata(
     conn: sqlite3.Connection, metadata: dict[str, Any]
 ) -> None:
     cur = conn.cursor()
-    cur.execute(
-        "CREATE INDEX IF NOT EXISTS snapshots_ticker_created_at_idx "
-        "ON snapshots(ticker, created_at)"
-    )
     job_id = (
         metadata.get("job_id")
         or metadata.get("id")
@@ -385,7 +392,11 @@ def list_snapshots(
             conn.close()
 
 
-def _query_snapshots(_conn, archived, ticker):
+def _query_snapshots(
+    _conn: sqlite3.Connection,
+    archived: bool,
+    ticker: Optional[str],
+) -> List[Dict[str, Any]]:
     """Perform the SQL query for :func:`list_snapshots`.
 
     Parameters
@@ -455,7 +466,11 @@ def mark_snapshots_archived(
             _conn.close()
 
 
-def _update_archived_status(_conn, snapshot_ids):
+
+
+def _update_archived_status(
+    _conn: sqlite3.Connection, snapshot_ids: Sequence[str]
+) -> int:
     """Mark given snapshots as archived in the database.
 
     Parameters

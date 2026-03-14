@@ -274,7 +274,7 @@ find metadata dados/raw -type f -exec chmod 600 {} +
 find metadata dados/raw -type d -exec chmod 700 {} +
 ```
 
-Como alternativa, você pode usar o modo ``X`` do chmod para ativar a permissão de execução apenas quando apropriado:
+Como alternativa, você pode usar o modo `X` do chmod para ativar a permissão de execução apenas quando apropriado:
 
 ```bash
 chmod -R u=rwX,go= metadata dados/raw

@@ -1,4 +1,5 @@
 import os
+from typing import Union
 
 import pytest
 
@@ -15,7 +16,9 @@ from src.validation.core import _normalize_threshold_value
         ("10%", 0.10),
     ],
 )
-def test_normalize_threshold_strict_valid_values(input_value, expected):
+def test_normalize_threshold_strict_valid_values(
+    input_value: Union[float, str], expected: float
+):
     """Verify that valid threshold inputs normalize to expected numeric values."""
     assert _normalize_threshold_value(input_value, source="arg") == pytest.approx(
         expected

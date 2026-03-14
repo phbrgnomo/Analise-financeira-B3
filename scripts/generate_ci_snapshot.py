@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import contextlib
 import os
+import sqlite3
 import sys
 import tempfile
 from pathlib import Path
@@ -275,7 +276,7 @@ def _compute_and_persist_metadata(out_path: Path, df: pd.DataFrame) -> str:
     try:
         from src import db
         from src.utils.checksums import sha256_file  # local import
-    except Exception as exc:  # pragma: no cover - defensive
+    except ImportError as exc:  # pragma: no cover - defensive
         print(f"Falha ao importar helpers de checksum/DB: {exc}", file=sys.stderr)
         return ""
 
@@ -295,20 +296,17 @@ def _compute_and_persist_metadata(out_path: Path, df: pd.DataFrame) -> str:
             if db_path_override := os.environ.get("SNAPSHOT_DB"):
                 # Ensure the metadata DB exists and has required schema.
                 db.init_db(db_path=db_path_override)
-                conn = db.connect(db_path=db_path_override)
-                try:
+                with db.connect(db_path=db_path_override) as conn:
                     db.record_snapshot_metadata(metadata, conn=conn)
-                finally:
-                    conn.close()
             else:
                 # Ensure default DB is initialized before recording metadata.
                 db.init_db(db_path=None)
                 db.record_snapshot_metadata(metadata)
-        except Exception as rec_exc:
+        except sqlite3.Error as rec_exc:
             print(f"Aviso: falha ao gravar metadata no DB: {rec_exc}", file=sys.stderr)
             return ""
         return checksum
-    except Exception as exc:
+    except (OSError, ValueError) as exc:
         print(f"Falha ao computar checksum/metadata: {exc}", file=sys.stderr)
         return ""
 
@@ -341,28 +339,28 @@ def main() -> int:
 
     try:
         df = pd.read_csv(fixture)
-    except Exception as exc:
+    except (OSError, pd.errors.EmptyDataError, pd.errors.ParserError) as exc:
         print(f"Falha ao ler fixture {fixture}: {exc}", file=sys.stderr)
         return 3
 
     # import local para evitar carregar heavy deps cedo
     try:
         from src.etl.snapshot import write_snapshot
-    except Exception as exc:
+    except ImportError as exc:
         print(f"Falha ao importar write_snapshot ou helpers: {exc}", file=sys.stderr)
         return 4
 
     out_path = snapshot_dir / "PETR4_snapshot.csv"
     try:
         _ = write_snapshot(df, out_path)
-    except Exception as exc:
+    except (OSError, ValueError) as exc:
         print(f"Falha ao escrever snapshot: {exc}", file=sys.stderr)
         return 5
 
     # compute authoritative checksum and persist metadata for CI consumers
     checksum = _compute_and_persist_metadata(out_path, df)
     if not checksum:
-        return 6
+        return 7
 
     print(f"Snapshot gerado: {out_path}")
     print(f"Checksum: {checksum}")

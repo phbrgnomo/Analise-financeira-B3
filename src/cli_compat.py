@@ -22,8 +22,8 @@ try:
 
     # Only patch when the original signature does *not* accept arbitrary
     # extra args/kwargs (which is the behaviour fixed in newer Typer/Click
-    # versions).  Inspecting the signature avoids overriding a future
-    # -compatible implementation.
+    # versions).  Inspecting the signature avoids overriding a
+    # future-compatible implementation.
     try:
         sig = inspect.signature(_orig_make_metavar)
         params = list(sig.parameters.values())[1:]  # skip self

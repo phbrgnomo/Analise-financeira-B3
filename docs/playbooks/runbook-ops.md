@@ -18,6 +18,11 @@ esteja no schema correto antes de executar comandos que dependem dele.
 poetry run python scripts/apply_migrations.py
 ```
 
+```bash
+# expected output
+# Migrations applied successfully
+# Database schema is up to date
+```
 
 ```bash
 # gerar um snapshot para PETR4 usando pipeline

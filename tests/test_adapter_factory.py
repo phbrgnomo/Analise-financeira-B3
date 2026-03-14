@@ -27,21 +27,23 @@ def test_register_adapter_warns_on_replace(caplog, monkeypatch):
     assert isinstance(adapter, Dummy)
 
 
-def test_available_providers_reflects_registry(monkeypatch):
+def test_available_providers_reflects_registry(monkeypatch) -> None:
+    """Test that available_providers() returns all registered adapter names.
+
+    The results should be sorted to make the behavior predictable.
+    """
     # isolate registry and add two entries
     monkeypatch.setattr("src.adapters.factory._ADAPTER_REGISTRY", {})
 
     class A(Adapter):
         def fetch(self, ticker: str, **kwargs):
             pass
-
         def _fetch_once(self, ticker: str, start: str, end: str, **kwargs):
             pass
 
     class B(Adapter):
         def fetch(self, ticker: str, **kwargs):
             pass
-
         def _fetch_once(self, ticker: str, start: str, end: str, **kwargs):
             pass
 

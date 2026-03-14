@@ -30,8 +30,7 @@ def test_no_tmp_snapshot_paths_ci_only():
     ``pytest.mark.skipif``.
     """
 
-    conn = _connect_default_db()
-    try:
+    with _connect_default_db() as conn:
         # Ensure schema exists, migrating if necessary so the query below
         # does not error on a fresh CI database.
         from src.db_migrator import apply_migrations
@@ -53,8 +52,15 @@ def test_no_tmp_snapshot_paths_ci_only():
         # noisy false positives locally.
         # sourcery skip: no-conditionals-in-tests
         if not os.environ.get("GITHUB_ACTIONS"):
-            cur.execute("DELETE FROM snapshots WHERE snapshot_path LIKE '/tmp/%'")
+            sql = "DELETE FROM snapshots WHERE snapshot_path LIKE '/tmp/%'"
+            cur.execute(sql)
+            deleted_rows = cur.rowcount
             conn.commit()
+            logging.getLogger(__name__).warning(
+                "Cleaned up %d /tmp snapshot metadata rows (SQL: %s)",
+                deleted_rows,
+                sql,
+            )
 
         query = (
             "SELECT id, ticker, snapshot_path FROM snapshots "
@@ -65,5 +71,5 @@ def test_no_tmp_snapshot_paths_ci_only():
         assert row is None, (
             f"Found snapshot metadata pointing to /tmp in metadata DB: {row}"
         )
-    finally:
-        conn.close()
+
+    conn.close()

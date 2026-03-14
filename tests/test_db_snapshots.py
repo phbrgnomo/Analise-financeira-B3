@@ -21,6 +21,16 @@ def test_extract_date_range_normalizes_formats():
     assert _extract_date_range_from_payload(m3) == ("2023-01-01", "2023-01-02")
 
 
+def test_extract_date_range_handles_edge_cases():
+    """Returns empty range when no dates can be found in metadata."""
+    assert _extract_date_range_from_payload({}) == ("", "")
+    assert _extract_date_range_from_payload({"other": "x"}) == ("", "")
+    assert _extract_date_range_from_payload({"snapshot_path": "/foo/snapshot.csv"}) == (
+        "",
+        "",
+    )
+
+
 def test_build_stable_snapshot_job_id_ignores_format_variation():
     """Different filename date formats yield identical stable hash."""
     m1 = {"ticker": "PETR4", "snapshot_path": "/x/20230101.csv"}

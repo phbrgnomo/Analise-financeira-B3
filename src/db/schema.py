@@ -53,7 +53,21 @@ def _sql_type(col_type: str) -> str:
     return mapping.get(col_type, "TEXT")
 
 
-def _ensure_schema(conn: sqlite3.Connection, schema_path: Optional[str] = None) -> None:
+def _ensure_schema(
+    conn: sqlite3.Connection, schema_path: Optional[str] = None
+) -> None:
+    """
+    Ensure the database schema exists and is up to date.
+
+    Creates the prices and metadata tables if they don't exist, runs
+    necessary migrations, and persists the schema version.
+
+    Args:
+        conn: SQLite database connection.
+        schema_path: Optional path to schema JSON file; defaults to
+            docs/schema.json.
+    """
+    schema = _load_canonical_schema(schema_path)
     schema = _load_canonical_schema(schema_path)
     cols = schema.get("columns", [])
 
@@ -70,7 +84,9 @@ def _ensure_schema(conn: sqlite3.Connection, schema_path: Optional[str] = None) 
     pk_sql = f", PRIMARY KEY {pk}" if pk else ""
 
     create_prices = (
-        "CREATE TABLE IF NOT EXISTS prices (" + ", ".join(col_sql_parts) + pk_sql + ")"
+        "CREATE TABLE IF NOT EXISTS prices ("
+         + ", ".join(col_sql_parts) + pk_sql
+         + ")"
     )
 
     cur = conn.cursor()

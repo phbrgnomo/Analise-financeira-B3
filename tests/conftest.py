@@ -156,6 +156,8 @@ def purge_test_setup(tmp_path, monkeypatch):
 
     * ``test_csv``: Path to the created snapshot CSV file
     * ``metadata_db_path``: Path to the temporary metadata database file
+    * ``checksum``: SHA-256 checksum of the created snapshot CSV (used in
+      assertions that metadata matches the file contents)
 
     The fixture also monkeypatches :func:`src.db.connect` so that calls from
     the CLI under test will always use this database.
@@ -241,11 +243,8 @@ def isolate_metadata_db(tmp_path, monkeypatch):
 
     monkeypatch.setattr(connection, "_connect", _test_connect)
 
-    try:
-        yield
-    finally:
-        # nothing to close here; connect() returns fresh connections per call
-        pass
+    # nothing to close here; connect() returns fresh connections per call
+    yield
 
 
 @pytest.fixture(scope="function")

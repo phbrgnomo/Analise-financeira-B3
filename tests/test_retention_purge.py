@@ -13,6 +13,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pandas as pd
+import pytest
 from typer.testing import CliRunner
 
 from src import db
@@ -114,6 +115,19 @@ def test_find_purge_candidates_excludes_archived(tmp_path):
     assert len(candidates) == 1
     assert candidates[0]["id"] == "2"
     assert candidates[0]["ticker"] == "ITUB3"
+
+    conn.close()
+
+
+def test_find_purge_candidates_negative_days_raises(tmp_path):
+    """Ensure negative retention days are rejected before any query runs."""
+    db_path = tmp_path / "test.db"
+    db.init_db(db_path=str(db_path))
+    conn = db.connect(db_path=str(db_path))
+    apply_migrations(conn)
+
+    with pytest.raises(ValueError, match="older_than_days must be non-negative"):
+        find_purge_candidates(conn, older_than_days=-1)
 
     conn.close()
 
@@ -241,9 +255,60 @@ def test_archive_snapshots_checksum_mismatch(tmp_path):
     assert len(results) == 1
     assert results[0]["checksum_ok"] is False
 
-    # Verify archived flag is NOT set when checksum mismatch (new behavior)
+    # Verify archived flag is set even when checksum mismatches (new behavior)
     row = conn.execute("SELECT archived FROM snapshots WHERE id = ?", ("1",)).fetchone()
-    assert row[0] == 0
+    assert row[0] == 1
+
+    conn.close()
+
+
+def test_archive_snapshots_unverifiable_checksum(tmp_path):
+    """If the DB has no checksum metadata, checksum_ok should be None."""
+    db_path = tmp_path / "test.db"
+    db.init_db(db_path=str(db_path))
+    conn = db.connect(db_path=str(db_path))
+    apply_migrations(conn)
+
+    test_csv = tmp_path / "PETR4_snapshot.csv"
+    df = pd.DataFrame(
+        {
+            "date": ["2023-01-01"],
+            "open": [10.0],
+            "high": [11.0],
+            "low": [9.0],
+            "close": [10.5],
+            "volume": [1000],
+            "ticker": ["PETR4"],
+        }
+    )
+    df.to_csv(test_csv, index=False)
+
+    # Insert record with NULL checksum
+    cur = conn.cursor()
+    cur.execute(
+        "INSERT INTO snapshots (id, ticker, snapshot_path, checksum, "
+        "size_bytes, created_at, archived) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (
+            "1",
+            "PETR4",
+            str(test_csv),
+            None,
+            test_csv.stat().st_size,
+            datetime.now(timezone.utc).isoformat(),
+            0,
+        ),
+    )
+    conn.commit()
+
+    archive_dir = tmp_path / "archive"
+    results = archive_snapshots(conn, ["1"], archive_dir)
+
+    assert len(results) == 1
+    assert results[0]["checksum_ok"] is None
+
+    # DB should still be marked archived even if checksum cannot be verified
+    row = conn.execute("SELECT archived FROM snapshots WHERE id = ?", ("1",)).fetchone()
+    assert row[0] == 1
 
     conn.close()
 

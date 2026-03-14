@@ -17,18 +17,38 @@ import json
 import re
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 import pandas as pd
+import pytest
 from typer.testing import CliRunner
 
 from src import db
-from src.db_migrator import apply_migrations
 from src.main import app
 from src.db.snapshots import _normalize_snapshot_path
 from src.utils.checksums import sha256_file
 
 
-def _extract_json_from_cli_output(output: str) -> dict:
+@pytest.fixture
+def patch_db_connect(monkeypatch, mock_metadata_db):
+    """Patch `src.db.connect` to always use the test metadata DB.
+
+    This allows CLI commands under test to use the in-memory metadata DB
+    prepared by the `mock_metadata_db` fixture without having to patch
+    `db.connect` repeatedly in each test.
+    """
+
+    _, metadata_db_path = mock_metadata_db
+    original_connect = db.connect
+
+    def mock_db_connect(db_path=None, **kw):
+        return original_connect(db_path=str(metadata_db_path), **kw)
+
+    monkeypatch.setattr(db, "connect", mock_db_connect)
+    return metadata_db_path
+
+
+def _extract_json_from_cli_output(output: str) -> dict[str, Any]:
     """Extract JSON report from CLI output containing status messages.
 
     The restore-verify CLI outputs status messages mixed with JSON:
@@ -250,21 +270,13 @@ def test_restore_verify_invalid_csv(mock_metadata_db, tmp_path):
     assert report["overall_result"] == "FAIL"
 
 
-def test_restore_verify_missing_metadata(mock_metadata_db, tmp_path, monkeypatch):
+def test_restore_verify_missing_metadata(mock_metadata_db, patch_db_connect, tmp_path):
     """Snapshot file exists but no metadata in DB → n/a checksum,
     but structure validated.
     """
     metadata_conn, metadata_db_path = mock_metadata_db
     metadata_conn.close()
 
-    # Patch db.connect
-    # (fixture already patched, but keep for clarity)
-    original_connect = db.connect
-
-    def mock_db_connect(db_path=None):
-        return original_connect(db_path=str(metadata_db_path))
-
-    monkeypatch.setattr(db, "connect", mock_db_connect)
 
     # Create snapshot CSV without metadata
     snapshot_dir = tmp_path / "snapshots"
@@ -302,7 +314,9 @@ def test_restore_verify_missing_metadata(mock_metadata_db, tmp_path, monkeypatch
     assert checks["checksum_match"] == "fail"
 
 
-def test_restore_verify_json_report_structure(mock_metadata_db, tmp_path, monkeypatch):
+def test_restore_verify_json_report_structure(
+    mock_metadata_db, patch_db_connect, tmp_path
+):
     """Validate JSON report has all required keys with correct types."""
     metadata_conn, metadata_db_path = mock_metadata_db
 
@@ -312,13 +326,6 @@ def test_restore_verify_json_report_structure(mock_metadata_db, tmp_path, monkey
     )
     metadata_conn.close()
 
-    # Patch db.connect (already done by fixture)
-    original_connect = db.connect
-
-    def mock_db_connect(db_path=None):
-        return original_connect(db_path=str(metadata_db_path))
-
-    monkeypatch.setattr(db, "connect", mock_db_connect)
 
     # Run restore-verify
     runner = CliRunner()
@@ -365,20 +372,8 @@ def test_restore_verify_json_report_structure(mock_metadata_db, tmp_path, monkey
     assert set(checks.values()) <= {"pass", "fail", "n/a"}
 
 
-def test_restore_verify_missing_columns(tmp_path, monkeypatch):
+def test_restore_verify_missing_columns(mock_metadata_db, patch_db_connect, tmp_path):
     """CSV missing required columns → exit 2, columns_present=fail."""
-    # Setup test DB
-    metadata_db_path = tmp_path / "metadata.db"
-    db.init_db(db_path=str(metadata_db_path))
-
-    # Patch db.connect
-    original_connect = db.connect
-
-    def mock_db_connect(db_path=None):
-        return original_connect(db_path=str(metadata_db_path))
-
-    monkeypatch.setattr(db, "connect", mock_db_connect)
-
     # Create CSV missing required columns (no 'close' column)
     snapshot_dir = tmp_path / "snapshots"
     snapshot_dir.mkdir()
@@ -411,27 +406,15 @@ def test_restore_verify_missing_columns(tmp_path, monkeypatch):
     assert report["checks"]["columns_present"] == "fail"
 
 
-def test_restore_verify_row_count_check(tmp_path, monkeypatch):
+def test_restore_verify_row_count_check(mock_metadata_db, patch_db_connect, tmp_path):
     """Verify row_count integrity check logic."""
-    # Setup test DB with migrations
-    metadata_db_path = tmp_path / "metadata.db"
-    db.init_db(db_path=str(metadata_db_path))
-    metadata_conn = db.connect(db_path=str(metadata_db_path))
-    apply_migrations(metadata_conn)
+    metadata_conn, _ = mock_metadata_db
 
     # Create snapshot with known row count
     snapshot_path, _ = _create_test_snapshot_with_metadata(
         "PETR4", tmp_path, metadata_conn
     )
     metadata_conn.close()
-
-    # Patch db.connect
-    original_connect = db.connect
-
-    def mock_db_connect(db_path=None):
-        return original_connect(db_path=str(metadata_db_path))
-
-    monkeypatch.setattr(db, "connect", mock_db_connect)
 
     # Run restore-verify
     runner = CliRunner()
@@ -449,27 +432,15 @@ def test_restore_verify_row_count_check(tmp_path, monkeypatch):
     assert report["checks"]["row_count"] == "pass"
 
 
-def test_restore_verify_sample_row_check(tmp_path, monkeypatch):
+def test_restore_verify_sample_row_check(mock_metadata_db, patch_db_connect, tmp_path):
     """Verify sample_row_check validates first and last rows exist in DB."""
-    # Setup test DB with migrations
-    metadata_db_path = tmp_path / "metadata.db"
-    db.init_db(db_path=str(metadata_db_path))
-    metadata_conn = db.connect(db_path=str(metadata_db_path))
-    apply_migrations(metadata_conn)
+    metadata_conn, _ = mock_metadata_db
 
     # Create snapshot with metadata
     snapshot_path, _ = _create_test_snapshot_with_metadata(
         "PETR4", tmp_path, metadata_conn
     )
     metadata_conn.close()
-
-    # Patch db.connect
-    original_connect = db.connect
-
-    def mock_db_connect(db_path=None):
-        return original_connect(db_path=str(metadata_db_path))
-
-    monkeypatch.setattr(db, "connect", mock_db_connect)
 
     # Run restore-verify
     runner = CliRunner()

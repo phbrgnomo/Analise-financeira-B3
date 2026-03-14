@@ -59,9 +59,7 @@ class TestToCanonical:
 
         # Assert: fetched_at is a datetime-like (schema defines datetime)
         fetched_at = result["fetched_at"].iloc[0]
-        import pandas as _pd
-
-        assert isinstance(fetched_at, _pd.Timestamp)
+        assert isinstance(fetched_at, pd.Timestamp)
 
         # Assert: metadata includes raw_checksum
         assert "raw_checksum" in result.attrs
@@ -125,8 +123,6 @@ class TestToCanonical:
 
     def test_mapper_allows_zero_high_low(self):
         """Rows where high==low==0 should pass validation (holiday markers)."""
-        import pandas as pd
-
         dates = pd.date_range("2026-01-01", periods=2, freq="D")
         raw_df = pd.DataFrame(
             {
@@ -220,7 +216,16 @@ class TestToCanonical:
         assert result.attrs["ticker"] == "AAPL"
 
     # TODO Rename helper to `_create_canonical_df` in other tests if needed
-    def _create_canonical_df(self, provider_name, ticker):
+    def _create_canonical_df(self, provider_name: str, ticker: str) -> pd.DataFrame:
+        """Create a minimal yfinance-like DataFrame and convert it to canonical format.
+
+        Args:
+            provider_name: The provider identifier used in the canonical output.
+            ticker: The ticker symbol used in the canonical output.
+
+        Returns:
+            A canonical DataFrame as produced by :func:`src.etl.mapper.to_canonical`.
+        """
         dates = pd.date_range("2026-01-01", periods=1, freq="D")
         raw_df = pd.DataFrame(
             {

@@ -8,9 +8,10 @@ ser reutilizada por qualquer comando em ``src.main`` ou sub-apps.
 
 from __future__ import annotations
 
+import json
 import time
 from dataclasses import dataclass
-from typing import Literal
+from typing import Any, Literal
 
 import typer
 
@@ -110,6 +111,17 @@ class CliFeedback:
             f"✓ {handle.name} ({elapsed}){suffix}",
             fg=typer.colors.GREEN,
         )
+
+    def json_output(
+        self,
+        data: Any,
+        *,
+        indent: int = 2,
+        ensure_ascii: bool = False,
+    ) -> None:
+        """Emite um objeto como JSON formatado para stdout."""
+
+        typer.echo(json.dumps(data, indent=indent, ensure_ascii=ensure_ascii))
 
     def summary(self, message: str) -> None:
         """Exibe o resumo final com a duração total do comando."""

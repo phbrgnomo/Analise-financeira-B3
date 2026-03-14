@@ -1,4 +1,5 @@
 import json
+import sqlite3
 import warnings
 from pathlib import Path
 
@@ -10,6 +11,13 @@ from src.utils.checksums import sha256_file
 
 
 def test_save_raw_csv_and_register(tmp_path):
+    """Ensure save_raw_csv writes CSV/metadata and warns when custom db_path is used.
+
+    This verifies that `save_raw_csv()` successfully writes a raw CSV and
+    associated metadata entry, and emits a deprecation warning when a
+    non-default `db_path` is passed.
+    """
+
     df = pd.DataFrame({"col1": [1, 2], "col2": [3, 4]})
 
     raw_root = tmp_path / "raw"
@@ -64,7 +72,22 @@ def test_save_raw_csv_and_register(tmp_path):
     assert len(found) == 1
 
 
-def assert_ingest_log_entry(conn, meta):
+def assert_ingest_log_entry(conn: sqlite3.Connection, meta: dict[str, object]) -> None:
+    """Assert that the given metadata record exists in the ingest log.
+
+    Parameters
+    ----------
+    conn : sqlite3.Connection
+        A connection to the metadata database.
+    meta : dict[str, object]
+        Metadata dict produced by `save_raw_csv`, expected to include at least
+        ``job_id`` and ``filepath``.
+
+    Raises
+    ------
+    AssertionError
+        If the ingest log entry is missing or does not match the expected values.
+    """
     cur = conn.cursor()
     cur.execute(
         "SELECT job_id, status, filepath FROM ingest_logs WHERE job_id = ?",

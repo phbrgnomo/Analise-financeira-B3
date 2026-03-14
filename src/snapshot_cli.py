@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 import sys
 from pathlib import Path
 from typing import Any, cast, override
@@ -76,6 +77,7 @@ def _resolve_snapshot_path(raw_path: str) -> Path:
 def _load_latest_snapshot(
     ticker: str,
     fb: _SnapshotExportFeedback,
+    conn: sqlite3.Connection | None = None,
 ) -> tuple[dict[str, object], pd.DataFrame]:
     """Load metadata and DataFrame for the latest snapshot of a ticker.
 
@@ -96,10 +98,19 @@ def _load_latest_snapshot(
     typer.Exit
         If no snapshot metadata exists or the snapshot file cannot be read.
     """
-    snapshots = db.list_snapshots(ticker=ticker, archived=False)
-    if not snapshots:
-        fb.error(f"No snapshots found for ticker {ticker}")
-        raise typer.Exit(code=1)
+    close_conn = False
+    if conn is None:
+        conn = db.connect()
+        close_conn = True
+
+    try:
+        snapshots = db.list_snapshots(ticker=ticker, archived=False, conn=conn)
+        if not snapshots:
+            fb.error(f"No snapshots found for ticker {ticker}")
+            raise typer.Exit(code=1)
+    finally:
+        if close_conn and conn is not None:
+            conn.close()
 
     metadata = snapshots[0]
     snapshot_path_raw = metadata.get("snapshot_path")
@@ -311,11 +322,15 @@ def purge_snapshots(
                 snapshot_ids,
                 archive_dir,
             )
-            ok_count = sum(bool(row.get("checksum_ok")) for row in archived)
-            feedback.success(
+            ok_count = sum(1 for row in archived if row.get("checksum_ok") is True)
+            unknown_count = sum(1 for row in archived if row.get("checksum_ok") is None)
+            msg = (
                 f"Arquivamento concluído: {len(archived)} snapshot(s), "
                 f"checksums OK: {ok_count}"
             )
+            if unknown_count:
+                msg += f", unverificáveis: {unknown_count}"
+            feedback.success(msg)
             return
 
         deleted = delete_snapshots(conn, snapshot_ids)
@@ -335,7 +350,7 @@ def export_snapshot(
         "--ticker",
         help="Ticker symbol (B3 format, e.g., PETR4)",
     ),
-    format: str = typer.Option(
+    output_format: str = typer.Option(
         "csv",
         "--format",
         help="Output format: csv or json",
@@ -358,7 +373,7 @@ def export_snapshot(
     ----------
     ticker : str
         B3 ticker symbol to export (e.g. ``PETR4``).
-    format : str
+    output_format : str
         Desired output format, either ``csv`` or ``json``.  Case-insensitive.
     output : str | None
         Optional filesystem path to write the export.  If omitted the data
@@ -372,10 +387,10 @@ def export_snapshot(
     """
     fb = _SnapshotExportFeedback("snapshots export")
     normalized_ticker = ticker.strip().upper()
-    requested_format = format.strip().lower()
+    requested_format = output_format.strip().lower()
 
     if requested_format not in {"csv", "json"}:
-        fb.error(f"Invalid format: {format}. Use 'csv' or 'json'.")
+        fb.error(f"Invalid format: {output_format}. Use 'csv' or 'json'.")
         raise typer.Exit(code=1)
 
     fb.start(f"Exporting snapshot for {normalized_ticker}")
@@ -425,6 +440,9 @@ def ingest_snapshot(
     cache_file: str = typer.Option(
         "", help="Arquivo JSON usado para armazenar o cache", is_flag=False
     ),
+    # hidden argument for backward compatibility (allows old positional usage
+    # of ticker as a second argument).  Keep this in place until all callers
+    # have migrated to the explicit --ticker option.
     ticker_arg: str | None = typer.Argument(None, hidden=True),
 ) -> None:
     """Importa um CSV de snapshot para o banco usando a função core de ingest.
@@ -480,4 +498,4 @@ def ingest_snapshot(
         )
 
     feedback.summary("Ingestão de snapshot concluída")
-    typer.echo(json.dumps(result, indent=2, ensure_ascii=False))
+    feedback.json_output(result)

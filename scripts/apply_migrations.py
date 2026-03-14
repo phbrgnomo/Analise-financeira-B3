@@ -23,6 +23,21 @@ logger = logging.getLogger(__name__)
 
 
 def main() -> None:
+    """Apply database migrations to the configured SQLite database.
+
+    This script reads the ``DB_PATH`` environment variable (defaulting to
+    ``dados/data.db``), ensures the required directory exists, opens a SQLite
+    connection, and calls :func:`src.db_migrator.apply_migrations` to apply any
+    pending migrations.
+
+    Side effects:
+    - Creates the parent directory of the configured DB if needed.
+    - Modifies the database schema by applying migrations.
+    - Logs success or errors via the standard logger.
+
+    The function takes no arguments and returns ``None``.
+    """
+
     dbpath = os.getenv("DB_PATH", "dados/data.db")
     if db_dir := os.path.dirname(dbpath):
         os.makedirs(db_dir, exist_ok=True)

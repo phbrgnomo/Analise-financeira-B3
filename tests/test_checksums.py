@@ -18,7 +18,10 @@ def test_generate_and_compare(tmp_path: Path):
     f2.write_text("world")
 
     manifest = generate_manifest(d)
-    assert "".join([]) is not None  # simple sanity
+    # Ensure the manifest contains an entry for each file created in the directory.
+    assert isinstance(manifest, dict)
+    assert {Path(p).name for p in manifest.keys()} == {"a.txt", "b.txt"}
+
     # write and load using a manifest path
     mpath = tmp_path / "checks.json"
     write_manifest(mpath, manifest)

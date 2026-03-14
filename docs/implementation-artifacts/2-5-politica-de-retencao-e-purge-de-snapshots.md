@@ -57,7 +57,17 @@ para que o repositório/servidor mantenha uso de disco controlado mantendo audit
   - Snapshots: `snapshots/` (produzido por Story 2-1 / 2-3)
   - Archive: `snapshots/archive/` (opcional, configurável)
   - Metadados: `metadata/snapshots.db` (SQLite) ou `metadata/snapshots.json`
-- Default retention policy: use `SNAPSHOT_RETENTION_DAYS=90` to keep snapshots for 90 days (configurable).
+- Default retention policy: keep snapshots for 90 days (configurable via `SNAPSHOT_RETENTION_DAYS`).
+  - Example (shell):
+    ```sh
+    # default: 90 days
+    export SNAPSHOT_RETENTION_DAYS=90
+    ```
+  - Example (dotenv / .env):
+    ```env
+    # default: 90 days
+    SNAPSHOT_RETENTION_DAYS=90
+    ```
 - Implementation recommendations:
   - Use SQLite table `snapshots` for transactional updates and easy queries. Columns: `id, path, ticker, created_at, rows, checksum_sha256, size_bytes, archived BOOLEAN, retention_tier, archived_at`.
   - When purging, always perform `--dry-run` in CI and logging. Only `--confirm` deletes files.

@@ -52,7 +52,9 @@ jobs:
           # Run tests inside Poetry-managed venv so installed deps (pandas) are visible
           # Enable metadata DB check in CI
           export CHECK_METADATA_DB=1
-          poetry run pytest -q
+          # `test_generate_ci_snapshot_writes_metadata` is already executed in the
+          # previous step (fast regression test), so skip it here to avoid duplicate work.
+          poetry run pytest -q -k "not test_generate_ci_snapshot_writes_metadata"
 
       - name: Upload snapshot diagnostics on failure
         if: failure()

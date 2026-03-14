@@ -106,9 +106,12 @@ def test_force_refresh_flag_propagation(monkeypatch):
 
 def test_raw_file_written(tmp_path, monkeypatch):
     """Non-dry run should produce a CSV under the raw directory."""
+    import src.adapters.factory as factory
+    import src.etl.mapper as mapper
+
     dummy = DummyAdapter()
-    monkeypatch.setattr("src.adapters.factory.get_adapter", lambda name: dummy)
-    monkeypatch.setattr("src.etl.mapper.to_canonical", lambda df, **kw: df)
+    monkeypatch.setattr(factory, "get_adapter", lambda name: dummy)
+    monkeypatch.setattr(mapper, "to_canonical", lambda df, **kw: df)
 
     # run ingestion with temporary working directory so files land under tmp_path
     monkeypatch.chdir(tmp_path)

@@ -12,7 +12,7 @@ import pandas as pd
 logger = logging.getLogger(__name__)
 
 
-def main(db_path: str = "dados/data.db", ticker: str = "PETR4.SA"):
+def main(db_path: str = "dados/data.db", ticker: str = "PETR4.SA") -> None:
     """Read returns for `ticker` from `db_path` and print cumulative return.
 
     Parameters

@@ -125,7 +125,7 @@ def test_metadata_registered_after_snapshot(snapshot_test_db, tmp_path):
     assert result.exit_code == 0, f"CLI failed: {result.output}"
 
     metadata = db.list_snapshots(ticker="PETR4", db_path=str(db_path))
-    assert len(metadata) >= 1, "Expected at least one metadata row"
+    assert len(metadata) == 1, "Expected exactly one metadata row"
 
     row = metadata[0]
     assert row["id"] is not None, "id field should be populated"
@@ -176,7 +176,7 @@ def test_checksum_matches_sha256_file(snapshot_test_db, tmp_path):
     )
 
 
-def test_checksum_sidecar_written(snapshot_test_db, tmp_path, monkeypatch):
+def test_checksum_sidecar_written(snapshot_test_db, tmp_path):
     """.checksum sidecar file exists next to CSV."""
 
     runner = CliRunner()
@@ -335,7 +335,7 @@ def test_metadata_rows_count_matches_df(snapshot_test_db, tmp_path):
     )
 
 
-def test_metadata_size_bytes_matches_file(snapshot_test_db, tmp_path, monkeypatch):
+def test_metadata_size_bytes_matches_file(snapshot_test_db, tmp_path):
     """size_bytes in DB matches file size of CSV."""
 
     db_path = snapshot_test_db

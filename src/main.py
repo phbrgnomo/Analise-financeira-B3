@@ -77,7 +77,7 @@ try:
     app.add_typer(
         snapshot_cli_module.app,
         name="snapshots",
-        help="Comandos para exportação de snapshots em CSV/JSON.",
+        help="Comandos para ingestão e geração de snapshots.",
     )
 except ImportError as exc:
     import logging
@@ -393,7 +393,19 @@ def export_csv_cmd(
         f"ticker={normalized} | output={output or DATA_DIR / f'{normalized}.csv'} | "
         f"start={start or '-'} | end={end or '-'}"
     )
-    resolved = _db.resolve_existing_ticker(normalized)
+    try:
+        resolved = _db.resolve_existing_ticker(normalized)
+    except sqlite3.OperationalError as e:
+        # This can happen if the database schema is missing (e.g. migrations not run).
+        logging.getLogger(__name__).error(
+            "erro ao resolver ticker existente %s: %s", normalized, e
+        )
+        feedback.error(
+            "Erro de acesso ao banco de dados; verifique se o esquema está "
+            "inicializado e execute as migrações"
+        )
+        return
+
     if resolved is None:
         # try the provider-specific variant (e.g. add .SA)
         _, provider_variant = ticker_variants(normalized)

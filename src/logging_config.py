@@ -61,6 +61,34 @@ class JSONFormatter(logging.Formatter):
     - format(record): formata o `LogRecord` e retorna uma string JSON.
     """
 
+    def _should_redact(self, key: str) -> bool:
+        """Return True if the key is considered sensitive and should be redacted."""
+
+        lowered = str(key).lower()
+        return any(substr in lowered for substr in SENSITIVE_KEY_SUBSTRINGS)
+
+    def _serialize_extra_field(self, key: str, value: object) -> object:
+        """Serialize an extra field for JSON output, redacting if needed."""
+
+        if self._should_redact(key):
+            return "***REDACTED***"
+
+        try:
+            json.dumps(value)
+            return value
+        except Exception:
+            # Represent non-serializable extras as strings rather than failing.
+            return str(value)
+
+    def _extract_extra_fields(self, record: logging.LogRecord) -> dict[str, object]:
+        """Extract and serialize any extra fields from a LogRecord."""
+
+        extra_keys = set(record.__dict__.keys()) - DEFAULT_RECORD_KEYS
+        return {
+            k: self._serialize_extra_field(k, record.__dict__[k])
+            for k in extra_keys
+        }
+
     def format(self, record: logging.LogRecord) -> str:
         """Format a LogRecord as a compact JSON string.
 
@@ -81,23 +109,8 @@ class JSONFormatter(logging.Formatter):
             "logger": record.name,
             "message": record.getMessage(),
         }
-        # Include any structured fields attached to the record (common pattern)
-        extra_keys = set(record.__dict__.keys()) - DEFAULT_RECORD_KEYS
 
-        # Redact common sensitive keys to avoid leaking secrets in logs.
-
-        for k in extra_keys:
-            try:
-                val = record.__dict__[k]
-                lowered = str(k).lower()
-                if any(substr in lowered for substr in SENSITIVE_KEY_SUBSTRINGS):
-                    payload[k] = "***REDACTED***"
-                    continue
-                json.dumps(val)
-                payload[k] = val
-            except Exception:
-                # Represent non-serializable extras as strings rather than failing
-                payload[k] = str(record.__dict__[k])
+        payload.update(self._extract_extra_fields(record))
 
         if record.exc_info:
             payload["exc_info"] = self.formatException(record.exc_info)

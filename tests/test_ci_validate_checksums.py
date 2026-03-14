@@ -307,7 +307,8 @@ def test_output_format_shows_results(test_db, tmp_path, capsys):
     assert "Total:" in output
     assert "Passed:" in output
     assert "Failed:" in output
-    assert "Missing:" in output
+    # Output currently includes a “Missing (subset of Failed)” summary line.
+    assert "Missing (subset of Failed)" in output
 
     assert exit_code == 1  # Failed validation → exit 1
 

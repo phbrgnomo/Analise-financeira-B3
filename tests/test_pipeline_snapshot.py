@@ -14,6 +14,7 @@ import re
 from typing import Pattern
 
 import pandas as pd
+import pytest
 from typer.testing import CliRunner
 
 from src.main import app
@@ -25,16 +26,27 @@ def _strip_ansi(s: str) -> str:
     return ansi.sub("", s)
 
 
-def test_snapshot_generates_csv_file(sample_db, tmp_path, monkeypatch):
-    """Valid ticker generates CSV file in output directory."""
+@pytest.fixture
+def mock_db_connections(sample_db, monkeypatch):
+    """Patch DB connection helpers to use the provided sample DB.
+
+    This ensures CLI commands use the in-memory fixture database even when the
+    code imports connection helpers from multiple modules.
+    """
+
     from src import db
     from src.db import connection, prices
 
-    # patch both public connector and price module reference
     monkeypatch.setattr(connection, "connect", lambda db_path=None: sample_db)
     monkeypatch.setattr(prices, "connect", lambda db_path=None: sample_db)
     monkeypatch.setattr(db, "connect", lambda **kw: sample_db)
     monkeypatch.setattr(db, "record_snapshot_metadata", lambda *a, **k: None)
+
+    return sample_db
+
+
+def test_snapshot_generates_csv_file(mock_db_connections, tmp_path):
+    """Valid ticker generates CSV file in output directory."""
 
     runner = CliRunner()
     output_dir = tmp_path / "snapshots"
@@ -57,18 +69,11 @@ def test_snapshot_generates_csv_file(sample_db, tmp_path, monkeypatch):
     assert csv_path.stat().st_size > 0, "Snapshot file is empty"
 
 
-def test_snapshot_csv_has_correct_columns(sample_db, tmp_path, monkeypatch):
+def test_snapshot_csv_has_correct_columns(mock_db_connections, tmp_path):
     """CSV columns match read_prices() output (canonical schema).
 
     Snapshot includes all DB columns sorted alphabetically by serialize_df_bytes.
     """
-    from src import db
-    from src.db import connection, prices
-
-    monkeypatch.setattr(connection, "connect", lambda db_path=None: sample_db)
-    monkeypatch.setattr(prices, "connect", lambda db_path=None: sample_db)
-    monkeypatch.setattr(db, "connect", lambda **kw: sample_db)
-    monkeypatch.setattr(db, "record_snapshot_metadata", lambda *a, **k: None)
 
     runner = CliRunner()
     output_dir = tmp_path / "snapshots"
@@ -98,19 +103,8 @@ def test_snapshot_csv_has_correct_columns(sample_db, tmp_path, monkeypatch):
     )
 
 
-def test_snapshot_with_date_range(sample_db, tmp_path, monkeypatch):
+def test_snapshot_with_date_range(mock_db_connections, tmp_path):
     """--start and --end filter data correctly."""
-    # import all relevant db modules first so monkeypatching order matches
-    # other snapshot tests.
-    from src import db
-    from src.db import connection, prices
-
-    # price reads go through ``connection.connect`` and the name imported by
-    # ``prices``; patch both so snapshot commands see our sample_db.
-    monkeypatch.setattr(connection, "connect", lambda db_path=None: sample_db)
-    monkeypatch.setattr(prices, "connect", lambda db_path=None: sample_db)
-    monkeypatch.setattr(db, "connect", lambda **kw: sample_db)
-    monkeypatch.setattr(db, "record_snapshot_metadata", lambda *a, **k: None)
 
     runner = CliRunner()
     output_dir = tmp_path / "snapshots"
@@ -146,12 +140,8 @@ def test_snapshot_with_date_range(sample_db, tmp_path, monkeypatch):
     assert "2023-01-04" in dates
 
 
-def test_snapshot_invalid_ticker_exit_code_1(sample_db, tmp_path, monkeypatch):
+def test_snapshot_invalid_ticker_exit_code_1(mock_db_connections, tmp_path):
     """Unknown ticker produces exit code 1."""
-    # ensure CLI uses the sample database instead of real data
-    from src import db
-
-    monkeypatch.setattr(db, "connect", lambda **kw: sample_db)
 
     runner = CliRunner()
     output_dir = tmp_path / "snapshots"
@@ -173,11 +163,8 @@ def test_snapshot_invalid_ticker_exit_code_1(sample_db, tmp_path, monkeypatch):
     assert "ticker inválido" in plain_output or "nenhum dado encontrado" in plain_output
 
 
-def test_snapshot_empty_date_range_exit_code_1(sample_db, tmp_path, monkeypatch):
+def test_snapshot_empty_date_range_exit_code_1(mock_db_connections, tmp_path):
     """Valid ticker but no data in date range produces exit code 1."""
-    from src import db
-
-    monkeypatch.setattr(db, "connect", lambda **kw: sample_db)
 
     runner = CliRunner()
     output_dir = tmp_path / "snapshots"
@@ -203,15 +190,8 @@ def test_snapshot_empty_date_range_exit_code_1(sample_db, tmp_path, monkeypatch)
     assert "nenhum dado encontrado" in plain_output
 
 
-def test_snapshot_creates_output_dir(sample_db, tmp_path, monkeypatch):
+def test_snapshot_creates_output_dir(mock_db_connections, tmp_path):
     """Non-existent output directory is created automatically."""
-    from src import db
-    from src.db import connection, prices
-
-    monkeypatch.setattr(connection, "connect", lambda db_path=None: sample_db)
-    monkeypatch.setattr(prices, "connect", lambda db_path=None: sample_db)
-    monkeypatch.setattr(db, "connect", lambda **kw: sample_db)
-    monkeypatch.setattr(db, "record_snapshot_metadata", lambda *a, **k: None)
 
     runner = CliRunner()
     output_dir = tmp_path / "does_not_exist" / "nested" / "snapshots"
@@ -237,18 +217,13 @@ def test_snapshot_creates_output_dir(sample_db, tmp_path, monkeypatch):
     assert csv_path.exists(), "Snapshot file should be created in new directory"
 
 
-def test_snapshot_default_output_dir(sample_db, tmp_path, monkeypatch):
+def test_snapshot_default_output_dir(mock_db_connections, tmp_path, monkeypatch):
     """Without --output-dir, command uses SNAPSHOTS_DIR.
 
     Monkeypatch SNAPSHOTS_DIR in pipeline module since it's imported there.
     """
-    from src import db, pipeline
-    from src.db import connection, prices
+    from src import pipeline
 
-    monkeypatch.setattr(connection, "connect", lambda db_path=None: sample_db)
-    monkeypatch.setattr(prices, "connect", lambda db_path=None: sample_db)
-    monkeypatch.setattr(db, "connect", lambda **kw: sample_db)
-    monkeypatch.setattr(db, "record_snapshot_metadata", lambda *a, **k: None)
     test_snapshots_dir = tmp_path / "snapshots"
     monkeypatch.setattr(pipeline, "SNAPSHOTS_DIR", test_snapshots_dir)
 

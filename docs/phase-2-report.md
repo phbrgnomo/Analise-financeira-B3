@@ -94,7 +94,24 @@ sha256sum snapshots/PETR4_snapshot.csv
 cat snapshots/PETR4_snapshot.csv.checksum
 ```
 
-3. Executar `restore-verify` para checar integridade e simular ingest (veja o exemplo na seção **Comandos úteis**, onde o mesmo comando é apresentado).
+A saída deve mostrar o mesmo hash em ambos os comandos. Exemplo:
+
+```bash
+# sha256sum prints <hash> and the filename
+3a7f1d5b...  snapshots/PETR4_snapshot.csv
+# checksum file contains only the same hash
+3a7f1d5b...
+```
+
+Se os hashes não coincidirem byte-a-byte, o arquivo `snapshots/PETR4_snapshot.csv` está corrompido e não deve ser restaurado — re-baixe ou regenere o snapshot antes de prosseguir.
+
+3. Executar `restore-verify` para checar integridade e simular ingest. Por exemplo:
+
+```bash
+poetry run main pipeline restore-verify --snapshot-path snapshots/PETR4_snapshot.csv
+```
+
+(este mesmo comando também aparece na seção **Comandos úteis**.)
 
 4. Se validado, importar CSV para DB de staging seguindo o processo de ingest (adotar fluxo `db.write_prices()` com conn de staging) e rodar checks (row counts, amostras de valores).
 
@@ -107,6 +124,11 @@ cat snapshots/PETR4_snapshot.csv.checksum
 - Garantir que `apply_migrations()` é parte do bootstrap do ambiente CI antes de rodar testes que dependem do schema expandido. Os testes atuais já chamam `apply_migrations()` e validam o comportamento da migração 0002; além disso, o workflow CI agora contém passos explícitos (jobs **test** e **integration**) que aplicam as migrações no banco padrão (`dados/data.db`) antes de executar qualquer comando.
 - Adicionar `SNAPSHOT_RETENTION_DAYS` ao `.env.example` e documentar seu uso — as funções de retenção (`get_retention_days`) leem esta variável com fallback para 90.
 - Documentar limites operacionais do uso de SQLite (concorrência por ticker, datasets grandes) em `docs/architecture.md`.
+
+  - Limite prático por snapshot: ~200–500 MB (depende do hardware); acima disso, operações de leitura/parse ficam muito lentas. **Sintoma:** `pipeline snapshot` pode demorar >5min e falhar com `MemoryError`.
+  - Conexões concorrentes por ticker: manter <= 1 ingest/restore por ticker simultâneo. **Sintoma:** `sqlite3.OperationalError: database is locked` ou timeouts de escrita.
+  - Espaço em disco: reservar >= 2× o tamanho do snapshot (CSV + sidecar + DB) no mesmo volume. **Sintoma:** falhas de escrita/`Disk quota exceeded`.
+  - Performance degrada quando >10M linhas por CSV; privilégie partições ou amostragem para workloads maiores.
 - Incluir um teste de migração que aplica `0002_expand_snapshots.sql` em um DB existente (dump) para evitar regressões em ambientes reais; já implementado nas suítes de teste existentes.
 
 

@@ -12,8 +12,10 @@ Verifies all behaviors of the snapshot export command:
 import json
 import sqlite3
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
+import pytest
+from pytest import MonkeyPatch
 from typer.testing import CliRunner
 
 from src import db
@@ -22,7 +24,7 @@ from src.etl.snapshot import write_snapshot
 from src.main import app
 
 
-def _prepare_test_db(tmp_path: Path, monkeypatch) -> sqlite3.Connection:
+def _prepare_test_db(tmp_path: Path, monkeypatch: MonkeyPatch) -> sqlite3.Connection:
     """Initialize a temp database, apply migrations, and monkeypatch connections.
 
     Returns a live ``sqlite3.Connection`` which the caller should close.
@@ -44,7 +46,9 @@ def _prepare_test_db(tmp_path: Path, monkeypatch) -> sqlite3.Connection:
     return conn
 
 
-def _setup_snapshot(ticker: str, tmp_path: Path, conn: Any) -> tuple[Path, str]:
+def _setup_snapshot(
+    ticker: str, tmp_path: Path, conn: sqlite3.Connection
+) -> tuple[Path, str]:
     """Create a test snapshot and register metadata.
 
     Returns:
@@ -94,7 +98,7 @@ def _setup_snapshot(ticker: str, tmp_path: Path, conn: Any) -> tuple[Path, str]:
     return snapshot_path, checksum
 
 
-def _assert_snapshot_json(data: dict, ticker: str = "PETR4") -> None:
+def _assert_snapshot_json(data: Mapping[str, Any], ticker: str = "PETR4") -> None:
     """Common assertions for JSON export metadata structure."""
     required_fields = {"ticker", "checksum", "rows", "data"}
     assert required_fields.issubset(data.keys()), (
@@ -104,209 +108,187 @@ def _assert_snapshot_json(data: dict, ticker: str = "PETR4") -> None:
     assert isinstance(data.get("data"), list)
 
 
-def test_export_csv_to_stdout(tmp_path, monkeypatch):
+@pytest.fixture
+def test_db(tmp_path, monkeypatch):
+    """Prepare a temporary metadata database and yield a connection.
+
+    This fixture mirrors the setup used by the CLI under test. It creates a
+    fresh metadata DB on disk, applies migrations, and patches the internal
+    `src.db.connection._connect` and `src.db.connect` entrypoints to always
+    return the same connection. It also patches the snapshots CLI to look for
+    snapshot files under the temp directory.
+    """
+
+    conn = _prepare_test_db(tmp_path, monkeypatch)
+
+    # Ensure CLI exports use the temp snapshots directory for this test.
+    from src import snapshot_cli
+
+    monkeypatch.setattr(snapshot_cli, "SNAPSHOTS_DIR", tmp_path / "snapshots")
+
+    try:
+        yield conn, tmp_path
+    finally:
+        conn.close()
+
+
+def test_export_csv_to_stdout(test_db):
     """CSV data on stdout, status messages on stderr."""
-    conn = _prepare_test_db(tmp_path, monkeypatch)
+    conn, tmp_path = test_db
 
-    try:
-        # only checksum used later; ignore snapshot_path
-        _, _ = _setup_snapshot("PETR4", tmp_path, conn)
+    # only checksum used later; ignore snapshot_path
+    _, _ = _setup_snapshot("PETR4", tmp_path, conn)
 
-        from src import snapshot_cli
+    runner = CliRunner()
+    result = runner.invoke(
+        app,
+        ["snapshots", "export", "--ticker", "PETR4", "--format", "csv"],
+    )
 
-        monkeypatch.setattr(snapshot_cli, "SNAPSHOTS_DIR", tmp_path / "snapshots")
+    assert result.exit_code == 0, f"CLI failed: {result.output}"
 
-        runner = CliRunner()
-        result = runner.invoke(
-            app,
-            ["snapshots", "export", "--ticker", "PETR4", "--format", "csv"],
-        )
+    csv_lines = result.stdout.strip().split("\n")
+    header = csv_lines[0]
+    assert "date" in header and "open" in header and "close" in header
+    assert "adj_close" in header and "volume" in header
+    assert "2024-01-01" in result.stdout
+    assert "10," in result.stdout or "10.0" in result.stdout
 
-        assert result.exit_code == 0, f"CLI failed: {result.output}"
-
-        csv_lines = result.stdout.strip().split("\n")
-        header = csv_lines[0]
-        assert "date" in header and "open" in header and "close" in header
-        assert "adj_close" in header and "volume" in header
-        assert "2024-01-01" in result.stdout
-        assert "10," in result.stdout or "10.0" in result.stdout
-
-        assert "Exporting snapshot" in result.output
-    finally:
-        conn.close()
+    assert "Exporting snapshot" in result.output
 
 
-def test_export_json_to_stdout(tmp_path, monkeypatch):
+def test_export_json_to_stdout(test_db):
     """JSON export with metadata wrapper and records orientation."""
-    conn = _prepare_test_db(tmp_path, monkeypatch)
+    conn, tmp_path = test_db
 
-    try:
-        # only checksum is used later; path is irrelevant for this test
-        _, checksum = _setup_snapshot("PETR4", tmp_path, conn)
+    # only checksum is used later; path is irrelevant for this test
+    _, checksum = _setup_snapshot("PETR4", tmp_path, conn)
 
-        from src import snapshot_cli
+    runner = CliRunner()
+    result = runner.invoke(
+        app,
+        ["snapshots", "export", "--ticker", "PETR4", "--format", "json"],
+    )
 
-        monkeypatch.setattr(snapshot_cli, "SNAPSHOTS_DIR", tmp_path / "snapshots")
+    assert result.exit_code == 0, f"CLI failed: {result.output}"
 
-        runner = CliRunner()
-        result = runner.invoke(
-            app,
-            ["snapshots", "export", "--ticker", "PETR4", "--format", "json"],
-        )
+    data = json.loads(result.stdout)
 
-        assert result.exit_code == 0, f"CLI failed: {result.output}"
-
-        data = json.loads(result.stdout)
-
-        _assert_snapshot_json(data, ticker="PETR4")
-        # additional content-specific checks
-        assert data["checksum"] == checksum
-        assert data["rows"] == 3
-        assert len(data["data"]) == 3
-    finally:
-        conn.close()
+    _assert_snapshot_json(data, ticker="PETR4")
+    # additional content-specific checks
+    assert data["checksum"] == checksum
+    assert data["rows"] == 3
+    assert len(data["data"]) == 3
 
 
-def test_export_csv_to_file(tmp_path, monkeypatch):
+def test_export_csv_to_file(test_db):
     """--output flag writes CSV file correctly."""
-    conn = _prepare_test_db(tmp_path, monkeypatch)
+    conn, tmp_path = test_db
 
-    try:
-        # path not required for this assertion
-        _, _ = _setup_snapshot("PETR4", tmp_path, conn)
+    # path not required for this assertion
+    _, _ = _setup_snapshot("PETR4", tmp_path, conn)
 
-        from src import snapshot_cli
+    output_file = tmp_path / "export.csv"
+    runner = CliRunner()
+    result = runner.invoke(
+        app,
+        [
+            "snapshots",
+            "export",
+            "--ticker",
+            "PETR4",
+            "--format",
+            "csv",
+            "--output",
+            str(output_file),
+        ],
+    )
 
-        monkeypatch.setattr(snapshot_cli, "SNAPSHOTS_DIR", tmp_path / "snapshots")
+    assert result.exit_code == 0, f"CLI failed: {result.output}"
+    assert output_file.exists(), "Output file not created"
 
-        output_file = tmp_path / "export.csv"
-        runner = CliRunner()
-        result = runner.invoke(
-            app,
-            [
-                "snapshots",
-                "export",
-                "--ticker",
-                "PETR4",
-                "--format",
-                "csv",
-                "--output",
-                str(output_file),
-            ],
-        )
-
-        assert result.exit_code == 0, f"CLI failed: {result.output}"
-        assert output_file.exists(), "Output file not created"
-
-        content = output_file.read_text()
-        csv_lines = content.strip().split("\n")
-        header = csv_lines[0]
-        assert "date" in header and "open" in header and "close" in header
-        assert "adj_close" in header and "volume" in header
-        assert "2024-01-01" in content
-    finally:
-        conn.close()
+    content = output_file.read_text()
+    csv_lines = content.strip().split("\n")
+    header = csv_lines[0]
+    assert "date" in header and "open" in header and "close" in header
+    assert "adj_close" in header and "volume" in header
+    assert "2024-01-01" in content
 
 
-def test_export_json_to_file(tmp_path, monkeypatch):
+def test_export_json_to_file(test_db):
     """--output flag writes JSON file correctly."""
-    conn = _prepare_test_db(tmp_path, monkeypatch)
+    conn, tmp_path = test_db
 
-    try:
-        # only checksum is relevant for these assertions
-        _, _ = _setup_snapshot("PETR4", tmp_path, conn)
+    # only checksum is relevant for these assertions
+    _, _ = _setup_snapshot("PETR4", tmp_path, conn)
 
-        from src import snapshot_cli
+    output_file = tmp_path / "export.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        app,
+        [
+            "snapshots",
+            "export",
+            "--ticker",
+            "PETR4",
+            "--format",
+            "json",
+            "--output",
+            str(output_file),
+        ],
+    )
 
-        monkeypatch.setattr(snapshot_cli, "SNAPSHOTS_DIR", tmp_path / "snapshots")
+    assert result.exit_code == 0, f"CLI failed: {result.output}"
+    assert output_file.exists(), "Output file not created"
 
-        output_file = tmp_path / "export.json"
-        runner = CliRunner()
-        result = runner.invoke(
-            app,
-            [
-                "snapshots",
-                "export",
-                "--ticker",
-                "PETR4",
-                "--format",
-                "json",
-                "--output",
-                str(output_file),
-            ],
-        )
-
-        assert result.exit_code == 0, f"CLI failed: {result.output}"
-        assert output_file.exists(), "Output file not created"
-
-        data = json.loads(output_file.read_text())
-        assert data["ticker"] == "PETR4"
-        assert data["rows"] == 3
-    finally:
-        conn.close()
+    data = json.loads(output_file.read_text())
+    assert data["ticker"] == "PETR4"
+    assert data["rows"] == 3
 
 
-def test_export_no_snapshot_exit_1(tmp_path, monkeypatch):
+def test_export_no_snapshot_exit_1(test_db):
     """Unknown ticker produces exit code 1 with error message."""
     # initialize a proper schema before running the CLI helper
-    conn = _prepare_test_db(tmp_path, monkeypatch)
-    try:
-        from src import snapshot_cli
+    conn, tmp_path = test_db
 
-        monkeypatch.setattr(snapshot_cli, "SNAPSHOTS_DIR", tmp_path / "snapshots")
-        # ``_prepare_test_db`` already patched db.connect to return our conn
+    # ``_prepare_test_db`` already patched db.connect to return our conn
 
-        runner = CliRunner()
-        result = runner.invoke(
-            app,
-            [
-                "snapshots",
-                "export",
-                "--ticker",
-                "INVALID99",
-                "--format",
-                "csv",
-            ],
-        )
+    runner = CliRunner()
+    result = runner.invoke(
+        app,
+        [
+            "snapshots",
+            "export",
+            "--ticker",
+            "INVALID99",
+            "--format",
+            "csv",
+        ],
+    )
 
-        assert result.exit_code == 1, "Expected exit code 1 for unknown ticker"
-        assert "No snapshots found" in result.output
-    finally:
-        conn.close()
+    assert result.exit_code == 1, "Expected exit code 1 for unknown ticker"
+    assert "No snapshots found" in result.output
 
 
-def test_export_json_has_metadata_fields(tmp_path, monkeypatch):
+def test_export_json_has_metadata_fields(test_db):
     """JSON contains ticker, checksum, rows, data."""
-    conn = _prepare_test_db(tmp_path, monkeypatch)
+    conn, tmp_path = test_db
 
-    try:
-        # path not needed here, keep only checksum for clarity
-        _, checksum = _setup_snapshot("PETR4", tmp_path, conn)
+    # path not needed here, keep only checksum for clarity
+    _, checksum = _setup_snapshot("PETR4", tmp_path, conn)
 
-        from src import snapshot_cli
+    runner = CliRunner()
+    result = runner.invoke(
+        app,
+        ["snapshots", "export", "--ticker", "PETR4", "--format", "json"],
+    )
 
-        monkeypatch.setattr(snapshot_cli, "SNAPSHOTS_DIR", tmp_path / "snapshots")
+    assert result.exit_code == 0
+    data = json.loads(result.stdout)
 
-        runner = CliRunner()
-        result = runner.invoke(
-            app,
-            ["snapshots", "export", "--ticker", "PETR4", "--format", "json"],
-        )
+    _assert_snapshot_json(data)
 
-        assert result.exit_code == 0
-        data = json.loads(result.stdout)
-
-        required_fields = {"ticker", "checksum", "rows", "data"}
-        # verify all required keys are present
-        assert required_fields.issubset(data.keys()), (
-            f"Missing required field(s): {required_fields - set(data.keys())}"
-        )
-
-        assert isinstance(data["ticker"], str)
-        assert isinstance(data["rows"], int)
-        assert isinstance(data["data"], list)
-    finally:
-        conn.close()
+    assert isinstance(data["rows"], int)
 
 
 def test_snapshots_subapp_mounted(tmp_path, monkeypatch):

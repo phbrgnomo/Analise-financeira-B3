@@ -37,6 +37,24 @@ app = typer.Typer()
 
 
 def _normalize_cli_ticker(value: str) -> str:
+    """Normalize a ticker string provided via CLI.
+
+    Parameters
+    ----------
+    value : str
+        Raw ticker value supplied by the user.
+
+    Returns
+    -------
+    str
+        Normalized ticker (e.g., uppercase, validated B3 format).
+
+    Raises
+    ------
+    typer.BadParameter
+        If the provided value is not a valid B3 ticker.
+    """
+
     try:
         return normalize_b3_ticker(value)
     except ValueError as exc:
@@ -178,7 +196,7 @@ def ingest_cmd(
     src_key = source.lower()
     if src_key not in prov_map:
         raise typer.BadParameter(
-            "unknown provider %r, choose from %s" % (source, ", ".join(provs)),
+            f"unknown provider {source!r}, choose from {', '.join(provs)}",
         )
     src_name = prov_map[src_key]
     try:
@@ -304,22 +322,6 @@ def snapshot(
     ``YYYY-MM-DD`` strings.  ``output_dir`` specifies the directory where the
     CSV will be written; when omitted the default ``snapshots/`` directory is
     used (created if necessary).
-
-    Parameters
-    ----------
-    ticker : str
-        B3-formatted ticker symbol (e.g. ``PETR4``).
-    start : Optional[str]
-        Beginning of time window (inclusive) in ``YYYY-MM-DD`` format.
-    end : Optional[str]
-        End of time window (inclusive) in ``YYYY-MM-DD`` format.
-    output_dir : Optional[str]
-        Directory path for snapshot output; defaults to ``snapshots/``.
-
-    Side effects
-    ------------
-    Writes a CSV file to the filesystem and records metadata in the
-    snapshots database.  Emits status feedback on stderr via ``CliFeedback``.
     """
     from src import db
     from src.etl.snapshot import write_snapshot
@@ -355,6 +357,9 @@ def snapshot(
         "rows": len(df),
         "checksum": sha256_file(out_path),
         "size_bytes": size_bytes,
+        # CLI-triggered snapshots are not part of an external batch/job run, so
+        # we leave job_id unset. Batch runners or schedulers can populate this
+        # field (e.g., with job/task IDs) when invoking the pipeline.
         "job_id": None,
     }
     db.record_snapshot_metadata(metadata, db_path=None)
@@ -392,7 +397,7 @@ def restore_verify_cmd(
         lookups (default is ``:memory:``).
     """
     from src import db
-    from src.db.snapshots import _normalize_snapshot_path, get_snapshot_by_path
+    from src.db.snapshots import get_snapshot_by_path, normalize_snapshot_path
     from src.utils.checksums import sha256_file
 
     fb = CliFeedback("pipeline restore-verify")
@@ -407,11 +412,14 @@ def restore_verify_cmd(
     metadata_conn = db.connect(db_path=None)
     try:
         resolved_path = str(snapshot_path.resolve())
-        normalized_path = _normalize_snapshot_path(resolved_path) or resolved_path
+        normalized_path = normalize_snapshot_path(resolved_path) or resolved_path
         metadata = get_snapshot_by_path(normalized_path, conn=metadata_conn)
 
-        # fall back to other variants for compatibility with differing stored
-        # formats (absolute vs basename etc.)
+        # Attempt multiple lookup variants to support different formats stored
+        # in metadata (absolute path, normalized/cleaned path, or raw user
+        # input).  `normalized_path` is the preferred key, but if the DB stores
+        # absolute paths (`resolved_path`) or raw CLI input (`str(snapshot_path)`)
+        # we fall back to those to remain compatible.
         if metadata is None and normalized_path != resolved_path:
             metadata = get_snapshot_by_path(resolved_path, conn=metadata_conn)
         if metadata is None:

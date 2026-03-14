@@ -13,6 +13,7 @@ Exit codes:
 
 from __future__ import annotations
 
+import logging
 import os
 import sys
 from pathlib import Path
@@ -24,6 +25,8 @@ if str(_REPO_ROOT) not in sys.path:
 
 from src import db  # noqa: E402
 from src.utils.checksums import sha256_file  # noqa: E402
+
+logger = logging.getLogger(__name__)
 
 
 def main() -> int:  # noqa: C901 - complexity acceptable in simple script
@@ -71,6 +74,13 @@ def main() -> int:  # noqa: C901 - complexity acceptable in simple script
 
         if not snapshot_path or not stored_checksum:
             # Skip snapshots without path or checksum metadata
+            logger.debug(
+                "Skipping snapshot id=%s ticker=%s (path=%r, checksum=%r)",
+                snap_id,
+                ticker,
+                snapshot_path,
+                stored_checksum,
+            )
             continue
 
         total += 1
@@ -96,8 +106,8 @@ def main() -> int:  # noqa: C901 - complexity acceptable in simple script
     print("Summary:")
     print(f"- Total: {total}")
     print(f"- Passed: {passed}")
-    print(f"- Failed: {failed}")
-    print(f"- Missing: {missing}")
+    print(f"- Failed: {failed} (includes {missing} missing files)")
+    print(f"- Missing (subset of Failed): {missing}")
     print()
 
     if failed > 0:

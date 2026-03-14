@@ -16,6 +16,7 @@ import argparse
 import hashlib
 import json
 import logging
+import os
 import shutil
 import sqlite3
 from datetime import datetime, timezone
@@ -86,8 +87,7 @@ def inspect_and_plan(
     Raises:
         sqlite3.DatabaseError: On DB access problems.
     """
-    conn = sqlite3.connect(str(db_path))
-    try:
+    with sqlite3.connect(str(db_path)) as conn:
         cur = conn.cursor()
         if ticker:
             cur.execute(
@@ -101,8 +101,6 @@ def inspect_and_plan(
                 "WHERE snapshot_path LIKE '/tmp/%'",
             )
         rows = cur.fetchall()
-    finally:
-        conn.close()
 
     plan: list[dict[str, Any]] = []
     for row in rows:
@@ -152,8 +150,8 @@ def apply_plan(db_path: Path, plan: list[dict[str, Any]], apply_archive: bool = 
     Raises:
         sqlite3.DatabaseError: Propagated from SQL execution.
     """
-    conn = sqlite3.connect(str(db_path))
-    try:
+    # Use context manager to ensure proper commit/rollback behavior.
+    with sqlite3.connect(str(db_path)) as conn:
         cur = conn.cursor()
         for item in plan:
             sid = item["id"]
@@ -171,9 +169,6 @@ def apply_plan(db_path: Path, plan: list[dict[str, Any]], apply_archive: bool = 
                     "UPDATE snapshots SET archived = 1, archived_at = ? WHERE id = ?"
                 )
                 cur.execute(query, (archived_at, sid))
-        conn.commit()
-    finally:
-        conn.close()
 
 
 def main() -> None:
@@ -230,7 +225,7 @@ def main() -> None:
         logger.info("No /tmp snapshot_path entries found.")
         return
 
-    logger.info("\nSample plan (first 20):")
+    logger.info("Sample plan (first 20):")
     for item in plan[:20]:
         logger.info(json.dumps(item, ensure_ascii=False))
 
@@ -240,12 +235,24 @@ def main() -> None:
     # report planned actions using separate arguments to avoid long
     # formatted strings triggering the line‑length linter.
     logger.info(
-        "\nWill update %d rows and archive %d rows.",
+        "Will update %d rows and archive %d rows.",
         len(updates),
         len(archives),
     )
 
     if apply_changes:
+        # Prevent accidental modification of the default production database when
+        # running locally. CI sets `CI=true`, but for manual runs require a
+        # conscious opt-in via `ALLOW_PROD_DB=1`.
+        if db_path == Path("dados/data.db") and not (
+            os.getenv("CI") == "true" or os.getenv("ALLOW_PROD_DB") == "1"
+        ):
+            logger.error(
+                "Refusing to apply changes to production DB without explicit "
+                "permission. Set CI=true or ALLOW_PROD_DB=1 to proceed."
+            )
+            raise SystemExit(1)
+
         if not args.no_backup:
             bak = backup_db(db_path)
             logger.info("Backup created: %s", bak)
