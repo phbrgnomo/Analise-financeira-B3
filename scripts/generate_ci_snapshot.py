@@ -293,12 +293,16 @@ def _compute_and_persist_metadata(out_path: Path, df: pd.DataFrame) -> str:
         }
         try:
             if db_path_override := os.environ.get("SNAPSHOT_DB"):
+                # Ensure the metadata DB exists and has required schema.
+                db.init_db(db_path=db_path_override)
                 conn = db.connect(db_path=db_path_override)
                 try:
                     db.record_snapshot_metadata(metadata, conn=conn)
                 finally:
                     conn.close()
             else:
+                # Ensure default DB is initialized before recording metadata.
+                db.init_db(db_path=None)
                 db.record_snapshot_metadata(metadata)
         except Exception as rec_exc:
             print(f"Aviso: falha ao gravar metadata no DB: {rec_exc}", file=sys.stderr)
