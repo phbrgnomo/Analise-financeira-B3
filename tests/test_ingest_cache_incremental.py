@@ -1,4 +1,3 @@
-
 import sqlite3
 import time
 from datetime import datetime, timedelta, timezone
@@ -27,7 +26,6 @@ def setup_env(tmp_path, ttl="0", snapshot_dir=None):
     monkeypatch.setenv("SNAPSHOT_TTL", ttl)
     monkeypatch.delenv("FORCE_REFRESH", raising=False)
     return monkeypatch, snapshot_dir
-
 
 
 @pytest.mark.parametrize("val", ["1", "true", "True", "yes", " YES "])
@@ -154,8 +152,6 @@ def test_ingest_cache_ttl_expiration(tmp_path, monkeypatch):
     mp.undo()
 
 
-
-
 def test_snapshot_index_created(tmp_path):
     """Recording metadata should create the composite index used by queries.
 
@@ -165,11 +161,16 @@ def test_snapshot_index_created(tmp_path):
     """
 
     db_path = tmp_path / "dados" / "data.db"
-    # no need to call init_db; record_snapshot_metadata will create table
-    metadata = {"ticker": "X", "created_at": "2026-01-01T00:00:00Z"}
-    from src import db as _db
+    # Schema now managed by migrations; init_db + apply_migrations required
+    from src.db_migrator import apply_migrations
 
-    _db.record_snapshot_metadata(metadata, db_path=str(db_path))
+    db.init_db(db_path=str(db_path))  # Creates 0000 schema
+    conn = db.connect(db_path=str(db_path))
+    apply_migrations(conn)  # Applies 0001, 0002
+    conn.close()
+
+    metadata = {"ticker": "X", "created_at": "2026-01-01T00:00:00Z"}
+    db.record_snapshot_metadata(metadata, db_path=str(db_path))
     conn = sqlite3.connect(str(db_path))
     cur = conn.cursor()
     cur.execute(
@@ -201,6 +202,7 @@ def test_shared_diff_helper_and_cli_agree():
     class DummyRepo(DatabaseClient):
         def read_prices(self, *args, **kwargs):
             return existing2
+
         # other abstract methods are unused in this test and can be
         # satisfied with no-op implementations
         def write_returns(self, df, conn=None, return_type="daily") -> None:
@@ -250,11 +252,15 @@ def test_incremental_ingest_only_new_and_changed_rows(tmp_path, monkeypatch):
     mp, snap_dir = setup_env(tmp_path, ttl="100000")
 
     ingest_only_new_and_changed_rows_helper(
-        date="2026-01-02", value=20, db_path=db_path,
+        date="2026-01-02",
+        value=20,
+        db_path=db_path,
         expected_rows_processed=2,
     )
     ingest_only_new_and_changed_rows_helper(
-        date="2026-01-03", value=30, db_path=db_path,
+        date="2026-01-03",
+        value=30,
+        db_path=db_path,
         expected_rows_processed=1,
     )
     # verify that the database contains three rows now
@@ -266,6 +272,7 @@ def test_incremental_ingest_only_new_and_changed_rows(tmp_path, monkeypatch):
 
 # helper for incremental ingest tests, called from
 # ``test_incremental_ingest_only_new_and_changed_rows``
+
 
 def ingest_only_new_and_changed_rows_helper(
     date: str,
@@ -361,7 +368,6 @@ def mock_time_progression(monkeypatch):
     mod2 = importlib.import_module("src.etl.snapshot")
     monkeypatch.setattr(mod1, "datetime", DummyDatetime)
     monkeypatch.setattr(mod2, "datetime", DummyDatetime)
-
 
 
 def test_snapshot_retention_policy(monkeypatch, tmp_path, mock_time_progression):
@@ -468,8 +474,7 @@ def test_ingest_lock_settings(monkeypatch):
 
 
 def test_snapshot_keep_latest_helper(monkeypatch):
-    """The low-level helper parses the env var and enforces a minimum of 1.
-    """
+    """The low-level helper parses the env var and enforces a minimum of 1."""
     from src.etl.snapshot import _snapshot_keep_latest
     from src.ingest.config import get_snapshot_keep_latest
 

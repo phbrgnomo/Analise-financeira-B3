@@ -26,6 +26,9 @@ jobs:
           poetry config virtualenvs.in-project true
           poetry install --no-interaction
 
+      - name: Ensure dados directory exists
+        run: mkdir -p dados
+
       - name: Generate deterministic snapshots
         run: |
           mkdir -p "$GITHUB_WORKSPACE/tmp_snapshots/snapshots_test"
@@ -39,10 +42,19 @@ jobs:
             --manifest snapshots/checksums.json \
             --allow-external
 
+      - name: Run snapshot-generation integration test (fast)
+        run: |
+          # run only the new integration test to fail fast on regressions
+          poetry run pytest -q tests/test_generate_ci_snapshot_integration.py::test_generate_ci_snapshot_writes_metadata
+
       - name: Run tests
         run: |
           # Run tests inside Poetry-managed venv so installed deps (pandas) are visible
-          poetry run pytest -q
+          # Enable metadata DB check in CI
+          export CHECK_METADATA_DB=1
+          # `test_generate_ci_snapshot_writes_metadata` is already executed in the
+          # previous step (fast regression test), so skip it here to avoid duplicate work.
+          poetry run pytest -q -k "not test_generate_ci_snapshot_writes_metadata"
 
       - name: Upload snapshot diagnostics on failure
         if: failure()

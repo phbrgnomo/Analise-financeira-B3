@@ -8,7 +8,6 @@ Usage:
         --manifest snapshots/checksums.json --update
 """
 
-
 from __future__ import annotations
 
 import argparse
@@ -144,9 +143,7 @@ def write_manifest(
     target = _prepare_manifest_target(path, allow_external)
 
     payload = {
-        "generated_at": datetime.now(timezone.utc).isoformat().replace(
-            "+00:00", "Z"
-        ),
+        "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "files": manifest,
     }
 

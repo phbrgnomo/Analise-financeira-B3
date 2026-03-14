@@ -28,14 +28,10 @@ def normalize_b3_ticker(ticker: str) -> str:
         candidate = candidate[:-3]
 
     if not _B3_TICKER_PATTERN.match(candidate):
-        raise ValueError(
-            "ticker inválido; use padrão B3 (ex.: PETR4, ITUB4, BOVA11)"
-        )
+        raise ValueError("ticker inválido; use padrão B3 (ex.: PETR4, ITUB4, BOVA11)")
 
     if not any(char.isdigit() for char in candidate):
-        raise ValueError(
-            "ticker inválido; deve conter dígitos (ex.: PETR4, BOVA11)"
-        )
+        raise ValueError("ticker inválido; deve conter dígitos (ex.: PETR4, BOVA11)")
 
     return candidate
 

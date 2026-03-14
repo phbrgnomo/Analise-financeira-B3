@@ -93,7 +93,7 @@ Exemplos rápidos
   tenha um arquivo de dados e queira carregá-lo):
 
  ```bash
- poetry run main ingest-snapshot snapshots/PETR4_snapshot.csv --ticker PETR4
+ poetry run main snapshots ingest snapshots/PETR4_snapshot.csv --ticker PETR4
  ```
 
 O comando também calcula checksum e evita reprocessar arquivos idênticos.

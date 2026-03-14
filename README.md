@@ -25,9 +25,11 @@ exemplo está em `.env.example` — copie para `.env` e ajuste conforme
 necessário.
 
 - **SNAPSHOT_TTL**: tempo em segundos que um cache de snapshot é considerado
-  válido. Padrão `86400` (um dia). Use com o comando `ingest-snapshot`.
+  válido. Padrão `86400` (um dia). Use com o comando `snapshots ingest`.
 - **SNAPSHOT_CACHE_FILE**: caminho para o arquivo JSON onde o cache é
   armazenado. Valor padrão `dados/snapshot_cache.json`.
+- **SNAPSHOT_RETENTION_DAYS**: número de dias de retenção para snapshots antes de
+  serem considerados elegíveis para purge/arquivamento. Valor padrão `90`.
 - **SNAPSHOTS_KEEP_LATEST**: quantidade de snapshots recentes por ticker a
   manter no diretório de snapshots. Padrão `1`.
 - **DEFAULT_TICKERS**: tickers padrão usados no `main run` quando `--ticker`
@@ -50,10 +52,22 @@ VALIDATION_INVALID_PERCENT_THRESHOLD=0.05
 - **INGEST_LOCK_TIMEOUT_SECONDS**: tempo máximo em segundos que uma chamada
   de ingest aguardará para obter um bloqueio por ticker. Padrão `120`.
 
+Exemplo em `.env`:
+
+```bash
+INGEST_LOCK_TIMEOUT_SECONDS=30
+```
+
 - **INGEST_LOCK_MODE**: define como reagir quando outro processo já detém o
   bloqueio para o mesmo ticker. `wait` (padrão) faz o comando aguardar até
   que o recurso seja liberado; `exit` faz com que a chamada falhe imediatamente
   com mensagem de erro clara.
+
+Exemplo em `.env`:
+
+```bash
+INGEST_LOCK_MODE=exit
+```
 
 - **LOCK_DIR**: diretório onde os arquivos de bloqueio por ticker são
   armazenados. O valor padrão é `locks/` (no diretório de trabalho atual) e
@@ -61,12 +75,21 @@ VALIDATION_INVALID_PERCENT_THRESHOLD=0.05
   um caminho específico quando múltiplos executores compartilham o mesmo
   ambiente de trabalho.
 
-  Exemplo em `.env`:
+- **DB_PATH**: caminho para o banco SQLite usado pelos scripts utilitários
+  (por exemplo `scripts/ci_validate_checksums.py`). O valor padrão é
+  `dados/data.db` mas pode ser sobrescrito em diferentes ambientes (desenvolvimento,
+  staging, CI) sem precisar alterar o código. Exemplos:
 
-  ```bash
-  INGEST_LOCK_MODE=exit
-  INGEST_LOCK_TIMEOUT_SECONDS=30
-  ```
+```bash
+DB_PATH=/tmp/mytest.db python scripts/ci_validate_checksums.py
+```
+
+Em `.env`:
+
+```bash
+DB_PATH=dados/custom.db
+```
+
 
 ## Quickstart
 
@@ -127,7 +150,7 @@ As instruções completas e o playbook estão em `docs/playbooks/testing-network
 - No banco (`prices` e `returns`), os tickers são persistidos no padrão B3 (ex.: `PETR4`).
 - A coluna `date` nas tabelas canônicas usa afinidade `DATE`.
 - Cálculos anuais usam 252 dias úteis por convenção do projeto.
-- O pipeline agora suporta ingestão de snapshots via CLI usando `ingest-snapshot`.
+- O pipeline agora suporta ingestão de snapshots via CLI usando `snapshots ingest`.
   Esta rotina aplica cache com TTL e faz ingestão incremental no banco, evitando
   reprocessamento quando o arquivo não mudou. Veja abaixo para detalhes de
   flags.
@@ -136,6 +159,23 @@ As instruções completas e o playbook estão em `docs/playbooks/testing-network
 ### Comandos principais da CLI
 
 Para os principais comandos da CLI e seus parâmetros, consulte `poetry run main --help` ou o playbook detalhado em `docs/playbooks/quickstart-cli.md`.
+
+Alguns comandos úteis para snapshots e validação:
+
+```bash
+# gerar um snapshot de um ticker (grava CSV e metadata)
+poetry run main pipeline snapshot --ticker PETR4 --output-dir snapshots/
+
+# exportar o último snapshot para CSV/JSON
+poetry run main snapshots export --ticker PETR4 --format csv --output snapshots/PETR4_export.csv
+poetry run main snapshots export --ticker PETR4 --format json --output snapshots/PETR4_export.json
+
+# purgar snapshots antigos (baseado em SNAPSHOT_RETENTION_DAYS, modifique com --older-than)
+poetry run main snapshots purge --confirm
+
+# verificar restauração/validar snapshot contra metadados
+poetry run main pipeline restore-verify --snapshot-path snapshots/PETR4_snapshot.csv
+```
 
 ## Estrutura do repositório (resumo)
 - `src/` — código principal
@@ -155,6 +195,13 @@ Para os principais comandos da CLI e seus parâmetros, consulte `poetry run main
 # Usar ruff conforme configuração do projeto
 poetry run ruff check src tests
 ```
+
+### Fechamento de histórias
+
+Para evitar drift entre implementação e tracking, cada story deve ser fechada usando o
+checklist em [`docs/playbooks/story-close-checklist.md`](docs/playbooks/story-close-checklist.md).
+Copie o conteúdo do arquivo para a descrição do pull request ou inclua um link direto nele.
+
 
 - Executar testes:
 
@@ -218,9 +265,19 @@ poetry run python scripts/validate_snapshots.py \
 - Arquivos CSV raw são gravados em `raw/<provider>/` com o padrão `<ticker>-YYYYMMDDTHHMMSSZ.csv`.
 - Um checksum SHA256 é gerado e gravado ao lado de cada CSV como `*.checksum`.
 - Metadados de ingestão são persistidos em `metadata/ingest_logs.jsonl` (JSON Lines, append-only).
-- Recomenda-se proteger artefatos sensíveis com permissões apenas do dono (owner-only). Para aplicar localmente:
+- Recomenda-se proteger artefatos sensíveis com permissões apenas do dono (owner-only). Para aplicar localmente, ajuste permissões de arquivos e diretórios separadamente (para não impedir travessia de diretórios):
 
 ```bash
-# tornar arquivos de metadados e raw inacessíveis a outros usuários
-chmod -R 600 metadata dados/raw
+# para arquivos: somente leitura/escrita para o dono
+find metadata dados/raw -type f -exec chmod 600 {} +
+# para diretórios: permitir travessia/execução para o dono
+find metadata dados/raw -type d -exec chmod 700 {} +
 ```
+
+Como alternativa, você pode usar o modo `X` do chmod para ativar a permissão de execução apenas quando apropriado:
+
+```bash
+chmod -R u=rwX,go= metadata dados/raw
+```
+
+> ⚠️ Teste os comandos localmente para garantir que você ainda consegue acessar e navegar nas pastas desejadas.

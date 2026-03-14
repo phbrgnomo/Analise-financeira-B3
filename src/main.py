@@ -6,9 +6,9 @@ comandos para ingestão, ETL e exportação de dados.
 Use ``poetry run main --help`` para ver todos os comandos disponíveis.
 """
 
-import json
 import logging
 import os
+import sqlite3
 from contextlib import suppress
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional, TypedDict
@@ -65,13 +65,19 @@ DEFAULT_TICKERS = _load_default_tickers()
 
 try:
     from src import pipeline as pipeline_module
+    from src import snapshot_cli as snapshot_cli_module
 
     # Expor o sub-app 'pipeline' com uma descrição para aparecer no help
     app.add_typer(
         pipeline_module.app,
         name="pipeline",
         help="Comandos do pipeline: operações de ingest e "
-             "amostragem sem execução completa do ETL.",
+        "amostragem sem execução completa do ETL.",
+    )
+    app.add_typer(
+        snapshot_cli_module.app,
+        name="snapshots",
+        help="Comandos para ingestão e geração de snapshots.",
     )
 except ImportError as exc:
     import logging
@@ -89,13 +95,10 @@ def _normalize_cli_ticker(value: str) -> str:
         raise typer.BadParameter(str(exc)) from exc
 
 
-
-
 class _ComputeResult(TypedDict):
     rows: int
     persisted: bool
     sample_df: "pd.DataFrame | None"  # pandas.DataFrame or None
-
 
 
 def _compute_returns_for_ticker(
@@ -130,8 +133,6 @@ def _compute_returns_for_ticker(
     sample_df = df.head(5) if rows > 5 else df
 
     return {"rows": rows, "persisted": persisted, "sample_df": sample_df}
-
-
 
 
 @app.command("run")
@@ -170,9 +171,7 @@ def run_cmd(
     tickers: list[str]
     if effective_ticker is None:
         tickers = list(DEFAULT_TICKERS)
-        feedback.start(
-            f"processando tickers padrão com provider={effective_provider}"
-        )
+        feedback.start(f"processando tickers padrão com provider={effective_provider}")
         feedback.info(f"Tickers: {', '.join(tickers)}")
         feedback.info("Para ticker específico, execute: main run --ticker <ticker>")
     else:
@@ -275,13 +274,33 @@ def compute_returns_cmd(
     targets: list[str]
     if effective_ticker is not None:
         normalized = _normalize_cli_ticker(effective_ticker)
-        targets = [_db.resolve_existing_ticker(normalized) or normalized]
+        # resolve_existing_ticker may hit the DB; guard against missing
+        # schema so the CLI remains usable even if migrations haven't run.
+        try:
+            resolved = _db.resolve_existing_ticker(normalized)
+        except sqlite3.OperationalError as e:
+            # log the error so we can investigate schema issues in CI
+            logging.getLogger(__name__).error(
+                "erro ao resolver ticker existente %s: %s", normalized, e
+            )
+            resolved = None
+        targets = [resolved or normalized]
         feedback.start(
             f"ticker={targets[0]} | dry_run={effective_dry_run} | "
             f"start={start or '-'} | end={end or '-'}"
         )
     else:
-        targets = _db.list_price_tickers()
+        try:
+            targets = _db.list_price_tickers()
+        except sqlite3.OperationalError as exc:
+            msg = str(exc).lower()
+            if "no such table" in msg and "prices" in msg:
+                feedback.start("processando todos os tickers do banco")
+                feedback.warn("Nenhuma tabela prices encontrada")
+                return
+            # unexpected operational error; re-raise so callers/CI see the
+            # real problem rather than silently treating it as empty DB.
+            raise
         if not targets:
             feedback.start("processando todos os tickers do banco")
             feedback.warn("Nenhum ticker encontrado na tabela prices")
@@ -331,83 +350,8 @@ def compute_returns_cmd(
         )
 
 
-@app.command("ingest-snapshot")
-def ingest_snapshot_cmd(
-    snapshot_path: str = typer.Argument(
-        ..., help="Caminho do arquivo CSV local a ser importado para o banco"
-    ),
-    ticker: str = typer.Option(
-        "",
-        help=(
-            "Ticker B3 associado ao snapshot quando o CSV não traz coluna ticker"
-        ),
-        is_flag=False,
-    ),
-    force_refresh: bool = typer.Option(
-        False, "--force-refresh", help="Ignora cache e processa novamente"
-    ),
-    ttl: float = typer.Option(
-        -1.0,
-        help="TTL do cache em segundos (usa SNAPSHOT_TTL se omitido)",
-        is_flag=False,
-    ),
-    cache_file: str = typer.Option(
-        "", help="Arquivo JSON usado para armazenar o cache", is_flag=False
-    ),
-    ticker_arg: Optional[str] = typer.Argument(None, hidden=True),
-) -> None:
-    """Importa CSV local no SQLite com cache/checksum e ingestão incremental."""
-    from src import ingest_cli
-
-    feedback = CliFeedback("ingest-snapshot")
-
-    effective_ticker = ticker or ticker_arg
-    normalized_ticker = (
-        _normalize_cli_ticker(effective_ticker) if effective_ticker else None
-    )
-    effective_force_refresh = as_bool(force_refresh)
-    # translate CLI defaults back to None semantics for the helper
-    ttl_arg = None if ttl < 0 else ttl
-    cache_arg = cache_file or None
-    feedback.start(
-        f"snapshot={snapshot_path} | ticker={normalized_ticker or '-'} | "
-        "force_refresh="
-        f"{effective_force_refresh} | "
-        f"ttl={ttl_arg if ttl_arg is not None else 'env'}"
-    )
-    step = feedback.start_step(
-        "processamento do snapshot",
-        detail=Path(snapshot_path).name,
-    )
-    try:
-        result = ingest_cli.ingest_snapshot(
-            snapshot_path,
-            normalized_ticker,
-            force_refresh=effective_force_refresh,
-            ttl=ttl_arg,
-            cache_file=cache_arg,
-        )
-    except Exception as e:
-        feedback.finish_step(step, status="error", detail=str(e))
-        raise
-    if result.get("cached"):
-        feedback.finish_step(
-            step,
-            status="skip",
-            detail="cache hit; nenhum processamento necessário",
-        )
-    else:
-        feedback.finish_step(
-            step,
-            detail=(
-                f"processed_rows={result.get('processed_rows', 0)} | "
-                f"skipped_rows={result.get('skipped_rows', 0)}"
-            ),
-        )
-
-    feedback.summary("Ingestão de snapshot concluída")
-    # exibir resultado em JSON formatado para legibilidade humana
-    typer.echo(json.dumps(result, indent=2, ensure_ascii=False))
+# `ingest-snapshot` foi removido: usar `main snapshots ingest`.
+# Atualize scripts e documentação que referenciem o comando antigo.
 
 
 @app.command("export-csv")
@@ -449,7 +393,19 @@ def export_csv_cmd(
         f"ticker={normalized} | output={output or DATA_DIR / f'{normalized}.csv'} | "
         f"start={start or '-'} | end={end or '-'}"
     )
-    resolved = _db.resolve_existing_ticker(normalized)
+    try:
+        resolved = _db.resolve_existing_ticker(normalized)
+    except sqlite3.OperationalError as e:
+        # This can happen if the database schema is missing (e.g. migrations not run).
+        logging.getLogger(__name__).error(
+            "erro ao resolver ticker existente %s: %s", normalized, e
+        )
+        feedback.error(
+            "Erro de acesso ao banco de dados; verifique se o esquema está "
+            "inicializado e execute as migrações"
+        )
+        return
+
     if resolved is None:
         # try the provider-specific variant (e.g. add .SA)
         _, provider_variant = ticker_variants(normalized)
@@ -493,9 +449,7 @@ if __name__ == "__main__":
         configure_logging()
     except Exception as e:  # pragma: no cover - very unlikely, but safe
         # usar logger disponível, mesmo que básico
-        logging.getLogger(__name__).exception(
-            "falha ao configurar logging: %s", e
-        )
+        logging.getLogger(__name__).exception("falha ao configurar logging: %s", e)
 
     if os.getenv("PROMETHEUS_METRICS"):
         raw_port = os.getenv("PROMETHEUS_METRICS_PORT", "8000")

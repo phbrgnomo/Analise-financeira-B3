@@ -284,10 +284,7 @@ def test_fallback_failure_logs_processed_count(monkeypatch):  # noqa: C901
 def _returns_table_exists(conn: sqlite3.Connection) -> bool:
     """Return True if the ``returns`` table exists in the database."""
     cur = conn.cursor()
-    cur.execute(
-        "SELECT name FROM sqlite_master "
-        "WHERE type='table' AND name='returns'"
-    )
+    cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='returns'")
     return cur.fetchone() is not None
 
 

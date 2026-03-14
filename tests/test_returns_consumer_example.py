@@ -22,17 +22,17 @@ def test_returns_consumer_example(tmp_path, monkeypatch):
     conn = sqlite3.connect(str(db_path))
     # mimic real schema: return_value column plus some extras
     conn.execute(
-        "CREATE TABLE returns (ticker text, date text, \"return\" real, "
+        'CREATE TABLE returns (ticker text, date text, "return" real, '
         "return_type text, created_at text)"
     )
     conn.execute(
-        "INSERT INTO returns (ticker,date,\"return\") "
+        'INSERT INTO returns (ticker,date,"return") '
         "VALUES ('PETR4.SA','2021-01-01',0.01)"
     )
     conn.commit()
     conn.close()
     # create a dummy repo root marker so find_repo_root() succeeds
-    (tmp_path / "pyproject.toml").write_text("[tool.poetry]\nname = \"dummy\"\n")
+    (tmp_path / "pyproject.toml").write_text('[tool.poetry]\nname = "dummy"\n')
 
     # run from the temporary directory so relative paths match the notebook
     monkeypatch.chdir(tmp_path)

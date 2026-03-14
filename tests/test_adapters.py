@@ -22,6 +22,36 @@ from src.adapters.errors import (
 from src.adapters.yfinance_adapter import YFinanceAdapter
 
 
+@pytest.fixture
+def minimal_adapter():
+    """Factory fixture returning a minimal Adapter instance.
+
+    The returned object is a concrete Adapter subclass that implements only the
+    bare minimum needed for unit tests: it can be instantiated and its helper
+    methods (e.g. _normalize_date, _validate_dataframe) can be exercised.
+
+    If required columns should be customized, pass `required_columns` when
+    calling the factory (e.g. `minimal_adapter(required_columns=[...])`).
+    """
+
+    def _make(required_columns: list[str] | None = None):
+        class TestAdapter(Adapter):
+            def fetch(self, ticker: str, **kwargs) -> pd.DataFrame:
+                return pd.DataFrame()
+
+            def _fetch_once(
+                self, ticker: str, start: str, end: str, **kwargs
+            ) -> pd.DataFrame:
+                return pd.DataFrame()
+
+        if required_columns is not None:
+            TestAdapter.REQUIRED_COLUMNS = required_columns
+
+        return TestAdapter()
+
+    return _make
+
+
 class TestAdapterErrors:
     """Testa hierarquia de erros customizados."""
 
@@ -147,9 +177,7 @@ class TestYFinanceAdapter:
 
     def test_normalize_ticker_non_b3(self):
         """Testa que tickers sem número não recebem .SA."""
-        self._assert_ticker_normalization(
-            "AAPL", "AAPL", "MSFT", "MSFT"
-        )
+        self._assert_ticker_normalization("AAPL", "AAPL", "MSFT", "MSFT")
 
     def _assert_ticker_normalization(
         self,
@@ -166,9 +194,7 @@ class TestYFinanceAdapter:
 
     def test_normalize_date_yyyy_mm_dd(self):
         """Testa normalização de data YYYY-MM-DD (já normalizada)."""
-        self._assert_date_normalization(
-            "2024-01-01", "2024-01-01", "2024-12-31"
-        )
+        self._assert_date_normalization("2024-01-01", "2024-01-01", "2024-12-31")
 
     def _assert_date_normalization(
         self,
@@ -401,20 +427,12 @@ class TestYFinanceAdapter:
         assert metadata["library_available"] == "no"
         assert metadata["library_version"] == "unknown"
 
+
 class TestAdapterBaseHelpers:
     """Testes para helpers centralizados em `Adapter` (normalize/validate)."""
 
-    def test_adapter_normalize_date_valid_formats(self):
-        class TestAdapter(Adapter):
-            def fetch(self, ticker: str, **kwargs) -> pd.DataFrame:
-                return pd.DataFrame()
-
-            def _fetch_once(
-                self, ticker: str, start: str, end: str, **kwargs
-            ) -> pd.DataFrame:
-                return pd.DataFrame()
-
-        adapter = TestAdapter()
+    def test_adapter_normalize_date_valid_formats(self, minimal_adapter):
+        adapter = minimal_adapter()
 
         normalized_iso = adapter._normalize_date("2023-02-15")
         assert normalized_iso == "2023-02-15"
@@ -422,179 +440,121 @@ class TestAdapterBaseHelpers:
         normalized_us = adapter._normalize_date("02-15-2023")
         assert normalized_us == "2023-02-15"
 
-    def test_adapter_normalize_date_invalid_format_raises_validation_error(self):
-            class TestAdapter(Adapter):
-                def fetch(self, ticker: str, **kwargs) -> pd.DataFrame:
-                    return pd.DataFrame()
+    def test_adapter_normalize_date_invalid_format_raises_validation_error(
+        self, minimal_adapter
+    ):
+        adapter = minimal_adapter()
 
-                def _fetch_once(
-                    self, ticker: str, start: str, end: str, **kwargs
-                ) -> pd.DataFrame:
-                    return pd.DataFrame()
+        with pytest.raises(ValidationError) as excinfo:
+            adapter._normalize_date("15/02/2023")
 
-            adapter = TestAdapter()
+        assert "Formato de data inválido" in str(excinfo.value)
 
-            with pytest.raises(ValidationError) as excinfo:
-                adapter._normalize_date("15/02/2023")
+    def test_adapter_validate_dataframe_empty_raises_validation_error(
+        self, minimal_adapter
+    ):
+        adapter = minimal_adapter()
+        df = pd.DataFrame()
 
-            assert "Formato de data inválido" in str(excinfo.value)
-
-    def test_adapter_validate_dataframe_empty_raises_validation_error(self):
-            class TestAdapter(Adapter):
-                def fetch(self, ticker: str, **kwargs) -> pd.DataFrame:
-                    return pd.DataFrame()
-
-                def _fetch_once(
-                    self, ticker: str, start: str, end: str, **kwargs
-                ) -> pd.DataFrame:
-                    return pd.DataFrame()
-
-            adapter = TestAdapter()
-            df = pd.DataFrame()
-
-            with pytest.raises(ValidationError, match="DataFrame vazio"):
-                adapter._validate_dataframe(df, "TICKER")
-
-    def test_validate_dataframe_missing_required_columns_mentions_them(self):
-            class TestAdapter(Adapter):
-                # define provider-specific required columns for the test
-                REQUIRED_COLUMNS = [
-                    "Open",
-                    "High",
-                    "Low",
-                    "Close",
-                    "Adj Close",
-                    "Volume",
-                ]
-
-                def fetch(self, ticker: str, **kwargs) -> pd.DataFrame:
-                    return pd.DataFrame()
-
-                def _fetch_once(
-                    self, ticker: str, start: str, end: str, **kwargs
-                ) -> pd.DataFrame:
-                    return pd.DataFrame()
-
-            adapter = TestAdapter()
-
-            index = pd.date_range("2023-01-01", periods=3, freq="D")
-            # criar um DataFrame não-vazio mas sem as colunas requeridas
-            df = pd.DataFrame({"foo": [1, 2, 3]}, index=index)
-
-            with pytest.raises(ValidationError) as excinfo:
-                adapter._validate_dataframe(df, "TICKER")
-
-            msg = str(excinfo.value)
-            required_columns = getattr(adapter, "REQUIRED_COLUMNS", None)
-            # evitar condicionais em testes (Sourcery): afirmar que
-            # ou todas as colunas requeridas aparecem na mensagem,
-            # ou (quando não há REQUIRED_COLUMNS) a mensagem contém
-            # palavras-chave indicativas de falta de colunas.
-            # msg_lower was previously used to examine the message;
-            # the simplified assertion above is sufficient and avoids an
-            # unused-variable lint error.
-            assert (
-                required_columns is not None
-                and all(col in msg for col in required_columns)
-            )
-
-    def test_validate_dataframe_accepts_lowercase_columns(self):
-            """Validation should be case‑insensitive for column names."""
-            class TestAdapter(Adapter):
-                REQUIRED_COLUMNS = [
-                    "Open",
-                    "High",
-                    "Low",
-                    "Close",
-                    "Volume",
-                ]
-
-                def fetch(self, ticker: str, **kwargs) -> pd.DataFrame:
-                    return pd.DataFrame()
-
-                def _fetch_once(
-                    self, ticker: str, start: str, end: str, **kwargs
-                ) -> pd.DataFrame:
-                    return pd.DataFrame()
-
-            adapter = TestAdapter()
-            index = pd.date_range("2023-01-01", periods=2, freq="D")
-            # use lowercase column headers to simulate provider variation
-            df = pd.DataFrame(
-                {
-                    "open": [1, 2],
-                    "high": [1, 2],
-                    "low": [1, 2],
-                    "close": [1, 2],
-                    "volume": [100, 200],
-                },
-                index=index,
-            )
-            # should not raise
+        with pytest.raises(ValidationError, match="DataFrame vazio"):
             adapter._validate_dataframe(df, "TICKER")
 
-    def test_validate_dataframe_flatten_multiindex_columns(self):
-            """Adapters should cope with MultiIndex column names (yfinance)."""
-            class TestAdapter(Adapter):
-                REQUIRED_COLUMNS = [
-                    "Open",
-                    "High",
-                    "Low",
-                    "Close",
-                    "Volume",
-                ]
+    def test_validate_dataframe_missing_required_columns_mentions_them(
+        self, minimal_adapter
+    ):
+        required_columns = [
+            "Open",
+            "High",
+            "Low",
+            "Close",
+            "Adj Close",
+            "Volume",
+        ]
+        adapter = minimal_adapter(required_columns=required_columns)
 
-                def fetch(self, ticker: str, **kwargs) -> pd.DataFrame:
-                    return pd.DataFrame()
+        index = pd.date_range("2023-01-01", periods=3, freq="D")
+        # criar um DataFrame não-vazio mas sem as colunas requeridas
+        df = pd.DataFrame({"foo": [1, 2, 3]}, index=index)
 
-                def _fetch_once(
-                    self, ticker: str, start: str, end: str, **kwargs
-                ) -> pd.DataFrame:
-                    # create MultiIndex that mimics yfinance returned frame
-                    import pandas as pd
-                    arrays = [
-                        ["Close", "High", "Low", "Open", "Volume"],
-                        [ticker] * 5,
-                    ]
-                    cols = pd.MultiIndex.from_arrays(arrays, names=["Price", "Ticker"])
-                    df = pd.DataFrame(
-                        [[1,2,3,4,5]], columns=cols,
-                        index=pd.date_range("2023-01-01", periods=1),
-                    )
-                    return df
+        with pytest.raises(ValidationError) as excinfo:
+            adapter._validate_dataframe(df, "TICKER")
 
-            adapter = TestAdapter()
-            # this should not raise even though columns are tuples
-            # call _fetch_once separately so the line length stays under limit
-            raw = adapter._fetch_once("TICK", "2020-01-01", "2020-01-02")
-            adapter._validate_dataframe(raw, "TICK")
+        msg = str(excinfo.value)
+        assert all(col in msg for col in required_columns)
 
-    def test_validate_dataframe_non_datetime_index(self):
-            class TestAdapter(Adapter):
-                def fetch(self, ticker: str, **kwargs) -> pd.DataFrame:
-                    return pd.DataFrame()
+    def test_validate_dataframe_accepts_lowercase_columns(self, minimal_adapter):
+        """Validation should be case‑insensitive for column names."""
 
-                def _fetch_once(
-                    self, ticker: str, start: str, end: str, **kwargs
-                ) -> pd.DataFrame:
-                    return pd.DataFrame()
+        required_columns = ["Open", "High", "Low", "Close", "Volume"]
+        adapter = minimal_adapter(required_columns=required_columns)
+        index = pd.date_range("2023-01-01", periods=2, freq="D")
+        # use lowercase column headers to simulate provider variation
+        df = pd.DataFrame(
+            {
+                "open": [1, 2],
+                "high": [1, 2],
+                "low": [1, 2],
+                "close": [1, 2],
+                "volume": [100, 200],
+            },
+            index=index,
+        )
+        # should not raise
+        adapter._validate_dataframe(df, "TICKER")
 
-            adapter = TestAdapter()
+    def test_validate_dataframe_flatten_multiindex_columns(self, minimal_adapter):
+        """Adapters should cope with MultiIndex column names (yfinance)."""
 
-            # criar DataFrame com todas as colunas requeridas, mas índice não Datetime
-            df = pd.DataFrame(
-                {
-                    "Open": [1.0],
-                    "High": [1.1],
-                    "Low": [0.9],
-                    "Close": [1.0],
-                    "Adj Close": [1.0],
-                    "Volume": [100],
-                },
-                index=[0],
-            )
+        required_columns = ["Open", "High", "Low", "Close", "Volume"]
+        adapter = minimal_adapter(required_columns=required_columns)
 
-            with pytest.raises(
-                ValidationError, match="Índice do DataFrame não é DatetimeIndex"
-            ):
-                adapter._validate_dataframe(df, "TICKER")
+        # create MultiIndex that mimics yfinance returned frame
+        arrays = [
+            ["Close", "High", "Low", "Open", "Volume"],
+            ["TICK"] * 5,
+        ]
+        cols = pd.MultiIndex.from_arrays(arrays, names=["Price", "Ticker"])
+        df = pd.DataFrame(
+            [[1, 2, 3, 4, 5]],
+            columns=cols,
+            index=pd.date_range("2023-01-01", periods=1),
+        )
+
+        # this should not raise even though columns are tuples
+        adapter._validate_dataframe(df, "TICK")
+
+    def test_validate_dataframe_non_datetime_index(self, minimal_adapter):
+        """Adapter._validate_dataframe should reject non-DatetimeIndex input.
+
+        This uses a minimal Adapter instance and calls `adapter._validate_dataframe(
+        "TICKER")` with a DataFrame that has required columns but an integer
+        index, which should raise ValidationError.
+        """
+
+        required_columns = [
+            "Open",
+            "High",
+            "Low",
+            "Close",
+            "Adj Close",
+            "Volume",
+        ]
+        adapter = minimal_adapter(required_columns=required_columns)
+
+        # criar DataFrame com todas as colunas requeridas, mas índice não Datetime
+        df = pd.DataFrame(
+            {
+                "Open": [1.0],
+                "High": [1.1],
+                "Low": [0.9],
+                "Close": [1.0],
+                "Adj Close": [1.0],
+                "Volume": [100],
+            },
+            index=[0],
+        )
+
+        with pytest.raises(
+            ValidationError, match="Índice do DataFrame não é DatetimeIndex"
+        ):
+            adapter._validate_dataframe(df, "TICKER")

@@ -65,9 +65,5 @@ def test_pipeline_write_and_read_prices(tmp_path):
     text = metadata_path.read_text(encoding="utf-8")
     lines = [line for line in text.splitlines() if line.strip()]
     entries = [json.loads(line) for line in lines]
-    found = [
-        e
-        for e in entries
-        if e.get("raw_checksum") == meta.get("raw_checksum")
-    ]
+    found = [e for e in entries if e.get("raw_checksum") == meta.get("raw_checksum")]
     assert len(found) >= 1

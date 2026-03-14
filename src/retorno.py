@@ -103,8 +103,7 @@ def _choose_price_column(df: pd.DataFrame) -> str:
         if c in df.columns:
             return c
     raise KeyError(
-        "Nenhuma coluna de preço encontrada em `prices` para cálculo "
-        "de retornos"
+        "Nenhuma coluna de preço encontrada em `prices` para cálculo de retornos"
     )
 
 
@@ -216,16 +215,7 @@ def retorno_periodo(_df: pd.DataFrame) -> Tuple[float, float, float]:
     Retorna uma tupla: (retorno_total, retorno_medio_diario, desvio)
     """
     df = _df.copy()
-    price_col = next(
-        (
-            c
-            for c in ("adj_close", "Adj Close", "close", "Close")
-            if c in df.columns
-        ),
-        None,
-    )
-    if price_col is None:
-        raise KeyError("Nenhuma coluna de preço encontrada")
+    price_col = _choose_price_column(df)
 
     df["Retorno dia"] = r_log(df[price_col], df[price_col].shift(1))
     ret_periodo = float(df["Retorno dia"].sum())

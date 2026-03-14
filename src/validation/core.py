@@ -75,10 +75,9 @@ def _extract_invalid_rows_from_schema_errors(
         )
 
     # Constrói invalid_df a partir dos índices coletados e retorna
+    # Use deterministic ordering so test outputs remain stable across runs.
     invalid_df = (
-        df.loc[list(invalid_indices)].copy()
-        if invalid_indices
-        else pd.DataFrame()
+        df.loc[sorted(invalid_indices)].copy() if invalid_indices else pd.DataFrame()
     )
 
     return invalid_df, error_records
@@ -126,9 +125,7 @@ def _heuristic_high_low_violations(
             # marca violações apenas quando ambos os valores estiverem presentes _e_
             # high é estritamente menor que low; igualdade é permitida.
             mask_violation = (
-                df["high"].notna()
-                & df["low"].notna()
-                & (df["high"] < df["low"])
+                df["high"].notna() & df["low"].notna() & (df["high"] < df["low"])
             )
             positions = np.nonzero(mask_violation.to_numpy())[0]
             vio_idx = df.index[positions]
@@ -146,19 +143,17 @@ def _heuristic_high_low_violations(
                             "row_index": idx,
                             "column": "high,low",
                             "reason_code": reason_code,
-                        "reason_message": (
-                            "Falha na restrição: preço máximo < preço mínimo"
-                        ),
-                        "failure_value": {
-                            "high": row["high"],
-                            "low": row["low"],
-                        },
-                    }
-                )
+                            "reason_message": (
+                                "Falha na restrição: preço máximo < preço mínimo"
+                            ),
+                            "failure_value": {
+                                "high": row["high"],
+                                "low": row["low"],
+                            },
+                        }
+                    )
     except Exception as exc:
-        logger.debug(
-            "Heuristic high/low check failed: %s", exc, exc_info=True
-        )
+        logger.debug("Heuristic high/low check failed: %s", exc, exc_info=True)
         return set(), []
 
     return invalid_indices, error_records
@@ -173,9 +168,7 @@ def _process_schema_exception(
     complexidade reduzida.
     """  # noqa: E501
     if isinstance(exc, SchemaErrors):
-        invalid_df, error_records = (
-            _extract_invalid_rows_from_schema_errors(df, exc)
-        )
+        invalid_df, error_records = _extract_invalid_rows_from_schema_errors(df, exc)
 
         # If failure_cases didn't provide row indices but the error is a
         # missing-column type, mark all rows invalid (legacy behaviour).
@@ -326,12 +319,8 @@ def validate_dataframe(  # noqa: E501
 
     # Get valid rows (set difference)
     invalid_indices = set() if invalid_df.empty else set(invalid_df.index)
-    valid_indices = [
-        idx for idx in df.index if idx not in invalid_indices
-    ]
-    valid_df = (
-        df.loc[valid_indices].copy() if valid_indices else pd.DataFrame()
-    )
+    valid_indices = [idx for idx in df.index if idx not in invalid_indices]
+    valid_df = df.loc[valid_indices].copy() if valid_indices else pd.DataFrame()
 
     # Build summary
     rows_invalid = len(invalid_df)
@@ -499,31 +488,19 @@ def _coerce_dataframe_columns(df: pd.DataFrame) -> None:
     # Normalize date
     if "date" in df.columns:
         try:
-            df["date"] = pd.to_datetime(
-                df["date"], utc=True, errors="coerce"
-            )
+            df["date"] = pd.to_datetime(df["date"], utc=True, errors="coerce")
         except (ValueError, TypeError, OverflowError) as exc:
-            logger.debug(
-                "failed to coerce 'date' column to datetime: %s", exc
-            )
+            logger.debug("failed to coerce 'date' column to datetime: %s", exc)
     # Coerce numeric price columns
-    numeric_cols = [
-        c for c in ("open", "high", "low", "close") if c in df.columns
-    ]
+    numeric_cols = [c for c in ("open", "high", "low", "close") if c in df.columns]
     for c in numeric_cols:
         try:
             df[c] = pd.to_numeric(df[c], errors="coerce")
         except (ValueError, TypeError, OverflowError) as exc:
-            logger.debug(
-                "failed to coerce '%s' column to numeric: %s", c, exc
-            )
+            logger.debug("failed to coerce '%s' column to numeric: %s", c, exc)
     # Volume as nullable integer when possible
     if "volume" in df.columns:
         try:
-            df["volume"] = pd.to_numeric(
-                df["volume"], errors="coerce"
-            ).astype("Int64")
+            df["volume"] = pd.to_numeric(df["volume"], errors="coerce").astype("Int64")
         except (ValueError, TypeError, OverflowError) as exc:
-            logger.debug(
-                "failed to coerce 'volume' column to Int64: %s", exc
-            )
+            logger.debug("failed to coerce 'volume' column to Int64: %s", exc)

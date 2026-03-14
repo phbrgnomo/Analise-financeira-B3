@@ -15,8 +15,7 @@ idênticos. O pipeline agora grava snapshots versionados em `dados/snapshots`,
 calcula e verifica checksums SHA256, mantém metadados no banco e só persiste
 linhas novas ou alteradas usando o helper `ingest_from_snapshot`.
 
-Além disso, foi adicionada uma CLI `ingest-snapshot` com flags para `--force-`
-refresh, TTL configurável e cache-file personalizável; essa rotina é usada no
+Além disso, foi adicionada uma CLI `snapshots ingest` com flags para `--force-refresh`, TTL configurável e cache-file personalizável; essa rotina é usada no
 fluxo principal em `src/main._fetch_and_prepare_asset` quando ingestindo preços.
 
 Decisões principais e justificativa
@@ -60,7 +59,7 @@ Implementação (arquivos alterados)
 
 - `src/main.py`
   - integração do helper `ingest_from_snapshot` no processo de ingest;
-    novo comando Typer `ingest-snapshot` e opções associadas.
+    novo subcomando Typer `snapshots ingest` e opções associadas.
 
 - `tests/test_ingest_cache_incremental.py` (novo)
   - testes unitários para `ingest_from_snapshot`: cache hits, mudanças e
@@ -100,7 +99,7 @@ Compatibilidade e riscos conhecidos
 Próximos passos recomendados
 ---------------------------
 
-1. Preparar workflow CI agendado de smoke tests que chame `ingest-snapshot`
+1. Preparar workflow CI agendado de smoke tests que chame `snapshots ingest`
    sobre alguns arquivos canários (dry-run ou temporários).
 2. Documentar convenções de snapshot em `docs/` e conectar com funcionalidades
    planejadas da épica 2 (snapshot exportação/purge).
@@ -114,7 +113,7 @@ Como validar manualmente (comandos)
    exemplo):
 
 ```bash
-poetry run python -m src.main ingest-snapshot examples/sample_snapshot.csv --ttl 0
+poetry run python -m src.main snapshots ingest examples/sample_snapshot.csv --ttl 0
 ```
 
 2. Reexecutar para verificar `cached=True` e `processed_rows=0`.

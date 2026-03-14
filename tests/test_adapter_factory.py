@@ -6,7 +6,7 @@ from src.adapters.factory import get_adapter, register_adapter
 
 def test_register_adapter_warns_on_replace(caplog, monkeypatch):
     # isolate registry
-    monkeypatch.setattr('src.adapters.factory._ADAPTER_REGISTRY', {})
+    monkeypatch.setattr("src.adapters.factory._ADAPTER_REGISTRY", {})
 
     class Dummy(Adapter):
         def fetch(self, ticker: str, **kwargs) -> None:
@@ -16,20 +16,24 @@ def test_register_adapter_warns_on_replace(caplog, monkeypatch):
             return None
 
     # first registration should succeed quietly
-    register_adapter('dummy', Dummy)
+    register_adapter("dummy", Dummy)
     # second registration of same name should emit warning
     caplog.set_level(logging.WARNING)
-    register_adapter('dummy', Dummy)
-    assert 're-registering adapter' in caplog.text.lower()
+    register_adapter("dummy", Dummy)
+    assert "re-registering adapter" in caplog.text.lower()
 
     # ensure get_adapter returns the class
-    adapter = get_adapter('dummy')
+    adapter = get_adapter("dummy")
     assert isinstance(adapter, Dummy)
 
 
-def test_available_providers_reflects_registry(monkeypatch):
+def test_available_providers_reflects_registry(monkeypatch) -> None:
+    """Test that available_providers() returns all registered adapter names.
+
+    The results should be sorted to make the behavior predictable.
+    """
     # isolate registry and add two entries
-    monkeypatch.setattr('src.adapters.factory._ADAPTER_REGISTRY', {})
+    monkeypatch.setattr("src.adapters.factory._ADAPTER_REGISTRY", {})
 
     class A(Adapter):
         def fetch(self, ticker: str, **kwargs):
@@ -44,10 +48,11 @@ def test_available_providers_reflects_registry(monkeypatch):
             pass
 
     from src.adapters.factory import available_providers
-    register_adapter('one', A)
-    register_adapter('two', B)
+
+    register_adapter("one", A)
+    register_adapter("two", B)
 
     provs = available_providers()
-    assert 'one' in provs and 'two' in provs
+    assert "one" in provs and "two" in provs
     # result is sorted, so order should be predictable
-    assert provs == ['one', 'two']
+    assert provs == ["one", "two"]

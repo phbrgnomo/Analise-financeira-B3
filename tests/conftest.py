@@ -6,13 +6,18 @@ Define fixtures úteis para integração e playback de rede.
 from __future__ import annotations
 
 import os
+import sqlite3
 import sys
+from datetime import datetime, timedelta, timezone
 from typing import Callable, Generator
 
 import pandas as pd
 import pytest
 
+from src import db
 from src.adapters.retry_metrics import get_global_metrics
+from src.db_migrator import apply_migrations
+from src.utils.checksums import sha256_file
 
 # Ensure tests directory is importable when pytest runs the tests as a script
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
@@ -106,10 +111,139 @@ def sqlite_version_override(monkeypatch):
     recompiling Python. The test suite uses this to exercise upsert vs
     fallback code paths deterministically.
     """
-    import sqlite3
 
     if ver := os.environ.get("SQLITE_VERSION"):
         monkeypatch.setattr(sqlite3, "sqlite_version", ver)
+    yield
+
+
+@pytest.fixture
+def mock_metadata_db(tmp_path, monkeypatch):
+    """Prepare a metadata database and patch ``db.connect`` to point at it.
+
+    Yields
+    ------
+    tuple[sqlite3.Connection, pathlib.Path]
+        The open connection and the path to the metadata DB.  The connection
+        is closed after the test automatically.
+    """
+    metadata_db_path = tmp_path / "metadata.db"
+    # initialize and migrate a fresh metadata database
+    db.init_db(db_path=str(metadata_db_path))
+    metadata_conn = db.connect(db_path=str(metadata_db_path))
+    apply_migrations(metadata_conn)
+
+    original_connect = db.connect
+
+    def mock_db_connect(db_path=None, **kw):
+        # ignore any requested path, always return connection to our test DB
+        return original_connect(db_path=str(metadata_db_path), **kw)
+
+    monkeypatch.setattr(db, "connect", mock_db_connect)
+
+    try:
+        yield metadata_conn, metadata_db_path
+    finally:
+        metadata_conn.close()
+
+
+@pytest.fixture
+def purge_test_setup(tmp_path, monkeypatch):
+    """Prepare a metadata DB with one old snapshot and return paths.
+
+    This mirrors the setup previously duplicated across multiple retention
+    purge tests.  The returned tuple contains:
+
+    * ``test_csv``: Path to the created snapshot CSV file
+    * ``metadata_db_path``: Path to the temporary metadata database file
+    * ``checksum``: SHA-256 checksum of the created snapshot CSV (used in
+      assertions that metadata matches the file contents)
+
+    The fixture also monkeypatches :func:`src.db.connect` so that calls from
+    the CLI under test will always use this database.
+    """
+    metadata_db_path = tmp_path / "metadata.db"
+    db.init_db(db_path=str(metadata_db_path))
+    metadata_conn = db.connect(db_path=str(metadata_db_path))
+    apply_migrations(metadata_conn)
+
+    # create CSV and checksum
+    test_csv = tmp_path / "PETR4_snapshot.csv"
+    df = pd.DataFrame(
+        {
+            "date": ["2023-01-01"],
+            "open": [10.0],
+            "high": [11.0],
+            "low": [9.0],
+            "close": [10.5],
+            "volume": [1000],
+            "ticker": ["PETR4"],
+        }
+    )
+    df.to_csv(test_csv, index=False)
+    checksum = sha256_file(test_csv)
+
+    old_date = (datetime.now(timezone.utc) - timedelta(days=100)).isoformat()
+    cur = metadata_conn.cursor()
+    cur.execute(
+        "INSERT INTO snapshots (id, ticker, snapshot_path, checksum, "
+        "size_bytes, created_at, archived) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (
+            "1",
+            "PETR4",
+            str(test_csv),
+            checksum,
+            test_csv.stat().st_size,
+            old_date,
+            0,
+        ),
+    )
+    metadata_conn.commit()
+    metadata_conn.close()
+
+    original_connect = db.connect
+
+    def patched_connect(db_path=None, **kw):
+        return original_connect(db_path=str(metadata_db_path), **kw)
+
+    monkeypatch.setattr(db, "connect", patched_connect)
+
+    return test_csv, metadata_db_path, checksum
+
+
+@pytest.fixture(autouse=True)
+def isolate_metadata_db(tmp_path, monkeypatch):
+    """Autouse fixture que garante que cada teste use um DB de metadata isolado.
+
+    Alguns testes podem esquecer de monkeypatchar conexões; esta fixture
+    força `db.connect` e o conector interno `src.db.connection._connect` a
+    retornarem uma conexão para um banco temporário por teste.
+    """
+    metadata_db_path = tmp_path / "metadata_isolated.db"
+    # create and migrate a fresh metadata database file (use real connect)
+    # Use the low-level connector so we can redirect all calls (including
+    # ones that import `db.connect` at import-time) to the isolated metadata DB.
+    from src.db import connection
+
+    orig_connect = connection._connect
+    # initialize DB file and apply migrations
+    conn_tmp = orig_connect(db_path=str(metadata_db_path))
+    try:
+        apply_migrations(conn_tmp)
+    finally:
+        conn_tmp.close()
+
+    def _test_connect(db_path=None, **kw):
+        # Redirect default (None) connections to our isolated metadata DB;
+        # explicit db_path requests are forwarded unchanged so tests that
+        # create their own DB files still work.
+        if db_path is None:
+            return orig_connect(db_path=str(metadata_db_path), **kw)
+        return orig_connect(db_path=db_path, **kw)
+
+    monkeypatch.setattr(connection, "_connect", _test_connect)
+
+    # nothing to close here; connect() returns fresh connections per call
     yield
 
 

@@ -33,9 +33,7 @@ def write_returns(
     # ensure ticker values inside df are canonical (strip .SA)
     if "ticker" in df.columns:
         df = df.copy()
-        df["ticker"] = (
-            df["ticker"].astype(str).str.replace(".SA", "", regex=False)
-        )
+        df["ticker"] = df["ticker"].astype(str).str.replace(".SA", "", regex=False)
     close_conn = False
     if conn is None:
         conn = _connect(db_path)
@@ -113,12 +111,9 @@ def _write_returns_core(conn, df, return_type):
         # support the UPSERT syntax. Performs UPDATE first and INSERT only
         # when no existing row was updated. Preserves ``created_at``.
         update_sql = (
-            f"UPDATE returns SET {qr} = ? "
-            f"WHERE {qt} = ? AND {qd} = ? AND {qrt} = ?"
+            f"UPDATE returns SET {qr} = ? WHERE {qt} = ? AND {qd} = ? AND {qrt} = ?"
         )
-        insert_sql = (
-            f"INSERT INTO returns ({cols_sql}) VALUES (?,?,?,?,?)"
-        )
+        insert_sql = f"INSERT INTO returns ({cols_sql}) VALUES (?,?,?,?,?)"
 
         # track how many rows have been handled in case an error
         # occurs before the loop (e.g. BEGIN failure); initialize here
@@ -144,8 +139,7 @@ def _write_returns_core(conn, df, return_type):
         except Exception:
             conn.rollback()
             logger.exception(
-                "Failed transactional upsert fallback for returns; "
-                "processed %d rows",
+                "Failed transactional upsert fallback for returns; processed %d rows",
                 processed,
             )
             raise

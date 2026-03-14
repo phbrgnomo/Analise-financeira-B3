@@ -27,18 +27,17 @@ def test_cli_help():
     # usage line is present rather than hard-coding the "Options" label.
     assert "Usage:" in result.output
 
+
 def test_ingest_snapshot_help():
-    """Verifica que a ajuda do subcomando `ingest-snapshot` inclui novos
+    """Verifica que a ajuda do subcomando `snapshots ingest` inclui novos
     flags como --force-refresh, --ttl e --cache-file e retorna exit code 0.
     """
     runner = CliRunner()
-    result = runner.invoke(app, ["ingest-snapshot", "--help"])
+    result = runner.invoke(app, ["snapshots", "ingest", "--help"])
     assert result.exit_code == 0, (
-        f"CLI help falhou (exit_code={result.exit_code}): "
-        f"{result.exception}"
+        f"CLI help falhou (exit_code={result.exit_code}): {result.exception}"
     )
     plain = _strip_ansi(result.output)
-    assert "ingest-snapshot" in plain
     # verify that the new flags appear
     assert "--force-refresh" in plain
     assert "--ttl" in plain
@@ -71,6 +70,12 @@ def test_main_help_exit_code_and_output():
 
 
 def test_run_uses_ingest_pipeline(monkeypatch):
+    """Verifica que o comando `run` da CLI invoca o pipeline de ingest e
+    prossegue para o cálculo de retornos.
+
+    O teste substitui as funções reais por **mocks** que registram as
+    chamadas, permitindo asserts sobre ticker, fonte e fluxo geral.
+    """
     from src.main import app
 
     calls = []
@@ -120,8 +125,7 @@ def test_run_uses_ingest_pipeline(monkeypatch):
     norm_ingest = {t.rstrip(".SA") for t in ingest_tickers}
     norm_compute = {t.rstrip(".SA") for t in calls_to_compute}
     assert norm_compute.issubset(norm_ingest), (
-        f"ticker inesperado para cálculo de retornos: "
-        f"{norm_compute - norm_ingest}"
+        f"ticker inesperado para cálculo de retornos: {norm_compute - norm_ingest}"
     )
     # e não deve haver chamadas extras
     assert len(calls_to_compute) == len(ingest_tickers)
@@ -138,8 +142,9 @@ def test_compute_returns_single_ticker(monkeypatch):
         return {"rows": 3, "persisted": True, "sample_df": None}
 
     monkeypatch.setattr("src.main._compute_returns_for_ticker", fake_compute)
-    # ensure no DB dependency when listing all tickers
+    # ensure no DB calls during command (neither list nor resolve)
     monkeypatch.setattr("src.db.list_price_tickers", lambda: ["PETR4"])
+    monkeypatch.setattr("src.db.resolve_existing_ticker", lambda t: t)
 
     runner = CliRunner()
     result = runner.invoke(app, ["compute-returns", "--ticker", "PETR4"])
@@ -207,6 +212,7 @@ def test_export_csv_success(tmp_path, monkeypatch):
     )
     # intercept default DATA_DIR in main module so file lands in tmp_path
     import src.main as mainmod
+
     monkeypatch.setattr(mainmod, "DATA_DIR", tmp_path)
 
     runner = CliRunner()
@@ -221,6 +227,7 @@ def test_export_csv_success(tmp_path, monkeypatch):
 def test_export_csv_not_found(monkeypatch):
     """CLI falha se o ticker válido não estiver no banco nem na variante."""
     from src.main import app
+
     # use a valid ticker so normalization passes
     monkeypatch.setattr("src.db.resolve_existing_ticker", lambda t: None)
     monkeypatch.setattr("src.tickers.ticker_variants", lambda t: (t, f"{t}.SA"))
@@ -233,7 +240,7 @@ def test_export_csv_not_found(monkeypatch):
 
 
 def test_ingest_snapshot_command(monkeypatch, tmp_path):
-    """Invocar `ingest-snapshot` dispara ingest_snapshot() com argumentos."""
+    """Invocar `snapshots ingest` dispara ingest_snapshot() com argumentos."""
     from src.main import app
 
     called = []
@@ -252,7 +259,8 @@ def test_ingest_snapshot_command(monkeypatch, tmp_path):
     result = runner.invoke(
         app,
         [
-            "ingest-snapshot",
+            "snapshots",
+            "ingest",
             str(snapshot),
             "--ticker",
             "PETR4",
@@ -271,5 +279,4 @@ def test_ingest_snapshot_command(monkeypatch, tmp_path):
     # CLI provides numeric ttl which is converted to float
     assert called[0][3] == 123.0
     assert called[0][4] == "foo.json"
-    assert "ingest-snapshot" in result.output
     assert "Ingestão de snapshot concluída" in result.output

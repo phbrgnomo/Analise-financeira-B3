@@ -10,7 +10,7 @@ from src.db._helpers import (
     _quote_identifier,
     _row_tuple_from_series,
 )
-from src.db.connection import _connect
+from src.db.connection import connect
 from src.db.schema import _ensure_schema, _get_upsert_sql, _load_canonical_schema
 from src.tickers import normalize_b3_ticker, ticker_variants
 
@@ -24,8 +24,64 @@ def write_prices(  # noqa: C901
     db_path: Optional[str] = None,
     source: str = "provider",
     fetched_at: Optional[str] = None,
-):
-    """Persist price DataFrame into ``prices`` table with upsert semantics."""
+) -> None:
+    """Write or update price rows in the ``prices`` database table.
+
+    The supplied ``df`` must contain a ``DatetimeIndex`` (or a ``date``
+    column which will be converted) and any subset of columns defined by
+    the canonical schema.  Rows for the given ``ticker`` are upserted using
+    SQLite's ``INSERT ... ON CONFLICT`` logic.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        DataFrame containing price data indexed by date.  Accepted column
+        names are case-insensitive and must match the schema (e.g.
+        ``open``, ``high``, ``low``, ``close``, ``volume``).
+    ticker : str
+        B3-style ticker identifier (``"PETR4"`` or ``"PETR4.SA"``) which
+        will be normalized to the base form for storage.
+    conn : Optional[sqlite3.Connection]
+        Active SQLite connection.  If ``None`` the helper will open a new
+        connection using ``db_path``.
+    db_path : Optional[str]
+        Path or URI to an SQLite database file; ignored if ``conn`` is
+        provided.
+    source : str
+        String describing the data source/provider (recorded in the row
+        metadata).
+    fetched_at : Optional[str]
+        Timestamp (ISO 8601) when the data was fetched; if provided,
+        stored in the ``fetched_at`` column.
+
+    Returns
+    -------
+    None
+        The function has no return value; it commits the transaction
+        before closing any connection it opened.
+
+    Raises
+    ------
+    ValueError
+        If ``df`` lacks a ``DatetimeIndex`` or ``date`` column, or if
+        required columns are missing or have incorrect types.
+    sqlite3.DatabaseError
+        Propagated from any underlying database error during upsert.
+
+    Example
+    -------
+    ```python
+    import sqlite3
+    import pandas as pd
+    from src.db.prices import write_prices
+
+    conn = sqlite3.connect('dados/data.db')
+    df = pd.DataFrame(...)
+    df['date'] = pd.to_datetime(df['date'])
+    df = df.set_index('date')
+    write_prices(df, 'PETR4', conn=conn)
+    ```
+    """
     # normalize ticker to base B3 form (strip .SA) for storage consistency
     try:
         ticker = normalize_b3_ticker(ticker)
@@ -34,7 +90,7 @@ def write_prices(  # noqa: C901
         ticker = ticker.strip().upper().removesuffix(".SA")
     close_conn = False
     if conn is None:
-        conn = _connect(db_path)
+        conn = connect(db_path)
         close_conn = True
 
     try:
@@ -45,9 +101,7 @@ def write_prices(  # noqa: C901
             df["date"] = pd.to_datetime(df["date"]).dt.tz_localize(None)
             df = df.set_index("date")
         if not isinstance(df.index, pd.DatetimeIndex):
-            raise ValueError(
-                "DataFrame must have a DatetimeIndex or a 'date' column"
-            )
+            raise ValueError("DataFrame must have a DatetimeIndex or a 'date' column")
 
         cols_map = {c.lower(): c for c in df.columns}
 
@@ -120,7 +174,7 @@ def read_prices(
     """
     close_conn = False
     if conn is None:
-        conn = _connect(db_path)
+        conn = connect(db_path)
         close_conn = True
 
     try:
@@ -136,6 +190,35 @@ def _read_prices_core(
     start: Optional[str],
     end: Optional[str],
 ) -> pd.DataFrame:
+    """Retrieve price rows from the database for a ticker and date range.
+
+    Parameters
+    ----------
+    conn : sqlite3.Connection
+        Open connection to a metadata/database file.
+    ticker : str
+        Ticker identifier used in the ``prices`` table; may include
+        provider suffix (e.g. ``"PETR4.SA"``) which is normalized internally.
+    start : Optional[str]
+        Lower date bound in ``YYYY-MM-DD`` format; if ``None`` no lower bound
+        is applied.
+    end : Optional[str]
+        Upper date bound in ``YYYY-MM-DD`` format; if ``None`` no upper bound
+        is applied.
+
+    Returns
+    -------
+    pandas.DataFrame
+        DataFrame indexed by ``date`` containing all columns from the
+        canonical prices schema.  If the query returns no rows an empty
+        DataFrame is returned.  Caller is responsible for any further
+        filtering or type conversions.
+
+    Raises
+    ------
+    sqlite3.DatabaseError
+        Propagated from underlying SQLite operations if the query fails.
+    """
     cur = conn.cursor()
     try:
         base, provider = ticker_variants(ticker)
@@ -154,14 +237,9 @@ def _read_prices_core(
     # names. Column names used as DataFrame columns remain unquoted.
     quoted_select = [_quote_identifier(c) for c in select_cols]
     if len(candidates) == 2:
-        sql = (
-            f"SELECT {', '.join(quoted_select)} FROM prices "
-            "WHERE ticker IN (?, ?)"
-        )
+        sql = f"SELECT {', '.join(quoted_select)} FROM prices WHERE ticker IN (?, ?)"
     else:
-        sql = (
-            f"SELECT {', '.join(quoted_select)} FROM prices WHERE ticker = ?"
-        )
+        sql = f"SELECT {', '.join(quoted_select)} FROM prices WHERE ticker = ?"
     if start and end:
         sql += " AND date BETWEEN ? AND ?"
         params.extend([start, end])
@@ -191,7 +269,7 @@ def list_price_tickers(
     """Lista tickers existentes na tabela ``prices`` em ordem alfabética."""
     close_conn = False
     if conn is None:
-        conn = _connect(db_path)
+        conn = connect(db_path)
         close_conn = True
 
     try:
@@ -221,7 +299,7 @@ def resolve_existing_ticker(
 
     close_conn = False
     if conn is None:
-        conn = _connect(db_path)
+        conn = connect(db_path)
         close_conn = True
 
     try:

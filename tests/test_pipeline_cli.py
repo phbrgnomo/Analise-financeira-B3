@@ -16,6 +16,7 @@ def isolate_lock_dir(tmp_path, monkeypatch):
     monkeypatch.delenv("INGEST_LOCK_MODE", raising=False)
     monkeypatch.delenv("INGEST_LOCK_TIMEOUT_SECONDS", raising=False)
 
+
 # The CLI helper is built using Typer, which has proven brittle in the
 # current test environment (see excessive recursion and parse errors above).
 # Instead of exercising the Typer runner we bypass the command layer and call
@@ -56,6 +57,7 @@ def test_pipeline_ingest_dry_run(monkeypatch, capsys):
 
 def test_pipeline_ingest_error_logging(monkeypatch, capsys):
     """Adapter failure results in error exit code and metadata log."""
+
     class BadAdapter:
         def fetch(self, *args, **kwargs):
             raise RuntimeError("network unreachable")
@@ -84,7 +86,6 @@ def test_pipeline_ingest_error_logging(monkeypatch, capsys):
     assert "job_id=" in captured.err
 
 
-
 def test_force_refresh_flag_propagation(monkeypatch):
     seen = {}
 
@@ -105,11 +106,12 @@ def test_force_refresh_flag_propagation(monkeypatch):
 
 def test_raw_file_written(tmp_path, monkeypatch):
     """Non-dry run should produce a CSV under the raw directory."""
+    import src.adapters.factory as factory
+    import src.etl.mapper as mapper
+
     dummy = DummyAdapter()
-    monkeypatch.setattr(
-        "src.adapters.factory.get_adapter", lambda name: dummy
-    )
-    monkeypatch.setattr("src.etl.mapper.to_canonical", lambda df, **kw: df)
+    monkeypatch.setattr(factory, "get_adapter", lambda name: dummy)
+    monkeypatch.setattr(mapper, "to_canonical", lambda df, **kw: df)
 
     # run ingestion with temporary working directory so files land under tmp_path
     monkeypatch.chdir(tmp_path)
@@ -191,13 +193,10 @@ def test_float_timeout_is_accepted(monkeypatch):
     assert isinstance(seen.get("timeout"), float)
 
 
-
 def test_mapper_failure_propagates(monkeypatch, capsys):
     """When the mapper raises, the CLI returns non-zero and logs metadata."""
     dummy = DummyAdapter()
-    monkeypatch.setattr(
-        "src.adapters.factory.get_adapter", lambda name: dummy
-    )
+    monkeypatch.setattr("src.adapters.factory.get_adapter", lambda name: dummy)
 
     # make the mapper raise
     import src.etl.mapper as mapper

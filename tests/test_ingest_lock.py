@@ -125,9 +125,7 @@ def test_concurrent_waiting(tmp_path) -> None:
     # execuções, mas não assumimos que todos os campos estejam sempre presentes
     # (apenas timeout/dry-run os preenchem).
     log_path = tmp_path / "metadata" / "ingest_logs.jsonl"
-    assert log_path.exists(), (
-        "esperava que o log de metadados fosse criado"
-    )
+    assert log_path.exists(), "esperava que o log de metadados fosse criado"
     with open(log_path, "r") as f:
         lines = [json.loads(line) for line in f]
 
@@ -160,9 +158,9 @@ def test_lock_released_on_exception(tmp_path, monkeypatch) -> None:
         pass
 
 
-
-@pytest.mark.skipif(sys.platform.startswith("win"),
-                    reason="fcntl não disponível no Windows")
+@pytest.mark.skipif(
+    sys.platform.startswith("win"), reason="fcntl não disponível no Windows"
+)
 def test_portalocker_missing_fallback(tmp_path, monkeypatch) -> None:
     """Se a dependência opcional ``portalocker`` estiver ausente, o caminho
     de fallback POSIX ainda deve funcionar corretamente.

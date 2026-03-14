@@ -63,9 +63,7 @@ def _ensure_metadata_file(metadata_path: Union[str, Path]) -> None:
         os.replace(str(tmp), str(metadata_path))
 
 
-def _log_metadata_error(
-    msg: str, e_meta: Exception, metadata: Dict[str, Any]
-) -> None:
+def _log_metadata_error(msg: str, e_meta: Exception, metadata: Dict[str, Any]) -> None:
     """Log a metadata write failure and annotate *metadata* in-place."""
     logger.exception("%s: %s", msg, e_meta)
     metadata["metadata_recorded"] = False
@@ -212,9 +210,7 @@ def _resolve_timestamp_str(ts: Optional[Union[str, datetime]]) -> str:
         import re
 
         if not re.match(r"^\d{8}T\d{6}Z$", ts):
-            raise ValueError(
-                "timestamp string must be in YYYYMMDDTHHMMSSZ format"
-            )
+            raise ValueError("timestamp string must be in YYYYMMDDTHHMMSSZ format")
         return ts
 
     raise TypeError("ts must be a str, datetime, or None")

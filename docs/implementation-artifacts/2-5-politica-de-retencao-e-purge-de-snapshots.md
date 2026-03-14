@@ -4,7 +4,7 @@ story_key: 2-5-politica-de-retencao-e-purge-de-snapshots
 epic: 2
 story_num: 5
 status: ready-for-dev
-owner: TBD
+owner: Dev/Ops
 ---
 
 # Story 2.5: Política de Retenção e Purge de Snapshots
@@ -32,11 +32,8 @@ para que o repositório/servidor mantenha uso de disco controlado mantendo audit
    - Verificar checksum do arquivo e metadados correspondem
    - Se `archive-dir` fornecido, mover/validar cópia antes de remoção definitiva
    - Verificar permissões (somente usuário com permissão pode excluir)
-5. Implementar política de retenção configurável via variável de ambiente `SNAPSHOT_RETENTION_POLICY` (JSON ou YAML curto) com valores padrão sensatos:
-   - daily_keep_days: 90
-   - keep_monthly: 12
-   - keep_yearly: 7
-   - min_free_space_mb: 1024 (aguardar confirmação em logs se limiar ultrapassado)
+5. Implementar política de retenção configurável via variável de ambiente `SNAPSHOT_RETENTION_DAYS` (número inteiro de dias) com valor padrão sensato (`90`).
+   - Observação: o comportamento padrão deve ser manter os snapshots mais recentes e considerar como elegíveis para purge os registros mais antigos que `SNAPSHOT_RETENTION_DAYS`.
 6. Implementar testes automatizados (unit + integração mocked):
    - Dry-run não modifica o estado
    - `--confirm` realmente remove arquivos e atualiza metadados
@@ -60,13 +57,17 @@ para que o repositório/servidor mantenha uso de disco controlado mantendo audit
   - Snapshots: `snapshots/` (produzido por Story 2-1 / 2-3)
   - Archive: `snapshots/archive/` (opcional, configurável)
   - Metadados: `metadata/snapshots.db` (SQLite) ou `metadata/snapshots.json`
-- Default retention policy (config via env `SNAPSHOT_RETENTION_POLICY`):
-  ```yaml
-  daily_keep_days: 90
-  keep_monthly: 12
-  keep_yearly: 7
-  min_free_space_mb: 1024
-  ```
+- Default retention policy: keep snapshots for 90 days (configurable via `SNAPSHOT_RETENTION_DAYS`).
+  - Example (shell):
+    ```sh
+    # default: 90 days
+    export SNAPSHOT_RETENTION_DAYS=90
+    ```
+  - Example (dotenv / .env):
+    ```env
+    # default: 90 days
+    SNAPSHOT_RETENTION_DAYS=90
+    ```
 - Implementation recommendations:
   - Use SQLite table `snapshots` for transactional updates and easy queries. Columns: `id, path, ticker, created_at, rows, checksum_sha256, size_bytes, archived BOOLEAN, retention_tier, archived_at`.
   - When purging, always perform `--dry-run` in CI and logging. Only `--confirm` deletes files.

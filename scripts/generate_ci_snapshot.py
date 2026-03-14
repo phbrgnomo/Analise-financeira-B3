@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import contextlib
 import os
+import sqlite3
 import sys
 import tempfile
 from pathlib import Path
@@ -76,7 +77,7 @@ def _build_candidate(base_path: Path, val: str) -> Path:
     """
     try:
         candidate = Path(val)
-    except Exception:
+    except TypeError:
         raise ValueError("Valor de caminho inválido") from None
 
     if not candidate.is_absolute():
@@ -84,7 +85,7 @@ def _build_candidate(base_path: Path, val: str) -> Path:
 
     try:
         return candidate.resolve(strict=False)
-    except Exception as exc:
+    except (OSError, RuntimeError) as exc:
         raise ValueError("Falha ao resolver o caminho do usuário") from exc
 
 
@@ -97,7 +98,7 @@ def _is_within_allowed_roots(candidate: Path, allowed_roots: Sequence[Path]) -> 
     for root in allowed_roots:
         try:
             root_res = root.resolve(strict=False)
-        except Exception:
+        except (OSError, RuntimeError):
             root_res = root
 
         try:
@@ -107,7 +108,7 @@ def _is_within_allowed_roots(candidate: Path, allowed_roots: Sequence[Path]) -> 
             try:
                 if os.path.commonpath([str(root_res), str(candidate)]) == str(root_res):
                     return True
-            except Exception:
+            except ValueError:
                 continue
 
     return False
@@ -131,7 +132,7 @@ def _build_allowed_roots(
         for r in extra_allowed:
             try:
                 roots.append(Path(r).resolve(strict=False))
-            except Exception:
+            except (TypeError, OSError, ValueError):
                 continue
     return roots
 
@@ -267,6 +268,49 @@ def validate_snapshot_dir(
     raise ValueError("Diretório de snapshot fora dos diretórios permitidos")
 
 
+def _compute_and_persist_metadata(out_path: Path, df: pd.DataFrame) -> str:
+    """Compute checksum/size/rows and persist metadata to DB for CI.
+
+    Returns the checksum string on success or empty string on failure.
+    """
+    try:
+        from src import db
+        from src.utils.checksums import sha256_file  # local import
+    except ImportError as exc:  # pragma: no cover - defensive
+        print(f"Falha ao importar helpers de checksum/DB: {exc}", file=sys.stderr)
+        return ""
+
+    try:
+        checksum = sha256_file(out_path)
+        size = out_path.stat().st_size
+        rows = len(df)
+        metadata = {
+            "ticker": "PETR4",
+            "created_at": None,
+            "snapshot_path": str(out_path.resolve()),
+            "rows": rows,
+            "checksum": checksum,
+            "size_bytes": size,
+        }
+        try:
+            if db_path_override := os.environ.get("SNAPSHOT_DB"):
+                # Ensure the metadata DB exists and has required schema.
+                db.init_db(db_path=db_path_override)
+                with db.connect(db_path=db_path_override) as conn:
+                    db.record_snapshot_metadata(metadata, conn=conn)
+            else:
+                # Ensure default DB is initialized before recording metadata.
+                db.init_db(db_path=None)
+                db.record_snapshot_metadata(metadata)
+        except sqlite3.Error as rec_exc:
+            print(f"Aviso: falha ao gravar metadata no DB: {rec_exc}", file=sys.stderr)
+            return ""
+        return checksum
+    except (OSError, ValueError) as exc:
+        print(f"Falha ao computar checksum/metadata: {exc}", file=sys.stderr)
+        return ""
+
+
 def main() -> int:
     repo_root = Path(__file__).resolve().parents[1]
 
@@ -283,13 +327,9 @@ def main() -> int:
     # diretórios temporários do runner para evitar rejeições redundantes.
     extra_allowed: list[Path] = []
     if runner_env := os.environ.get("RUNNER_TEMP"):
-        try:
-            runner_sanitized = _sanitize_env_value(runner_env)
-            if runner_sanitized:
+        with contextlib.suppress(ValueError):
+            if runner_sanitized := _sanitize_env_value(runner_env):
                 extra_allowed.append(Path(runner_sanitized))
-        except ValueError:
-            pass
-
     try:
         validate_snapshot_dir(snapshot_dir, repo_root, extra_allowed=extra_allowed)
     except ValueError as exc:
@@ -299,23 +339,28 @@ def main() -> int:
 
     try:
         df = pd.read_csv(fixture)
-    except Exception as exc:
+    except (OSError, pd.errors.EmptyDataError, pd.errors.ParserError) as exc:
         print(f"Falha ao ler fixture {fixture}: {exc}", file=sys.stderr)
         return 3
 
     # import local para evitar carregar heavy deps cedo
     try:
         from src.etl.snapshot import write_snapshot
-    except Exception as exc:
-        print(f"Falha ao importar write_snapshot: {exc}", file=sys.stderr)
+    except ImportError as exc:
+        print(f"Falha ao importar write_snapshot ou helpers: {exc}", file=sys.stderr)
         return 4
 
     out_path = snapshot_dir / "PETR4_snapshot.csv"
     try:
-        checksum = write_snapshot(df, out_path)
-    except Exception as exc:
+        _ = write_snapshot(df, out_path)
+    except (OSError, ValueError) as exc:
         print(f"Falha ao escrever snapshot: {exc}", file=sys.stderr)
         return 5
+
+    # compute authoritative checksum and persist metadata for CI consumers
+    checksum = _compute_and_persist_metadata(out_path, df)
+    if not checksum:
+        return 7
 
     print(f"Snapshot gerado: {out_path}")
     print(f"Checksum: {checksum}")

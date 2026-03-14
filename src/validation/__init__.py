@@ -85,9 +85,7 @@ def validate_and_handle(
     )
 
     # Enforce threshold
-    check_threshold(
-        summary, threshold=threshold, abort_on_exceed=abort_on_exceed
-    )
+    check_threshold(summary, threshold=threshold, abort_on_exceed=abort_on_exceed)
 
     return valid_df, invalid_df, summary, details
 

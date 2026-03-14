@@ -21,8 +21,8 @@ def test_snapshot_filename_regex_matches_valid_names():
 
 def test_snapshot_filename_regex_rejects_invalid_names():
     bad = [
-        "bad-name.csv",            # no timestamp
-        "PETR4-2020-01-01.csv",    # wrong timestamp format
+        "bad-name.csv",  # no timestamp
+        "PETR4-2020-01-01.csv",  # wrong timestamp format
         "petr4-20200101T000000.csv",  # lowercase ticker
         "PETR4_20200101T000000.csv",  # underscore instead of dash
         "PETR4-20200101T000000.txt",  # wrong extension

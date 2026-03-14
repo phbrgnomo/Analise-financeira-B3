@@ -4,6 +4,7 @@
 This small script forwards args to the existing validation script and returns
 its exit code. It simplifies CI step commands and makes intent explicit.
 """
+
 from __future__ import annotations
 
 import subprocess

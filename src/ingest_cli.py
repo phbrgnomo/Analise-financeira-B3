@@ -15,7 +15,7 @@ aceitação:
 * validação de checksum antes de processar
 * logs estruturados sobre decisões de cache e contagem de registros
 * funções facilmente testáveis e CLI (ver `src.main`
-  comando ``ingest-snapshot``)
+    comando ``snapshots ingest``)
 
 A lógica é suficientemente simples para ser aplicada em arquivos locais
 (`dados/`) e pode ser estendida posteriormente para armazenamentos remotos
@@ -48,12 +48,13 @@ DEFAULT_CACHE_FILE = os.getenv("SNAPSHOT_CACHE_FILE") or "dados/snapshot_cache.j
 
 # helpers ------------------------------------------------------------
 
+
 def _read_checksum(path: Path) -> str:
     """Return the SHA256 checksum for ``path``.
 
     If a companion ``.checksum`` file exists it will be compared against the
-    computed value; um mismatch causa erro para evitar ingestões silenciosas
-de arquivos corrompidos.
+    computed value; a mismatch raises ``ValueError`` to prevent ingesting
+    corrupted files silently.
     """
     actual = sha256_file(path)
     check_path = path.with_name(f"{path.name}.checksum")
@@ -122,6 +123,7 @@ def _compute_changes(
 
 
 # public API ---------------------------------------------------------
+
 
 def ingest_snapshot(
     snapshot_path: Union[str, Path],
@@ -206,9 +208,7 @@ def ingest_snapshot(
             ticker = unique[0]
         else:
             # snapshot contains more than one ticker; refuse to guess
-            raise ValueError(
-                f"snapshot contains multiple tickers: {unique.tolist()}"
-            )
+            raise ValueError(f"snapshot contains multiple tickers: {unique.tolist()}")
     # at this point we guarantee a string value for ticker, but the type
     # checker still sees Optional[str].  narrow with an explicit runtime
     # check so that the behaviour does not change when Python is run with
