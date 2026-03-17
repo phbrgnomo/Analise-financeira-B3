@@ -8,6 +8,7 @@ from __future__ import annotations
 import os
 import sqlite3
 import sys
+import types
 from datetime import datetime, timedelta, timezone
 from typing import Callable, Generator
 
@@ -86,6 +87,88 @@ def mock_yfinance_data(monkeypatch) -> Generator[Callable, None, None]:
     ns = yadapter.types.SimpleNamespace(DataReader=_patched_datareader)
     monkeypatch.setattr(yadapter, "web", ns)
     yield _patched_datareader
+
+
+@pytest.fixture
+def yfinance_stub(monkeypatch):
+    """Stub out the `yfinance` module used by `YFinanceAdapter.test_connection`.
+
+    This fixture emulates the situation where `yfinance` is not installed
+    and the adapter should report unavailable.
+    """
+    import src.adapters.yfinance_adapter as yfa  # type: ignore
+
+    ns = types.SimpleNamespace(__is_stub__=True)
+    monkeypatch.setattr(yfa, "yf", ns)
+    yield ns
+
+
+@pytest.fixture
+def yfinance_present(monkeypatch):
+    """Provide a minimal yfinance stub with the API surface expected by the adapter.
+
+    Used by tests that need `YFinanceAdapter.test_connection()` to return True.
+    """
+    import src.adapters.yfinance_adapter as yfa  # type: ignore
+
+    ns = types.SimpleNamespace(
+        download=lambda *a, **k: None,
+        Ticker=lambda *a, **k: None,
+        __is_stub__=False,
+    )
+    monkeypatch.setattr(yfa, "yf", ns)
+    yield ns
+
+
+@pytest.fixture
+def fake_ingest_success(monkeypatch):
+    """Fixture that stubs src.ingest.pipeline.ingest to return a successful result."""
+
+    def _fake_ingest(*args, **kwargs):
+        return {
+            "status": "success",
+            "persist": {
+                "rows_processed": 1,
+                "snapshot_path": "snapshots/PETR4-20260215.csv",
+                "checksum": "abc",
+            },
+        }
+
+    monkeypatch.setattr("src.ingest.pipeline.ingest", _fake_ingest)
+    return _fake_ingest
+
+
+@pytest.fixture
+def fake_ingest_failure(monkeypatch):
+    """Fixture that stubs src.ingest.pipeline.ingest to return a failure result."""
+
+    def _fake_ingest(*args, **kwargs):
+        return {"status": "failure", "error_message": "boom: ingest failed"}
+
+    monkeypatch.setattr("src.ingest.pipeline.ingest", _fake_ingest)
+    return _fake_ingest
+
+
+@pytest.fixture
+def fake_compute_rows1(monkeypatch):
+    """Fixture that stubs src.main._compute_returns_for_ticker to return 1 row."""
+
+    def _fake_compute(*args, **kwargs):
+        return {"rows": 1, "persisted": True, "sample_df": None}
+
+    monkeypatch.setattr("src.main._compute_returns_for_ticker", _fake_compute)
+    return _fake_compute
+
+
+@pytest.fixture
+def fake_compute_rows0(monkeypatch):
+    """Fixture that stubs src.main._compute_returns_for_ticker to return 0 rows."""
+
+    def _fake_compute(*args, **kwargs):
+        return {"rows": 0, "persisted": False, "sample_df": None}
+
+    monkeypatch.setattr("src.main._compute_returns_for_ticker", _fake_compute)
+    return _fake_compute
 
 
 @pytest.fixture(scope="function")

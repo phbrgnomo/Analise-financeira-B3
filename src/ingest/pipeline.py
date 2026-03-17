@@ -291,9 +291,8 @@ def _make_metadata(
         "source": source,
         "status": status,
         "started_at": started_at,
-    }
-    out["finished_at"] = finished_at or _now_iso()
-    out.update(extras)
+        "finished_at": finished_at or _now_iso(),
+    } | extras
     return out
 
 

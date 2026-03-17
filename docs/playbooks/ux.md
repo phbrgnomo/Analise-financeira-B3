@@ -6,7 +6,11 @@ Este documento descreve as expectativas mínimas de UX para CLI, notebooks e uma
 
 - Flags suportadas (exemplos):
   - `--ticker <TICKER>` (ex.: PETR4, ITUB4, BOVA11)
+  - `--start_date <YYYY-MM-DD>` (para limitar o intervalo de dados)
+  - `--end_date <YYYY-MM-DD>` (para limitar o intervalo de dados)
   - `--force-refresh` (força re-ingest)
+  - `--format <text|json>` (formato de saída, padrão `text`)
+  - `--no-network` (modo offline para testes/CI usando provider dummy)
   - `--output <path>` (local de saída para `export-csv`)
 
 - Mensagens esperadas (stdout/stderr):
@@ -38,6 +42,12 @@ Este documento descreve as expectativas mínimas de UX para CLI, notebooks e uma
   - Exibir mensagens de sucesso/erro conforme CLI
 
 ## Exemplos de saída (stdout)
+
+```bash
+python main.py --ticker PETR4 --ticker ITUB3 --ticker BBDC4
+```
+
+**Output:**
 
 ```
 Executando tickers padrão: PETR4, ITUB3, BBDC4

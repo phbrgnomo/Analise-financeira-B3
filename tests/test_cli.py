@@ -1,3 +1,4 @@
+import json
 import re
 import subprocess
 import sys
@@ -194,6 +195,55 @@ def test_compute_returns_all_when_empty(monkeypatch):
     result = runner.invoke(app, ["compute-returns"])
     assert result.exit_code == 0
     assert "Nenhum ticker encontrado" in result.output
+
+
+def test_run_json_output(fake_ingest_success, fake_compute_rows1):
+    """Verifica que `main --ticker ... --format json` retorna JSON válido."""
+    from src.main import app
+
+    runner = CliRunner()
+    result = runner.invoke(
+        app, ["--ticker", "PETR4", "--format", "json", "--no-network"]
+    )
+    assert result.exit_code == 0
+    data = json.loads(result.output)
+    assert data["status"] == "success"
+    assert isinstance(data.get("tickers"), list)
+    assert data["tickers"][0]["ticker"] == "PETR4"
+
+
+def test_run_json_output_warning_no_rows(fake_ingest_success, fake_compute_rows0):
+    """Verifica o fluxo de warning quando nenhum retorno é calculado."""
+    from src.main import app
+
+    runner = CliRunner()
+    result = runner.invoke(
+        app, ["--ticker", "PETR4", "--format", "json", "--no-network"]
+    )
+
+    assert result.exit_code == 1
+    data = json.loads(result.output)
+    assert data["status"] == "warning"
+    assert isinstance(data.get("tickers"), list)
+    assert data["tickers"][0]["ticker"] == "PETR4"
+    assert data["tickers"][0].get("rows_returns") == 0
+
+
+def test_run_json_output_failure_ingest_error(fake_ingest_failure):
+    """Verifica o fluxo de failure quando ingest falha."""
+    from src.main import app
+
+    runner = CliRunner()
+    result = runner.invoke(
+        app, ["--ticker", "PETR4", "--format", "json", "--no-network"]
+    )
+
+    assert result.exit_code == 2
+    data = json.loads(result.output)
+    assert data["status"] == "failure"
+    assert isinstance(data.get("tickers"), list)
+    assert data["tickers"][0]["ticker"] == "PETR4"
+    assert data["tickers"][0].get("error_message")
 
 
 def test_export_csv_success(tmp_path, monkeypatch):

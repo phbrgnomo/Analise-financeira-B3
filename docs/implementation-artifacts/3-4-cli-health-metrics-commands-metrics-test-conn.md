@@ -22,16 +22,17 @@ so that I can verify provider connectivity and system health before running inge
 
 ## Tasks / Subtasks
 
-- [ ] Implement CLI entrypoints in `src/cli.py` / `src/main.py`:
+- [ ] Implement CLI entrypoints in `src/main.py`:
   - [ ] Add `test_conn` command implementing `--provider`, `--timeout`, `--json` flags.
   - [ ] Add `metrics` and `health` commands with `--json` output option.
-- [ ] Add health/metrics helpers in `src/utils/health.py` and `src/utils/metrics.py`.
+- [ ] Add health/metrics helpers in `src/utils/health.py` and `src/utils/metrics.py`. The existing `src/metrics.py` and `src/health.py` must be moved to the `utils/` subfolder and the code must be refactored to fit the new placement.
 - [ ] Implement provider connectivity check in adapter base: add `Adapter.check_connection()` contract and implement in critical adapters (yfinance, alpha_vantage) in `src/adapters/`.
 - [ ] Wire logging and structured output (use existing logging conventions; prefer JSON logger wrapper in `src/utils/logging.py`).
 - [ ] Add tests:
   - [ ] `tests/test_cli_test_conn.py` (unit, mocking adapters)
   - [ ] `tests/test_cli_health_metrics.py` (smoke, DB health checks using fixtures)
-- [ ] Update docs: add usage examples in `docs/playbooks/quickstart-ticker.md` and `docs/implementation-artifacts/3-4-cli-health-metrics-commands-metrics-test-conn.md` (this file).
+- [ ] Update docs: add usage examples in `docs/playbooks/quickstart-ticker.md`
+- [ ] Document implemented features, usage examples and rationale in `docs/sprint-reports/3-4-cli-health-metrics-commands.md`.
 
 ## Dev Notes
 
@@ -40,17 +41,18 @@ so that I can verify provider connectivity and system health before running inge
   - Respect single-user SQLite constraints: health should check DB file presence and owner permissions (`chmod 600`) rather than open heavy concurrent writes.
   - Provider `check_connection()` should be non-destructive and limited to a single lightweight request (e.g., provider ping endpoint or HEAD request where available) and must respect `RETRY_BACKOFF` environment settings.
 - Source tree components to touch:
-  - `src/cli.py` or `src/main.py` (Typer entrypoints)
+  - `src/main.py` (Typer entrypoints)
   - `src/adapters/*` (add `check_connection()` implementations)
   - `src/utils/health.py`, `src/utils/metrics.py`, `src/utils/logging.py`
   - `tests/test_cli_*.py`
+  - `src/metrics.py` (previously implemented lightweight Prometheus metrics wrapper. Move functionality to `src/utils/metrics_prometheus.py`.)
 - Testing standards summary:
   - Unit tests mock adapter network calls; integration smoke tests use fixtures (`tests/fixtures/sample_ticker.csv`) and a temporary SQLite DB provided by `tests/conftest.py`.
 
 ### Project Structure Notes
 
 - File locations (recommended):
-  - CLI: `src/cli.py` (Typer)
+  - CLI: `src/main.py` (Typer)
   - Health/metrics helpers: `src/utils/health.py`, `src/utils/metrics.py`
   - Adapter checks: `src/adapters/<provider>_adapter.py` (implement `check_connection()`)
   - Tests: `tests/test_cli_test_conn.py`, `tests/test_cli_health_metrics.py`
@@ -77,10 +79,11 @@ GPT-5 mini
 
 ### File List
 
-- src/cli.py (new/updated)
+- src/main.py (new/updated)
 - src/utils/health.py (new)
 - src/utils/metrics.py (new)
 - src/adapters/* (update: add check_connection implementations)
+- src/utils/metrics_prometheus.py (previously implemented, existing functionality must be moved here)
 - tests/test_cli_test_conn.py (new)
 - tests/test_cli_health_metrics.py (new)
 

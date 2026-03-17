@@ -13,6 +13,8 @@ Uma ferramenta leve para coletar dados de mercados (B3), calcular retornos e mé
 - Cálculo de retornos diários e métricas de risco (volatilidade, conversões anuais).
 - Estrutura para persistir séries em CSV em `dados/` e snapshots em `snapshots/`.
 - Scripts de exemplo e fixtures para testes em `tests/`.
+- Comando `metrics`: gera métricas/health check do pipeline (via `poetry run main metrics --format json`).
+- Comando `test-conn`: valida conectividade com um provider (ex.: `poetry run main test-conn --provider dummy --format json`).
 
 ## Pré-requisitos
 - Python 3.12+ (recomendado)
@@ -105,6 +107,10 @@ poetry install
 poetry run main run
 # ticker específico (padrão B3)
 poetry run main run --ticker PETR4
+# saída JSON (útil para CI / automação)
+poetry run main --ticker PETR4 --format json
+# modo offline (sem chamadas de rede) para testes/CI
+poetry run main --ticker PETR4 --format json --no-network
 ```
 
 3. Exemplos e testes rápidos:
@@ -112,6 +118,20 @@ poetry run main run --ticker PETR4
 ```bash
 poetry run pytest -q
 ./examples/run_quickstart_example.sh
+```
+
+### Métricas / health check (CI)
+
+Você pode conferir a saúde do pipeline com:
+
+```bash
+poetry run main metrics --format json
+```
+
+E testar conexão com um provider (ex.: dummy):
+
+```bash
+poetry run main test-conn --provider dummy --format json
 ```
 
 ### Modo de testes de rede (NETWORK_MODE)

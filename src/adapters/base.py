@@ -41,6 +41,23 @@ class Adapter(ABC):
         self.retry_config = retry_config or RetryConfig.from_env()
         self._metrics = get_global_metrics()
 
+    def test_connection(self) -> bool:
+        """Testa a conectividade do adaptador.
+
+        Implementação padrão assume o adaptador saudável e serve como um
+        fallback genérico para provedores que não expõem logicamente esse
+        método.
+
+        Subclasses podem sobrescrever este método para implementar uma verificação
+        mais rigorosa.
+        """
+
+        logger.debug(
+            "Adapter %s has no explicit test_connection; assuming healthy",
+            self.__class__.__name__,
+        )
+        return True
+
     @abstractmethod
     def fetch(self, ticker: str, **kwargs) -> pd.DataFrame:
         """
