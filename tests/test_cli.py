@@ -229,6 +229,61 @@ def test_run_json_output(monkeypatch):
     assert data["ticks"][0]["ticker"] == "PETR4"
 
 
+def test_run_json_output_warning_no_rows(monkeypatch):
+    """Verifica o fluxo de warning quando nenhum retorno é calculado."""
+    from src.main import app
+
+    def fake_ingest(*args, **kwargs):
+        return {
+            "status": "success",
+            "persist": {
+                "rows_processed": 1,
+                "snapshot_path": "snapshots/PETR4-20260215.csv",
+                "checksum": "abc",
+            },
+        }
+
+    def fake_compute(*args, **kwargs):
+        return {"rows": 0, "persisted": False, "sample_df": None}
+
+    monkeypatch.setattr("src.ingest.pipeline.ingest", fake_ingest)
+    monkeypatch.setattr("src.main._compute_returns_for_ticker", fake_compute)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        app, ["--ticker", "PETR4", "--format", "json", "--no-network"]
+    )
+
+    assert result.exit_code == 1
+    data = json.loads(result.output)
+    assert data["status"] == "warning"
+    assert isinstance(data.get("ticks"), list)
+    assert data["ticks"][0]["ticker"] == "PETR4"
+    assert data["ticks"][0].get("rows_returns") == 0
+
+
+def test_run_json_output_failure_ingest_error(monkeypatch):
+    """Verifica o fluxo de failure quando ingest falha."""
+    from src.main import app
+
+    def fake_ingest(*args, **kwargs):
+        return {"status": "failure", "error_message": "boom: ingest failed"}
+
+    monkeypatch.setattr("src.ingest.pipeline.ingest", fake_ingest)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        app, ["--ticker", "PETR4", "--format", "json", "--no-network"]
+    )
+
+    assert result.exit_code == 2
+    data = json.loads(result.output)
+    assert data["status"] == "failure"
+    assert isinstance(data.get("ticks"), list)
+    assert data["ticks"][0]["ticker"] == "PETR4"
+    assert data["ticks"][0].get("error_message")
+
+
 def test_export_csv_success(tmp_path, monkeypatch):
     """`export-csv` escreve arquivo quando ticker existe."""
     import pandas as pd

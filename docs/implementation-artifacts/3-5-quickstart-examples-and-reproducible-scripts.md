@@ -26,7 +26,7 @@ so that I can validate the environment and understand expected outputs.
 2. The example script documents expected run time and outputs in comments and exits with non-zero on failures to enable CI detection.
 3. The example supports `--config` or respects `ENV` vars and writes artifacts to `outputs/` by default.
 4. Script uses `--no-network` / fixtures (`tests/fixtures/sample_ticker.csv`) for CI determinism.
-5. `examples/run_quickstart_example.sh` invokes --no-network and CI have a deterministic fixture (`tests/fixtures/sample_ticker.csv`) to validate the quickstart flow without external calls.
+5. `examples/run_quickstart_example.sh` invokes --no-network and CI uses a deterministic fixture (`tests/fixtures/sample_ticker.csv`) to validate the quickstart flow without external calls.
 
 ## Tasks / Subtasks
 

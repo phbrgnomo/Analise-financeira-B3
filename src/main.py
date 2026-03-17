@@ -6,14 +6,12 @@ comandos para ingestão, ETL e exportação de dados.
 Use ``poetry run main --help`` para ver todos os comandos disponíveis.
 """
 
-import json
 import logging
 import os
 import sqlite3
 import time
 import uuid
 from contextlib import suppress
-from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal, Optional, TypedDict, cast
 
@@ -23,19 +21,25 @@ if TYPE_CHECKING:
     import pandas as pd
 from dotenv import load_dotenv
 
+import src.db as _db
+import src.retorno as _retorno
+from src import metrics
+from src.cli_feedback import CliFeedback, StepHandle
+from src.cli_options import output_format_option
+from src.connectivity import test_provider_connection
+from src.health import (
+    compute_health_metrics,
+    read_ingest_logs,
+    resolve_ingest_log_path,
+)
+from src.logging_config import configure_logging
+from src.paths import DATA_DIR
+from src.tickers import normalize_b3_ticker, ticker_variants
+from src.utils.conversions import as_bool
+
 # load any local .env file early so calls to os.getenv work below; this
 # is a no-op when running in CI or when no file exists.
 load_dotenv()
-
-import src.db as _db  # noqa: E402
-import src.retorno as _retorno  # noqa: E402
-from src import metrics  # noqa: E402
-from src.cli_feedback import CliFeedback, StepHandle  # noqa: E402
-from src.ingest.raw_storage import DEFAULT_METADATA  # noqa: E402
-from src.logging_config import configure_logging  # noqa: E402
-from src.paths import DATA_DIR  # noqa: E402
-from src.tickers import normalize_b3_ticker, ticker_variants  # noqa: E402
-from src.utils.conversions import as_bool  # noqa: E402
 
 # compatibility shims have been extracted to ``src.cli_compat``; import
 # here to ensure the patches are applied when the CLI is loaded.
@@ -221,7 +225,6 @@ def _run_one_ticker(  # noqa: C901
     ticker: str,
     provider: str,
     force_refresh: bool,
-    output_json: bool,
     feedback: CliFeedback | None,
 ) -> tuple[dict[str, object], str]:
     """Run ingest + returns for a single ticker.
@@ -377,13 +380,7 @@ def run_cmd(  # noqa: C901
         help="Nome do provider/adaptador a ser usado (ex.: yfinance)",
         is_flag=False,
     ),
-    output_format: Literal["text", "json"] = typer.Option(
-        "text",
-        "--format",
-        "-f",
-        help="Formato de saída: text (padrão) ou json (para CI/integração).",
-        case_sensitive=False,
-    ),
+    output_format: Literal["text", "json"] = output_format_option(),
     no_network: bool = typer.Option(
         False,
         "--no-network",
@@ -421,7 +418,6 @@ def run_cmd(  # noqa: C901
             ticker=tk,
             provider=effective_provider,
             force_refresh=effective_force_refresh,
-            output_json=output_json,
             feedback=feedback,
         )
         results.append(result)
@@ -448,110 +444,9 @@ def run_cmd(  # noqa: C901
     raise typer.Exit(code=exit_code)
 
 
-def _parse_duration(duration: str) -> float:
-    """Parse duration string like '1.23s' into seconds.
-
-    Returns 0.0 when parsing fails.
-    """
-
-    try:
-        return float(duration[:-1]) if duration.endswith("s") else float(duration)
-    except Exception:
-        return 0.0
-
-
-def _read_ingest_logs(path: str) -> list[dict]:
-    """Read JSONL ingest log file into a list of dicts."""
-
-    if not os.path.exists(path):
-        return []
-
-    out: list[dict] = []
-    with open(path, "r", encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                out.append(json.loads(line))
-            except Exception:
-                continue
-    return out
-
-
-def _compute_health_metrics(logs: list[dict], threshold_seconds: int) -> dict:  # noqa: C901
-    now = datetime.utcnow().replace(tzinfo=timezone.utc)
-    last_finished = None
-
-    errors_last_24h = 0
-    jobs_last_24h = 0
-    latency_values: list[float] = []
-
-    for rec in logs:
-        finished = rec.get("finished_at")
-        if not finished:
-            continue
-        try:
-            finished_dt = datetime.fromisoformat(finished.replace("Z", "+00:00"))
-        except Exception:
-            continue
-
-        if last_finished is None or finished_dt > last_finished:
-            last_finished = finished_dt
-
-        delta = now - finished_dt
-        if delta <= timedelta(hours=24):
-            jobs_last_24h += 1
-            if rec.get("status") != "success":
-                errors_last_24h += 1
-
-        dur = rec.get("duration")
-        if isinstance(dur, str):
-            latency = _parse_duration(dur)
-            if latency > 0:
-                latency_values.append(latency)
-
-    ingest_lag = (
-        (now - last_finished).total_seconds()
-        if last_finished is not None
-        else float("inf")
-    )
-
-    if latency_values:
-        avg_latency = sum(latency_values) / len(latency_values)
-    else:
-        avg_latency = 0.0
-
-    status = "healthy"
-    if ingest_lag > threshold_seconds:
-        status = "degraded"
-    if ingest_lag > threshold_seconds * 2:
-        status = "unhealthy"
-    if errors_last_24h > 0 and status == "healthy":
-        status = "degraded"
-
-    return {
-        "status": status,
-        "timestamp": now.isoformat().replace("+00:00", "Z"),
-        "metrics": {
-            "ingest_lag_seconds": ingest_lag,
-            "errors_last_24h": errors_last_24h,
-            "jobs_last_24h": jobs_last_24h,
-            "avg_latency_seconds": avg_latency,
-        },
-        "thresholds": {"ingest_lag_seconds": threshold_seconds},
-    }
-
-
 @app.command("metrics")
 def metrics_cmd(
-    output_format: Literal["text", "json"] = typer.Option(
-        "text",
-        "--format",
-        "-f",
-        help="Formato de saída: text (padrão) ou json (para CI/integração).",
-        case_sensitive=False,
-    ),
+    output_format: Literal["text", "json"] = output_format_option(),
     ingest_log_path: Optional[str] = typer.Option(
         None,
         "--ingest-log-path",
@@ -568,9 +463,9 @@ def metrics_cmd(
 ) -> None:
     """Exibe métricas de health do pipeline."""
 
-    path = ingest_log_path or os.getenv("INGEST_LOG_PATH") or str(DEFAULT_METADATA)
-    logs = _read_ingest_logs(path)
-    summary = _compute_health_metrics(logs, threshold)
+    path = resolve_ingest_log_path(ingest_log_path)
+    logs = read_ingest_logs(path)
+    summary = compute_health_metrics(logs, threshold)
 
     if output_format.lower() == "json":
         CliFeedback("metrics").json_output(summary)
@@ -590,53 +485,24 @@ def test_conn_cmd(
         help="Nome do provider/adaptador a ser usado (ex.: yfinance)",
         is_flag=False,
     ),
-    output_format: Literal["text", "json"] = typer.Option(
-        "text",
-        "--format",
-        "-f",
-        help="Formato de saída: text (padrão) ou json (para CI/integração).",
-        case_sensitive=False,
-    ),
+    output_format: Literal["text", "json"] = output_format_option(),
 ) -> None:
     """Verifica conectividade com um provider/adaptador."""
 
-    from src.adapters.factory import get_adapter
-
-    start = time.monotonic()
-    status = "failure"
-    error = None
-
-    try:
-        adapter = get_adapter(provider)
-        test_connection = getattr(adapter, "test_connection", None)
-        if callable(test_connection):
-            healthy = test_connection()
-            status = "success" if healthy else "failure"
-        elif provider == "dummy":
-            status = "success"
-        else:
-            status = "failure"
-            error = "provider does not support test-conn"
-    except Exception as exc:
-        status = "failure"
-        error = str(exc)
-
-    duration = time.monotonic() - start
-    result = {
-        "status": status,
-        "provider": provider,
-        "latency_ms": round(duration * 1000, 2),
-        "error": error,
-    }
+    result = test_provider_connection(provider)
 
     if output_format.lower() == "json":
         CliFeedback("test-conn").json_output(result)
-        raise typer.Exit(code=0 if status == "success" else 2)
+        raise typer.Exit(code=0 if result.get("status") == "success" else 2)
 
-    if status == "success":
-        typer.echo(f"OK ({duration:.3f}s)")
+    if result.get("status") == "success":
+        latency = result.get("latency_ms")
+        if isinstance(latency, (int, float)):
+            typer.echo(f"OK ({latency / 1000:.3f}s)")
+        else:
+            typer.echo("OK")
     else:
-        typer.echo(f"FAIL: {error}")
+        typer.echo(f"FAIL: {result.get('error')}")
         raise typer.Exit(code=2)
 
 

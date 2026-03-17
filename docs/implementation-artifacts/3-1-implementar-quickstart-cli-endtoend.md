@@ -56,8 +56,8 @@ so that I can reproduce a complete experiment quickly.
   - [ ] Subtask 5.0: Evaluate existing tests: `tests/test_cli.py`, `tests/integration/test_quickstart_mocked.py` (if exists) and identify gaps in coverage for new flags and snapshot generation.
   - [ ] Subtask 5.1: Add mocked quickstart integration test using `tests/fixtures/sample_ticker.csv`
   - [ ] Subtask 5.2: Add CI step that runs quickstart in `--no-network` mode and validates produced checksum
-  - [ ] Subtask 5.3: Integration tests for `poetry run main --ticker` + JSON Summary might be missing. Check existing tests and add an E2E test that runs the command with `--no-network` and validate JSON output + exit code (CI).
-  - [ ] Subtask 5.4: Add unit tests invoking entrypoint fuctions `src/main.py`and `src/ingest/pipeline.py` to assert exit codes, JSON summary when using `--format json`, and `--dry-run` and `--force-refresh` behavior.
+  - [ ] Subtask 5.3: Integration tests for `poetry run main --ticker` + JSON Summary might be missing. Check existing tests and add an E2E test that runs the command with `--no-network` and validates JSON output + exit code (CI).
+  - [ ] Subtask 5.4: Add unit tests invoking entrypoint functions `src/main.py` and `src/ingest/pipeline.py` to assert exit codes, JSON summary when using `--format json`, and `--dry-run` and `--force-refresh` behavior.
 
 - [ ] Task 6: Document implemented features, usage examples and rationale in `docs/sprint-reports/3-1-quickstart-cli.md`.
   - [ ] Update `docs/playbooks/quickstart-ticker.md` with the final commands.
@@ -71,7 +71,7 @@ so that I can reproduce a complete experiment quickly.
   - Snapshot and raw artifacts: `snapshots/` and `raw/<provider>/` directories; snapshots must include SHA256 checksum and companion `.checksum` file.
   - Permissions: `dados/data.db` and backups should be created with owner-only permissions where applicable.
   - DB tests: `tests/test_db_write.py`
-  - Pipeline CLI tests: `tests/test_pipeline_clie.py`
+  - Pipeline CLI tests: `tests/test_pipeline_cli.py`
   - Fixtures: `tests/fixtures/sample_ticker.csv` for deterministic testing without network.
 
 - Source tree components to touch:

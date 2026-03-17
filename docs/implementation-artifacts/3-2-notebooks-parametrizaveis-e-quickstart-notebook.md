@@ -33,7 +33,7 @@ so that newcomers and automation pipelines can reproduce analyses and examples r
 - [ ] Add README docs with run examples and dependency list.
 - [ ] Add lightweight sanity checks (script/tests) that validate notebook outputs.
 - [ ] Document implemented features, usage examples and rationale in `docs/sprint-reports/3-2-notebooks-parametrizaveis-e-quickstart-notebook.md`.
-- [ ] Add an optional integration test that runs the notebook with `papermill` with a temporary DB (use existing fixtures in `tests/fixtures`). This test only run if `PAPERMILL=1` env var is set to avoid adding papermill as a hard dependency for all tests.
+- [ ] Add an optional integration test that runs the notebook with `papermill` with a temporary DB (use existing fixtures in `tests/fixtures`). This test only runs if `PAPERMILL=1` env var is set to avoid adding papermill as a hard dependency for all tests.
 - [ ] Add `papermill` to `dev-dependencies` in `pyproject.toml` and document in README.
 
 ## Dev Notes
