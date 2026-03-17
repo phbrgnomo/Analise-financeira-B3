@@ -7,12 +7,12 @@ be made in one place.
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
 import typer
 
 
-def output_format_option(default: Literal["text", "json"] = "text") -> typer.Option:
+def output_format_option(default: Literal["text", "json"] = "text") -> Any:
     """Return a reusable Typer Option for the `--format`/`-f` output selector."""
 
     return typer.Option(
