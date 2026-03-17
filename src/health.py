@@ -47,7 +47,7 @@ def resolve_ingest_log_path(ingest_log_path: Optional[str]) -> str:
 
     # Allow directory-like values (including trailing slash or missing extension) by
     # ensuring we end up with a file path.
-    if path.is_dir() or raw.endswith(os.sep) or path.suffix == "":
+    if path.is_dir() or raw.endswith(os.sep) or not path.suffix:
         path = path / DEFAULT_INGEST_LOG_NAME
 
     return str(path)
@@ -130,7 +130,7 @@ def compute_health_metrics(
 ) -> Dict[str, Any]:
     """Compute high-level health metrics from ingest audit log entries."""
 
-    now = datetime.utcnow().replace(tzinfo=timezone.utc)
+    now = datetime.now(timezone.utc).replace(tzinfo=timezone.utc)
 
     if not logs:
         return {
