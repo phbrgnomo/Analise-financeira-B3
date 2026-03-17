@@ -46,8 +46,10 @@ def resolve_ingest_log_path(ingest_log_path: Optional[str]) -> str:
     path = Path(raw)
 
     # Allow directory-like values (including trailing slash or missing extension) by
-    # ensuring we end up with a file path.
-    if path.is_dir() or raw.endswith(os.sep) or not path.suffix:
+    # ensuring we end up with a file path. We intentionally avoid filesystem-based
+    # checks (like Path.is_dir()) so that non-existent directories are treated
+    # consistently based purely on the input syntax.
+    if raw.endswith(os.sep) or not path.suffix:
         path = path / DEFAULT_INGEST_LOG_NAME
 
     return str(path)
@@ -140,7 +142,7 @@ def compute_health_metrics(
                 "ingest_lag_seconds": None,
                 "errors_last_24h": 0,
                 "jobs_last_24h": 0,
-                "avg_latency_seconds": 0.0,
+                "avg_latency_seconds": None,
             },
             "thresholds": {"ingest_lag_seconds": threshold_seconds},
         }
@@ -157,7 +159,7 @@ def compute_health_metrics(
     else:
         ingest_lag = float("inf")
 
-    avg_latency = sum(latency_values) / len(latency_values) if latency_values else 0.0
+    avg_latency = sum(latency_values) / len(latency_values) if latency_values else None
 
     status = _determine_health_status(ingest_lag, errors_last_24h, threshold_seconds)
 

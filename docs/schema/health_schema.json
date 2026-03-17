@@ -19,7 +19,7 @@
         "ingest_lag_seconds": { "type": "number", "minimum": 0 },
         "errors_last_24h": { "type": "integer", "minimum": 0 },
         "jobs_last_24h": { "type": "integer", "minimum": 0 },
-        "avg_latency_seconds": { "type": "number", "minimum": 0 }
+        "avg_latency_seconds": { "anyOf": [ { "type": "number", "minimum": 0 }, { "type": "null" } ] }
       }
     },
     "thresholds": {

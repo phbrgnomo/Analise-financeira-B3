@@ -65,13 +65,7 @@ def _main_callback(
         help="Nome do provider/adaptador a ser usado (ex.: yfinance)",
         is_flag=False,
     ),
-    output_format: Literal["text", "json"] = typer.Option(
-        "text",
-        "--format",
-        "-f",
-        help="Formato de saída: text (padrão) ou json (para CI/integração).",
-        case_sensitive=False,
-    ),
+    output_format: Literal["text", "json"] = output_format_option(),
     no_network: bool = typer.Option(
         False,
         "--no-network",
@@ -140,8 +134,6 @@ try:
         help="Comandos para ingestão e geração de snapshots.",
     )
 except ImportError as exc:
-    import logging
-
     logging.getLogger(__name__).warning(
         "could not import pipeline subcommands: %s", exc
     )
@@ -346,8 +338,7 @@ def _aggregate_run_results(
 
     success_count = sum(r.get("status") == "success" for r in results)
     warning_count = sum(r.get("status") == "warning" for r in results)
-    failure_count = sum(bool(r.get("status") == "failure")
-                    for r in results)
+    failure_count = sum(r.get("status") == "failure" for r in results)
 
     status = "success"
     if failure_count:
@@ -397,7 +388,7 @@ def run_cmd(  # noqa: C901
 ) -> None:
     """Executa fluxo ETL principal (ingestão + cálculo de retornos)."""
 
-    output_json = output_format.lower() == "json"
+    output_json = output_format == "json"
     effective_force_refresh = as_bool(force_refresh)
 
     tickers, feedback, effective_provider = _prepare_run_context(
@@ -429,18 +420,24 @@ def run_cmd(  # noqa: C901
         "status": summary_status,
         "job_id": job_id,
         "duration_sec": time.monotonic() - run_started,
-        "ticks": results,
+        "tickers": results,
     }
 
     if output_json:
         CliFeedback("executar").json_output(summary)
         raise typer.Exit(code=exit_code)
 
-    assert feedback is not None
-    feedback.summary(
-        f"Resumo run: sucesso={success_count}, falhas={failure_count}"
-        + (f", avisos={warning_count}" if warning_count else "")
-    )
+    if feedback is None:
+        # Fallback when feedback is unexpectedly None: print summary to stdout.
+        typer.echo(
+            f"Resumo run: sucesso={success_count}, falhas={failure_count}"
+            + (f", avisos={warning_count}" if warning_count else "")
+        )
+    else:
+        feedback.summary(
+            f"Resumo run: sucesso={success_count}, falhas={failure_count}"
+            + (f", avisos={warning_count}" if warning_count else "")
+        )
     raise typer.Exit(code=exit_code)
 
 
@@ -455,8 +452,8 @@ def metrics_cmd(
             "(default: metadata/ingest_logs.jsonl)."
         ),
     ),
-    threshold: int = typer.Option(
-        int(os.getenv("INGEST_LAG_THRESHOLD", "86400")),
+    threshold: str = typer.Option(
+        os.getenv("INGEST_LAG_THRESHOLD", "86400"),
         "--threshold",
         help="Valor em segundos para o limite de ingest lag (default 86400).",
     ),
@@ -465,9 +462,18 @@ def metrics_cmd(
 
     path = resolve_ingest_log_path(ingest_log_path)
     logs = read_ingest_logs(path)
-    summary = compute_health_metrics(logs, threshold)
 
-    if output_format.lower() == "json":
+    try:
+        threshold_seconds = int(threshold)
+    except Exception:
+        logging.getLogger(__name__).warning(
+            "invalid INGEST_LAG_THRESHOLD=%r, using default 86400", threshold
+        )
+        threshold_seconds = 86400
+
+    summary = compute_health_metrics(logs, threshold_seconds)
+
+    if output_format == "json":
         CliFeedback("metrics").json_output(summary)
         raise typer.Exit(code=0)
 
@@ -475,7 +481,11 @@ def metrics_cmd(
     typer.echo(f"ingest_lag_seconds: {summary['metrics']['ingest_lag_seconds']}")
     typer.echo(f"errors_last_24h: {summary['metrics']['errors_last_24h']}")
     typer.echo(f"jobs_last_24h: {summary['metrics']['jobs_last_24h']}")
-    typer.echo(f"avg_latency_seconds: {summary['metrics']['avg_latency_seconds']:.3f}")
+    avg = summary['metrics'].get('avg_latency_seconds')
+    if avg is None:
+        typer.echo('avg_latency_seconds: null')
+    else:
+        typer.echo(f'avg_latency_seconds: {avg:.3f}')
 
 
 @app.command("test-conn")
@@ -491,7 +501,7 @@ def test_conn_cmd(
 
     result = test_provider_connection(provider)
 
-    if output_format.lower() == "json":
+    if output_format == "json":
         CliFeedback("test-conn").json_output(result)
         raise typer.Exit(code=0 if result.get("status") == "success" else 2)
 
@@ -504,6 +514,64 @@ def test_conn_cmd(
     else:
         typer.echo(f"FAIL: {result.get('error')}")
         raise typer.Exit(code=2)
+
+
+def _gather_compute_targets(
+    effective_ticker: Optional[str],
+    start: Optional[str],
+    end: Optional[str],
+    effective_dry_run: bool,
+    feedback: CliFeedback,
+) -> Optional[list[str]]:
+    """Resolve os tickers alvo para compute-returns.
+
+    Retorna lista de tickers ou None para indicar que o comando deve
+    encerrar sem processar nada (feedback já terá sido emitido).
+    """
+    if effective_ticker is not None:
+        normalized = _normalize_cli_ticker(effective_ticker)
+        try:
+            resolved = _db.resolve_existing_ticker(normalized)
+        except sqlite3.OperationalError as e:
+            logging.getLogger(__name__).error(
+                "erro ao resolver ticker existente %s: %s", normalized, e
+            )
+            resolved = None
+        targets = [resolved or normalized]
+        feedback.start(
+            f"ticker={targets[0]} | dry_run={effective_dry_run} | "
+            f"start={start or '-'} | end={end or '-'}"
+        )
+        return targets
+
+    try:
+        targets = _db.list_price_tickers()
+    except sqlite3.OperationalError as exc:
+        msg = str(exc).lower()
+        if "no such table" in msg and "prices" in msg:
+            return _no_targets_feedback(feedback, "Nenhuma tabela prices encontrada")
+        raise
+
+    if not targets:
+        return _no_targets_feedback(
+            feedback, "Nenhum ticker encontrado na tabela prices"
+        )
+    feedback.start(
+        f"processando todos os tickers do banco ({len(targets)}) | "
+        f"dry_run={effective_dry_run}"
+    )
+    return targets
+
+
+def _no_targets_feedback(feedback: CliFeedback, message: str) -> None:
+    """Emit feedback when no targets are found in the database.
+
+    Starts the feedback session and emits a warning message. Returns None to
+    indicate the caller should abort processing.
+    """
+    feedback.start("processando todos os tickers do banco")
+    feedback.warn(message)
+    return None
 
 
 @app.command("compute-returns")
@@ -536,48 +604,11 @@ def compute_returns_cmd(
     effective_ticker = ticker or ticker_arg or None
     effective_dry_run = as_bool(dry_run)
 
-    # start/end may already be None when not provided
-    # (previous logic converted empty strings, but Optional annotation
-    # lets Typer produce None directly).
-
-    targets: list[str]
-    if effective_ticker is not None:
-        normalized = _normalize_cli_ticker(effective_ticker)
-        # resolve_existing_ticker may hit the DB; guard against missing
-        # schema so the CLI remains usable even if migrations haven't run.
-        try:
-            resolved = _db.resolve_existing_ticker(normalized)
-        except sqlite3.OperationalError as e:
-            # log the error so we can investigate schema issues in CI
-            logging.getLogger(__name__).error(
-                "erro ao resolver ticker existente %s: %s", normalized, e
-            )
-            resolved = None
-        targets = [resolved or normalized]
-        feedback.start(
-            f"ticker={targets[0]} | dry_run={effective_dry_run} | "
-            f"start={start or '-'} | end={end or '-'}"
-        )
-    else:
-        try:
-            targets = _db.list_price_tickers()
-        except sqlite3.OperationalError as exc:
-            msg = str(exc).lower()
-            if "no such table" in msg and "prices" in msg:
-                feedback.start("processando todos os tickers do banco")
-                feedback.warn("Nenhuma tabela prices encontrada")
-                return
-            # unexpected operational error; re-raise so callers/CI see the
-            # real problem rather than silently treating it as empty DB.
-            raise
-        if not targets:
-            feedback.start("processando todos os tickers do banco")
-            feedback.warn("Nenhum ticker encontrado na tabela prices")
-            return
-        feedback.start(
-            f"processando todos os tickers do banco ({len(targets)}) | "
-            f"dry_run={effective_dry_run}"
-        )
+    targets = _gather_compute_targets(
+        effective_ticker, start, end, effective_dry_run, feedback
+    )
+    if not targets:
+        return
 
     total_rows = 0
     processed = 0
@@ -598,13 +629,11 @@ def compute_returns_cmd(
                 detail="nenhum retorno calculado",
             )
             continue
+
         processed += 1
         total_rows += rows
         mode = "calculados" if effective_dry_run else "persistidos"
-        feedback.finish_step(
-            step,
-            detail=f"{rows} retorno(s) {mode}",
-        )
+        feedback.finish_step(step, detail=f"{rows} retorno(s) {mode}")
 
     if processed == 0:
         feedback.warn("Nenhum retorno calculado para os parâmetros fornecidos")

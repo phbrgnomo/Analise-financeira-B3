@@ -255,6 +255,29 @@ class YFinanceAdapter(Adapter):
             ticker, data_source="yfinance", start=start, end=end, **kwargs
         )
 
+    def test_connection(self) -> bool:
+        """
+        Lightweight test for adapter availability. Deliberately avoids network
+        calls: it checks only that the yfinance library is present and exposes
+        the expected callables. Returns True when the adapter appears usable
+        in the current environment.
+        """
+        try:
+            # If yfinance was stubbed at import-time (missing dependency), report
+            # unavailable rather than attempting network I/O.
+            if getattr(yf, "__is_stub__", False):
+                return False
+
+            # Presence of core API objects (Ticker/download) is a cheap check
+            # that the library is importable and likely usable without making
+            # network requests here.
+            if hasattr(yf, "Ticker") or hasattr(yf, "download"):
+                return True
+            return False
+        except Exception:
+            logger.exception("error during yfinance test_connection")
+            return False
+
     def get_metadata(self) -> Dict[str, str]:
         """
         Retorna metadados do adaptador.

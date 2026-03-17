@@ -225,8 +225,8 @@ def test_run_json_output(monkeypatch):
     assert result.exit_code == 0
     data = json.loads(result.output)
     assert data["status"] in {"success", "warning", "failure"}
-    assert isinstance(data.get("ticks"), list)
-    assert data["ticks"][0]["ticker"] == "PETR4"
+    assert isinstance(data.get("tickers"), list)
+    assert data["tickers"][0]["ticker"] == "PETR4"
 
 
 def test_run_json_output_warning_no_rows(monkeypatch):
@@ -257,9 +257,9 @@ def test_run_json_output_warning_no_rows(monkeypatch):
     assert result.exit_code == 1
     data = json.loads(result.output)
     assert data["status"] == "warning"
-    assert isinstance(data.get("ticks"), list)
-    assert data["ticks"][0]["ticker"] == "PETR4"
-    assert data["ticks"][0].get("rows_returns") == 0
+    assert isinstance(data.get("tickers"), list)
+    assert data["tickers"][0]["ticker"] == "PETR4"
+    assert data["tickers"][0].get("rows_returns") == 0
 
 
 def test_run_json_output_failure_ingest_error(monkeypatch):
@@ -279,9 +279,9 @@ def test_run_json_output_failure_ingest_error(monkeypatch):
     assert result.exit_code == 2
     data = json.loads(result.output)
     assert data["status"] == "failure"
-    assert isinstance(data.get("ticks"), list)
-    assert data["ticks"][0]["ticker"] == "PETR4"
-    assert data["ticks"][0].get("error_message")
+    assert isinstance(data.get("tickers"), list)
+    assert data["tickers"][0]["ticker"] == "PETR4"
+    assert data["tickers"][0].get("error_message")
 
 
 def test_export_csv_success(tmp_path, monkeypatch):

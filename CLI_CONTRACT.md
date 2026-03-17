@@ -13,7 +13,7 @@ O comando principal `main run` (ou seu atalho `main --ticker <TICKER>`) aceita a
   "status": "success|warning|failure",
   "job_id": "<uuid>",
   "duration_sec": 0.0,
-  "ticks": [
+  "tickers": [
     {
       "ticker": "PETR4",
       "provider": "yfinance",

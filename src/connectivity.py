@@ -7,6 +7,7 @@ exit codes.
 
 from __future__ import annotations
 
+import logging
 import time
 
 from src.adapters.factory import get_adapter
@@ -25,14 +26,14 @@ def test_provider_connection(provider: str) -> dict[str, object]:
         if callable(test_connection):
             healthy = test_connection()
             status = "success" if healthy else "failure"
+        elif provider == "dummy":
+            status = "success"
         else:
-            if provider == "dummy":
-                status = "success"
-            else:
-                status = "failure"
-                error = "provider does not support test-conn"
+            status = "failure"
+            error = "provider does not support test-conn"
     except Exception as exc:
         status = "failure"
+        logging.exception("error testing provider %s", provider)
         error = str(exc)
 
     duration = time.monotonic() - start
