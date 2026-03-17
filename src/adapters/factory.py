@@ -51,23 +51,7 @@ def get_adapter(name: str) -> Adapter:
     cls = _ADAPTER_REGISTRY.get(name)
     if cls is None:
         raise ValueError(f"unknown adapter provider: {name!r}")
-    inst = cls()
-    # Ensure adapters without a dedicated test_connection expose a default
-    # shim so `main test-conn` remains useful even when adapters haven't been
-    # updated to include the method.
-    if not hasattr(inst, "test_connection") or not callable(inst.test_connection):
-        import types
-
-        def _default_test_connection(self) -> bool:
-            logging.getLogger(__name__).debug(
-                "Adapter %s has no test_connection; using default shim "
-                "(assume healthy)",
-                name,
-            )
-            return True
-
-        inst.test_connection = types.MethodType(_default_test_connection, inst)
-    return inst
+    return cls()
 
 
 def register_adapter(name: str, adapter_cls: Type[Adapter]) -> None:

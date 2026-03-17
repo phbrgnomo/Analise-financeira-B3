@@ -13,6 +13,8 @@ Uma ferramenta leve para coletar dados de mercados (B3), calcular retornos e mé
 - Cálculo de retornos diários e métricas de risco (volatilidade, conversões anuais).
 - Estrutura para persistir séries em CSV em `dados/` e snapshots em `snapshots/`.
 - Scripts de exemplo e fixtures para testes em `tests/`.
+- Comando `metrics`: gera métricas/health check do pipeline (via `poetry run main metrics --format json`).
+- Comando `test-conn`: valida conectividade com um provider (ex.: `poetry run main test-conn --provider dummy --format json`).
 
 ## Pré-requisitos
 - Python 3.12+ (recomendado)

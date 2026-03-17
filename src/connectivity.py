@@ -9,12 +9,38 @@ from __future__ import annotations
 
 import logging
 import time
+from typing import Optional, TypedDict
 
 from src.adapters.factory import get_adapter
 
 
-def test_provider_connection(provider: str) -> dict[str, object]:
-    """Test connectivity for a provider and return a normalized status dict."""
+class ConnectionStatus(TypedDict):
+    """Structured result returned by :func:`test_provider_connection`."""
+
+    status: str
+    provider: str
+    latency_ms: float
+    error: Optional[str]
+
+
+def test_provider_connection(provider: str) -> ConnectionStatus:
+    """Test provider connectivity and return a normalized status dict.
+
+    Parameters
+    ----------
+    provider:
+        Name of the provider/adapter to test (e.g., "yfinance", "dummy").
+
+    Returns
+    -------
+    ConnectionStatus
+        A structured dict describing the provider health check result.
+
+    Notes
+    -----
+    The dict is intended for CLI consumption; callers may treat it as a
+    lightweight health/metrics record.
+    """
 
     start = time.monotonic()
     status = "failure"
@@ -33,7 +59,7 @@ def test_provider_connection(provider: str) -> dict[str, object]:
             error = "provider does not support test-conn"
     except Exception as exc:
         status = "failure"
-        logging.exception("error testing provider %s", provider)
+        logging.getLogger(__name__).exception("error testing provider %s", provider)
         error = str(exc)
 
     duration = time.monotonic() - start

@@ -25,7 +25,7 @@ so that I can verify provider connectivity and system health before running inge
 - [ ] Implement CLI entrypoints in `src/main.py`:
   - [ ] Add `test_conn` command implementing `--provider`, `--timeout`, `--json` flags.
   - [ ] Add `metrics` and `health` commands with `--json` output option.
-- [ ] Add health/metrics helpers in `src/utils/health.py` and `src/utils/metrics.py`.
+- [ ] Add health/metrics helpers in `src/utils/health.py` and `src/utils/metrics.py`. The existing `src/metrics.py` and `src/health.py` must be moved to the `utils/` subfolder and the code must be refactored to fit the new placement.
 - [ ] Implement provider connectivity check in adapter base: add `Adapter.check_connection()` contract and implement in critical adapters (yfinance, alpha_vantage) in `src/adapters/`.
 - [ ] Wire logging and structured output (use existing logging conventions; prefer JSON logger wrapper in `src/utils/logging.py`).
 - [ ] Add tests:

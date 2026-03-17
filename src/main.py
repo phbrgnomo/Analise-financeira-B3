@@ -258,8 +258,12 @@ def _run_one_ticker(  # noqa: C901
         ingest_detail = []
         if ingest_result.get("duration"):
             ingest_detail.append(f"total={ingest_result['duration']}")
-        if persist_reason := ingest_result.get("persist", {}).get("reason"):
-            ingest_detail.append(f"reason={persist_reason}")
+
+        persist = ingest_result.get("persist")
+        if isinstance(persist, dict):
+            if persist_reason := persist.get("reason"):
+                ingest_detail.append(f"reason={persist_reason}")
+
         feedback.finish_step(
             ingest_step,
             detail=" | ".join(ingest_detail) if ingest_detail else None,
@@ -473,19 +477,21 @@ def metrics_cmd(
 
     summary = compute_health_metrics(logs, threshold_seconds)
 
+    feedback = CliFeedback("metrics")
+
     if output_format == "json":
-        CliFeedback("metrics").json_output(summary)
+        feedback.json_output(summary)
         raise typer.Exit(code=0)
 
-    typer.echo(f"status: {summary['status']}")
-    typer.echo(f"ingest_lag_seconds: {summary['metrics']['ingest_lag_seconds']}")
-    typer.echo(f"errors_last_24h: {summary['metrics']['errors_last_24h']}")
-    typer.echo(f"jobs_last_24h: {summary['metrics']['jobs_last_24h']}")
+    feedback.info(f"status: {summary['status']}")
+    feedback.info(f"ingest_lag_seconds: {summary['metrics']['ingest_lag_seconds']}")
+    feedback.info(f"errors_last_24h: {summary['metrics']['errors_last_24h']}")
+    feedback.info(f"jobs_last_24h: {summary['metrics']['jobs_last_24h']}")
     avg = summary['metrics'].get('avg_latency_seconds')
     if avg is None:
-        typer.echo('avg_latency_seconds: null')
+        feedback.info('avg_latency_seconds: null')
     else:
-        typer.echo(f'avg_latency_seconds: {avg:.3f}')
+        feedback.info(f'avg_latency_seconds: {avg:.3f}')
 
 
 @app.command("test-conn")
@@ -501,18 +507,21 @@ def test_conn_cmd(
 
     result = test_provider_connection(provider)
 
+    feedback = CliFeedback("test-conn")
+
     if output_format == "json":
-        CliFeedback("test-conn").json_output(result)
+        feedback.json_output(result)
         raise typer.Exit(code=0 if result.get("status") == "success" else 2)
 
     if result.get("status") == "success":
         latency = result.get("latency_ms")
         if isinstance(latency, (int, float)):
-            typer.echo(f"OK ({latency / 1000:.3f}s)")
+            feedback.success(f"OK ({latency / 1000:.3f}s)")
         else:
-            typer.echo("OK")
+            feedback.success("OK")
     else:
-        typer.echo(f"FAIL: {result.get('error')}")
+        error_msg = result.get("error") or "erro desconhecido"
+        feedback.error(error_msg)
         raise typer.Exit(code=2)
 
 

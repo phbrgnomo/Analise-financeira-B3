@@ -14,7 +14,7 @@ import json
 import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from src.ingest.raw_storage import DEFAULT_METADATA
 
@@ -49,7 +49,7 @@ def resolve_ingest_log_path(ingest_log_path: Optional[str]) -> str:
     # ensuring we end up with a file path. We intentionally avoid filesystem-based
     # checks (like Path.is_dir()) so that non-existent directories are treated
     # consistently based purely on the input syntax.
-    if raw.endswith(os.sep) or not path.suffix:
+    if raw.endswith(("/", os.sep)) or not path.suffix:
         path = path / DEFAULT_INGEST_LOG_NAME
 
     return str(path)
@@ -75,6 +75,25 @@ def read_ingest_logs(path: str) -> List[Dict[str, Any]]:
 
 
 def _parse_finished_at(rec: Dict[str, Any]) -> Optional[datetime]:
+    """Parse an ISO-8601 "finished_at" timestamp into an aware datetime.
+
+    Parameters
+    ----------
+    rec:
+        A log record dictionary containing a "finished_at" key.
+
+    Returns
+    -------
+    Optional[datetime]
+        A timezone-aware datetime parsed from the string, or None if the
+        field is missing or cannot be parsed.
+
+    Notes
+    -----
+    The function accepts timestamps suffixed with "Z" and converts them to
+    a form acceptable by ``datetime.fromisoformat``.
+    """
+
     finished = rec.get("finished_at")
     if not finished:
         return None
@@ -85,7 +104,26 @@ def _parse_finished_at(rec: Dict[str, Any]) -> Optional[datetime]:
 
 
 def _extract_latency(rec: Dict[str, Any]) -> Optional[float]:
+    """Extract a duration value (seconds) from a log record.
+
+    If the record has a numeric duration (int/float), it is returned as float.
+    If the record has a string duration (e.g., "1.23s"), the trailing "s"
+    is stripped before conversion.
+
+    Parameters
+    ----------
+    rec:
+        A log record dictionary.
+
+    Returns
+    -------
+    Optional[float]
+        The duration in seconds, or None if it cannot be parsed.
+    """
+
     dur = rec.get("duration")
+    if isinstance(dur, (int, float)):
+        return float(dur)
     if not isinstance(dur, str):
         return None
     try:
@@ -97,7 +135,7 @@ def _extract_latency(rec: Dict[str, Any]) -> Optional[float]:
 def _analyze_logs(
     logs: List[Dict[str, Any]],
     now: datetime,
-) -> tuple[Optional[datetime], int, int, List[float]]:
+    ) -> Tuple[Optional[datetime], int, int, List[float]]:
     """Analyze log entries and extract metrics used for health computation."""
 
     last_finished: Optional[datetime] = None
@@ -132,7 +170,7 @@ def compute_health_metrics(
 ) -> Dict[str, Any]:
     """Compute high-level health metrics from ingest audit log entries."""
 
-    now = datetime.now(timezone.utc).replace(tzinfo=timezone.utc)
+    now = datetime.now(timezone.utc)
 
     if not logs:
         return {

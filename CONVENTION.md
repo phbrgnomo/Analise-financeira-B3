@@ -23,7 +23,7 @@ Para cada snapshot gerado, deve existir um arquivo `*.checksum` ao lado, contend
 **Exemplo:**
 - `snapshots/PETR4-20260215.csv.checksum`
 
-## 2. Localização dos artifacts
+## 2. Localização dos artefatos
 
 - **Snapshots**: `snapshots/`
 - **Checksums**: no mesmo diretório, ao lado do snapshot
@@ -33,4 +33,6 @@ Para cada snapshot gerado, deve existir um arquivo `*.checksum` ao lado, contend
 
 Alguns artefatos legados podem usar nomes anteriores como `PETR4_snapshot.csv` ou `PETR4-20260215_snapshot.csv`. Para compatibilidade, o sistema deve aceitar estes formatos ao ler snapshots antigos, mas novos snapshots devem ser gerados no formato canônico acima.
 
-Uma ferramenta de migração pode ser adicionada em `scripts/` para renomear snapshots legados e gerar `.checksum` correspondentes.
+## 4. Futuras melhorias
+
+- Avaliar a criação de uma ferramenta de migração em `scripts/` para renomear snapshots legados e gerar `.checksum` correspondentes.

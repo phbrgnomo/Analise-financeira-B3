@@ -7,7 +7,7 @@ be made in one place.
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Any, Literal, Optional
 
 import typer
 
@@ -20,7 +20,9 @@ def output_format_option(default: Literal["text", "json"] = "text") -> Any:
     ("text" / "json").
     """
 
-    def _normalize_output_format(ctx, param, value):
+    def _normalize_output_format(
+        ctx: Any, param: Any, value: Optional[str]
+    ) -> Optional[str]:
         if value is None:
             return None
         val = str(value).strip().lower()

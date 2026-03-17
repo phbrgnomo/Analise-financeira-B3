@@ -43,6 +43,12 @@ Este documento descreve as expectativas mínimas de UX para CLI, notebooks e uma
 
 ## Exemplos de saída (stdout)
 
+```bash
+python main.py --ticker PETR4 --ticker ITUB3 --ticker BBDC4
+```
+
+**Output:**
+
 ```
 Executando tickers padrão: PETR4, ITUB3, BBDC4
 PETR4.SA: 250 retornos persistidos

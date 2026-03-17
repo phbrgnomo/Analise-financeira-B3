@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 from jsonschema import validate
 from typer.testing import CliRunner
@@ -12,10 +13,17 @@ def test_cli_json_schema():
     result = runner.invoke(
         app, ["--ticker", "PETR4", "--format", "json", "--no-network"]
     )
-    assert result.exit_code == 0
+    assert result.exit_code == 0, f"CLI failed: {result.output}"
     data = json.loads(result.output)
 
-    with open("docs/schema/cli_summary_schema.json", "r", encoding="utf-8") as f:
-        schema = json.load(f)
+    schema_path = (
+        Path(__file__)
+        .resolve()
+        .parents[1]
+        / "docs"
+        / "schema"
+        / "cli_summary_schema.json"
+    )
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
 
     validate(instance=data, schema=schema)

@@ -197,26 +197,9 @@ def test_compute_returns_all_when_empty(monkeypatch):
     assert "Nenhum ticker encontrado" in result.output
 
 
-def test_run_json_output(monkeypatch):
+def test_run_json_output(fake_ingest_success, fake_compute_rows1):
     """Verifica que `main --ticker ... --format json` retorna JSON válido."""
     from src.main import app
-
-    def fake_ingest(*args, **kwargs):
-        return {
-            "status": "success",
-            "persist": {
-                "rows_processed": 1,
-                "snapshot_path": "snapshots/PETR4-20260215.csv",
-                "checksum": "abc",
-            },
-        }
-
-    monkeypatch.setattr("src.ingest.pipeline.ingest", fake_ingest)
-
-    def fake_compute(*args, **kwargs):
-        return {"rows": 1, "persisted": True, "sample_df": None}
-
-    monkeypatch.setattr("src.main._compute_returns_for_ticker", fake_compute)
 
     runner = CliRunner()
     result = runner.invoke(
@@ -224,30 +207,14 @@ def test_run_json_output(monkeypatch):
     )
     assert result.exit_code == 0
     data = json.loads(result.output)
-    assert data["status"] in {"success", "warning", "failure"}
+    assert data["status"] == "success"
     assert isinstance(data.get("tickers"), list)
     assert data["tickers"][0]["ticker"] == "PETR4"
 
 
-def test_run_json_output_warning_no_rows(monkeypatch):
+def test_run_json_output_warning_no_rows(fake_ingest_success, fake_compute_rows0):
     """Verifica o fluxo de warning quando nenhum retorno é calculado."""
     from src.main import app
-
-    def fake_ingest(*args, **kwargs):
-        return {
-            "status": "success",
-            "persist": {
-                "rows_processed": 1,
-                "snapshot_path": "snapshots/PETR4-20260215.csv",
-                "checksum": "abc",
-            },
-        }
-
-    def fake_compute(*args, **kwargs):
-        return {"rows": 0, "persisted": False, "sample_df": None}
-
-    monkeypatch.setattr("src.ingest.pipeline.ingest", fake_ingest)
-    monkeypatch.setattr("src.main._compute_returns_for_ticker", fake_compute)
 
     runner = CliRunner()
     result = runner.invoke(
@@ -262,14 +229,9 @@ def test_run_json_output_warning_no_rows(monkeypatch):
     assert data["tickers"][0].get("rows_returns") == 0
 
 
-def test_run_json_output_failure_ingest_error(monkeypatch):
+def test_run_json_output_failure_ingest_error(fake_ingest_failure):
     """Verifica o fluxo de failure quando ingest falha."""
     from src.main import app
-
-    def fake_ingest(*args, **kwargs):
-        return {"status": "failure", "error_message": "boom: ingest failed"}
-
-    monkeypatch.setattr("src.ingest.pipeline.ingest", fake_ingest)
 
     runner = CliRunner()
     result = runner.invoke(

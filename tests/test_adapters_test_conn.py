@@ -1,30 +1,18 @@
-import types
-
 from src.adapters import yfinance_adapter as yfa
 from src.adapters.base import Adapter
 from src.adapters.factory import get_adapter, register_adapter
 
 
-def test_yfinance_test_connection_stub(monkeypatch):
+def test_yfinance_test_connection_stub(yfinance_stub):
     """When yfinance was stubbed at import-time, the adapter reports unavailable."""
-    monkeypatch.setattr(yfa, "yf", types.SimpleNamespace(__is_stub__=True))
     adapter = yfa.YFinanceAdapter()
     assert adapter.test_connection() is False
 
 
-def test_yfinance_test_connection_present(monkeypatch):
+def test_yfinance_test_connection_present(yfinance_present):
     """When yfinance module exposes expected attributes,
     test_connection returns True.
     """
-    monkeypatch.setattr(
-        yfa,
-        "yf",
-        types.SimpleNamespace(
-            download=lambda *a, **k: None,
-            Ticker=lambda *a, **k: None,
-            __is_stub__=False,
-        ),
-    )
     adapter = yfa.YFinanceAdapter()
     assert adapter.test_connection() is True
 

@@ -10,7 +10,7 @@
     },
     "job_id": {
       "type": "string",
-      "pattern": "^[0-9a-fA-F-]{36}$"
+      "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
     },
     "duration_sec": {
       "type": "number",
@@ -21,6 +21,7 @@
       "items": {
         "type": "object",
         "required": ["ticker", "provider", "status"],
+        "additionalProperties": false,
         "properties": {
           "ticker": { "type": "string" },
           "provider": { "type": "string" },

@@ -13,8 +13,8 @@ Status: ready-for-dev
 ## Story
 
 As a New User,
-I want a single command `poetry run main --ticker <TICKER> [--force-refresh]` that executes ingest→persist→snapshot (where applicable),
-so that I can reproduce a complete experiment quickly.
+I want a single command `poetry run main --ticker <TICKER> [--force-refresh]` that runs the core pipeline (ingest→persist→snapshot) by default, and optionally executes the analysis notebook when called with `--run-notebook`,
+so that I can reproduce a complete experiment quickly while keeping notebook execution opt-in.
 
 ## Acceptance Criteria
 
@@ -32,16 +32,16 @@ so that I can reproduce a complete experiment quickly.
 
 6. The quickstart flow writes canonical rows into `dados/data.db` (table `prices`) with upsert semantics by `(ticker, date)`.
 
-7. The CLI command `--run-notebook` is implemented and executes papermill.
+7. The CLI supports an optional `--run-notebook` flag that, when provided, runs papermill after the core pipeline (ingest→persist→snapshot) completes.
 
 ## Tasks / Subtasks
 
 - [ ] Task 1: Refactor the existing command `poetry run main run` for the desired entrypoint with `main --ticker` and operational flags (AC: 1,2,3)
   - [ ] Subtask 1.1: Add CLI flags and help text; support `--format json` output
   - [ ] Subtask 1.2: Verify the CLI wiring to `pipeline.ingest` orchestration function
-  - [ ] Subtask 1.3: Implement `--run-notebook` flag to execute papermill
+  - [ ] Subtask 1.3: Implement optional `--run-notebook` flag that triggers papermill after the core pipeline (`poetry run main --ticker <TICKER> [--force-refresh]`) completes
 
-- [ ] Task 2: Verify the implementation of the quick orchestration `pipeline.ingest` through the command `poetry run pipeline ingest`(AC: 1,3,4)
+- [ ] Task 2: Verify the implementation of the quick orchestration `pipeline.ingest` through the command `poetry run pipeline ingest --ticker <TICKER> [--force-refresh]` (AC: 1,3,4)
   - [ ] Subtask 2.1: Support `--dry-run`, `--no-network`, `--force-refresh` behavior
   - [ ] Subtask 2.2: Return structured summary (job_id, elapsed_sec, snapshot, rows)
 
@@ -70,9 +70,9 @@ so that I can reproduce a complete experiment quickly.
   - Upsert semantics: implement `INSERT OR REPLACE` / `ON CONFLICT` by `(ticker,date)` to ensure idempotency.
   - Snapshot and raw artifacts: `snapshots/` and `raw/<provider>/` directories; snapshots must include SHA256 checksum and companion `.checksum` file.
   - Permissions: `dados/data.db` and backups should be created with owner-only permissions where applicable.
-  - DB tests: `tests/test_db_write.py`
-  - Pipeline CLI tests: `tests/test_pipeline_cli.py`
-  - Fixtures: `tests/fixtures/sample_ticker.csv` for deterministic testing without network.
+  - DB tests: `tests/test_db_write.py` (existing)
+  - Pipeline CLI tests: `tests/test_pipeline_cli.py` (existing)
+  - Fixtures: `tests/fixtures/sample_ticker.csv` (existing) for deterministic testing without network.
 
 - Source tree components to touch:
   - `src/main.py` (CLI wiring)

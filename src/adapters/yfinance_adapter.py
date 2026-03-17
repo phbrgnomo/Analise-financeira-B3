@@ -256,11 +256,13 @@ class YFinanceAdapter(Adapter):
         )
 
     def test_connection(self) -> bool:
-        """
-        Lightweight test for adapter availability. Deliberately avoids network
-        calls: it checks only that the yfinance library is present and exposes
-        the expected callables. Returns True when the adapter appears usable
-        in the current environment.
+        """Lightweight test for adapter availability.
+
+        Deliberately avoids network calls: it checks only that the yfinance
+        library is present and exposes the expected callables.
+
+        Returns:
+            bool: True if yfinance appears usable, False otherwise.
         """
         try:
             # If yfinance was stubbed at import-time (missing dependency), report
