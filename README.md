@@ -105,6 +105,10 @@ poetry install
 poetry run main run
 # ticker específico (padrão B3)
 poetry run main run --ticker PETR4
+# saída JSON (útil para CI / automação)
+poetry run main --ticker PETR4 --format json
+# modo offline (sem chamadas de rede) para testes/CI
+poetry run main --ticker PETR4 --format json --no-network
 ```
 
 3. Exemplos e testes rápidos:
@@ -112,6 +116,20 @@ poetry run main run --ticker PETR4
 ```bash
 poetry run pytest -q
 ./examples/run_quickstart_example.sh
+```
+
+### Métricas / health check (CI)
+
+Você pode conferir a saúde do pipeline com:
+
+```bash
+poetry run main metrics --format json
+```
+
+E testar conexão com um provider (ex.: dummy):
+
+```bash
+poetry run main test-conn --provider dummy --format json
 ```
 
 ### Modo de testes de rede (NETWORK_MODE)

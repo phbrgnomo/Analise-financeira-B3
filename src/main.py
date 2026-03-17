@@ -6,12 +6,16 @@ comandos para ingestão, ETL e exportação de dados.
 Use ``poetry run main --help`` para ver todos os comandos disponíveis.
 """
 
+import json
 import logging
 import os
 import sqlite3
+import time
+import uuid
 from contextlib import suppress
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional, TypedDict
+from typing import TYPE_CHECKING, Literal, Optional, TypedDict, cast
 
 import typer
 
@@ -26,7 +30,8 @@ load_dotenv()
 import src.db as _db  # noqa: E402
 import src.retorno as _retorno  # noqa: E402
 from src import metrics  # noqa: E402
-from src.cli_feedback import CliFeedback  # noqa: E402
+from src.cli_feedback import CliFeedback, StepHandle  # noqa: E402
+from src.ingest.raw_storage import DEFAULT_METADATA  # noqa: E402
 from src.logging_config import configure_logging  # noqa: E402
 from src.paths import DATA_DIR  # noqa: E402
 from src.tickers import normalize_b3_ticker, ticker_variants  # noqa: E402
@@ -38,6 +43,57 @@ with suppress(ImportError):
     import src.cli_compat  # noqa: F401 - import for side effects
 
 app = typer.Typer()
+
+
+@app.callback(invoke_without_command=True)
+def _main_callback(
+    ctx: typer.Context,
+    ticker: str = typer.Option(
+        "",
+        help=(
+            "Ticker B3 específico (ex.: PETR4). Quando omitido, usa tickers "
+            "padrão do projeto."
+        ),
+        is_flag=False,
+    ),
+    provider: str = typer.Option(
+        "yfinance",
+        help="Nome do provider/adaptador a ser usado (ex.: yfinance)",
+        is_flag=False,
+    ),
+    output_format: Literal["text", "json"] = typer.Option(
+        "text",
+        "--format",
+        "-f",
+        help="Formato de saída: text (padrão) ou json (para CI/integração).",
+        case_sensitive=False,
+    ),
+    no_network: bool = typer.Option(
+        False,
+        "--no-network",
+        help="Usa o provider dummy para execução sem acesso à rede (modo de teste/CI).",
+        is_flag=True,
+    ),
+    force_refresh: bool = typer.Option(
+        False,
+        "--force-refresh",
+        help="Força persistência ignorando decisões de cache do pipeline",
+    ),
+) -> None:
+    """Callback que permite usar `main --ticker` como atalho para `main run`.
+
+    Este callback é acionado quando nenhum subcomando é fornecido.
+    """
+    if ctx.invoked_subcommand is None:
+        # Roda o comando principal de forma compatível com o comportamento
+        # esperado pelo quickstart (sem precisar digitar "run").
+        run_cmd(
+            ticker=ticker,
+            provider=provider,
+            output_format=output_format,
+            no_network=no_network,
+            force_refresh=force_refresh,
+        )
 
 
 def _load_default_tickers() -> tuple[str, ...]:
@@ -135,8 +191,179 @@ def _compute_returns_for_ticker(
     return {"rows": rows, "persisted": persisted, "sample_df": sample_df}
 
 
+def _make_ticker_result(
+    ticker: str,
+    provider: str,
+    ingest_result: dict[str, object],
+    rows_returns: int,
+    status: str,
+) -> dict[str, object]:
+    """Constrói a estrutura de resultado por ticker usada na saída JSON."""
+
+    persist = ingest_result.get("persist") or {}
+    if not isinstance(persist, dict):
+        persist = {}
+    persist = cast(dict[str, object], persist)
+
+    return {
+        "ticker": ticker,
+        "provider": provider,
+        "status": status,
+        "rows_ingested": persist.get("rows_processed"),
+        "rows_returns": rows_returns,
+        "snapshot_path": persist.get("snapshot_path"),
+        "snapshot_checksum": persist.get("checksum"),
+        "error_message": ingest_result.get("error_message"),
+    }
+
+
+def _run_one_ticker(  # noqa: C901
+    ticker: str,
+    provider: str,
+    force_refresh: bool,
+    output_json: bool,
+    feedback: CliFeedback | None,
+) -> tuple[dict[str, object], str]:
+    """Run ingest + returns for a single ticker.
+
+    Returns a tuple `(result_dict, status)` where `status` is one of
+    ``success``, ``warning`` or ``failure``.
+    """
+
+    from src.ingest.pipeline import ingest
+
+    ingest_step: StepHandle | None = None
+    if feedback:
+        feedback.item(ticker, 1, 1)
+        ingest_step = feedback.start_step(
+            "ingestão",
+            detail=f"ticker={ticker} | force_refresh={force_refresh}",
+        )
+
+    ingest_result = ingest(
+        ticker=ticker,
+        source=provider,
+        dry_run=False,
+        force_refresh=force_refresh,
+    )
+
+    if ingest_result.get("status") != "success":
+        if feedback and ingest_step is not None:
+            feedback.finish_step(
+                ingest_step,
+                status="error",
+                detail=ingest_result.get("error_message", "erro desconhecido"),
+            )
+        return (
+            _make_ticker_result(ticker, provider, ingest_result, 0, "failure"),
+            "failure",
+        )
+
+    if feedback and ingest_step is not None:
+        ingest_detail = []
+        if ingest_result.get("duration"):
+            ingest_detail.append(f"total={ingest_result['duration']}")
+        if persist_reason := ingest_result.get("persist", {}).get("reason"):
+            ingest_detail.append(f"reason={persist_reason}")
+        feedback.finish_step(
+            ingest_step,
+            detail=" | ".join(ingest_detail) if ingest_detail else None,
+        )
+
+    returns_step: StepHandle | None = None
+    if feedback:
+        returns_step = feedback.start_step("cálculo de retornos", detail=ticker)
+
+    compute_info = _compute_returns_for_ticker(ticker, None, None, False)
+    rows = compute_info.get("rows", 0)
+
+    if rows == 0:
+        if feedback and returns_step is not None:
+            feedback.finish_step(
+                returns_step,
+                status="warning",
+                detail="nenhum retorno calculado",
+            )
+        return (
+            _make_ticker_result(ticker, provider, ingest_result, 0, "warning"),
+            "warning",
+        )
+
+    if feedback and returns_step is not None:
+        feedback.finish_step(
+            returns_step,
+            detail=f"{rows} retorno(s) persistidos",
+        )
+
+    return (
+        _make_ticker_result(ticker, provider, ingest_result, rows, "success"),
+        "success",
+    )
+
+
+def _prepare_run_context(
+    ticker: str,
+    provider: str,
+    output_json: bool,
+    no_network: bool,
+    ticker_arg: Optional[str],
+    provider_arg: Optional[str],
+) -> tuple[list[str], CliFeedback | None, str]:
+    """Prepara tickers, provider efetivo e objeto de feedback para o comando run."""
+
+    effective_ticker = ticker or ticker_arg or None
+    effective_provider = provider or provider_arg or "yfinance"
+    if no_network:
+        effective_provider = "dummy"
+
+    feedback = None if output_json else CliFeedback("executar")
+
+    if effective_ticker is None:
+        tickers = list(DEFAULT_TICKERS)
+        if feedback:
+            feedback.start(
+                f"processando tickers padrão com provider={effective_provider}"
+            )
+            feedback.info(f"Tickers: {', '.join(tickers)}")
+            feedback.info("Para ticker específico, execute: main --ticker <ticker>")
+    else:
+        tickers = [_normalize_cli_ticker(effective_ticker)]
+        if feedback:
+            feedback.start(
+                f"processando ticker={tickers[0]} com provider={effective_provider}"
+            )
+
+    return tickers, feedback, effective_provider
+
+
+def _aggregate_run_results(
+    results: list[dict[str, object]],
+) -> tuple[str, int, int, int, int]:
+    """Retorna status agregado, código de saída e contagens dos resultados."""
+
+    success_count = sum(r.get("status") == "success" for r in results)
+    warning_count = sum(r.get("status") == "warning" for r in results)
+    failure_count = sum(bool(r.get("status") == "failure")
+                    for r in results)
+
+    status = "success"
+    if failure_count:
+        status = "failure"
+    elif warning_count:
+        status = "warning"
+
+    if status == "success":
+        exit_code = 0
+    elif status == "warning":
+        exit_code = 1
+    else:
+        exit_code = 2
+
+    return status, exit_code, success_count, warning_count, failure_count
+
+
 @app.command("run")
-def run_cmd(
+def run_cmd(  # noqa: C901
     ticker: str = typer.Option(
         "",
         help=(
@@ -150,6 +377,19 @@ def run_cmd(
         help="Nome do provider/adaptador a ser usado (ex.: yfinance)",
         is_flag=False,
     ),
+    output_format: Literal["text", "json"] = typer.Option(
+        "text",
+        "--format",
+        "-f",
+        help="Formato de saída: text (padrão) ou json (para CI/integração).",
+        case_sensitive=False,
+    ),
+    no_network: bool = typer.Option(
+        False,
+        "--no-network",
+        help="Usa o provider dummy para execução sem acesso à rede (modo de teste/CI).",
+        is_flag=True,
+    ),
     ticker_arg: Optional[str] = typer.Argument(None, hidden=True),
     provider_arg: Optional[str] = typer.Argument(None, hidden=True),
     force_refresh: bool = typer.Option(
@@ -159,82 +399,245 @@ def run_cmd(
     ),
 ) -> None:
     """Executa fluxo ETL principal (ingestão + cálculo de retornos)."""
-    from src.ingest.pipeline import ingest
 
-    # label shown in CLI output; localized to Portuguese
-    feedback = CliFeedback("executar")
-
-    effective_ticker = ticker or ticker_arg or None
-    effective_provider = provider or provider_arg or "yfinance"
+    output_json = output_format.lower() == "json"
     effective_force_refresh = as_bool(force_refresh)
 
-    tickers: list[str]
-    if effective_ticker is None:
-        tickers = list(DEFAULT_TICKERS)
-        feedback.start(f"processando tickers padrão com provider={effective_provider}")
-        feedback.info(f"Tickers: {', '.join(tickers)}")
-        feedback.info("Para ticker específico, execute: main run --ticker <ticker>")
-    else:
-        tickers = [_normalize_cli_ticker(effective_ticker)]
-        feedback.start(
-            f"processando ticker={tickers[0]} com provider={effective_provider}"
-        )
+    tickers, feedback, effective_provider = _prepare_run_context(
+        ticker=ticker,
+        provider=provider,
+        output_json=output_json,
+        no_network=no_network,
+        ticker_arg=ticker_arg,
+        provider_arg=provider_arg,
+    )
 
-    ok = 0
-    failed = 0
-    warnings = 0
-    for idx, tk in enumerate(tickers, start=1):
-        feedback.item(tk, idx, len(tickers))
-        ingest_step = feedback.start_step(
-            "ingestão",
-            detail=f"ticker={tk} | force_refresh={effective_force_refresh}",
-        )
-        result = ingest(
+    job_id = str(uuid.uuid4())
+    run_started = time.monotonic()
+
+    results: list[dict[str, object]] = []
+    for _idx, tk in enumerate(tickers, start=1):
+        result, _status = _run_one_ticker(
             ticker=tk,
-            source=effective_provider,
-            dry_run=False,
+            provider=effective_provider,
             force_refresh=effective_force_refresh,
+            output_json=output_json,
+            feedback=feedback,
         )
-        if result.get("status") != "success":
-            failed += 1
-            feedback.finish_step(
-                ingest_step,
-                status="error",
-                detail=result.get("error_message", "erro desconhecido"),
-            )
-            continue
-        ingest_detail = []
-        if result.get("duration"):
-            ingest_detail.append(f"total={result['duration']}")
-        if persist_reason := result.get("persist", {}).get("reason"):
-            ingest_detail.append(f"reason={persist_reason}")
-        feedback.finish_step(
-            ingest_step,
-            detail=" | ".join(ingest_detail) if ingest_detail else None,
-        )
+        results.append(result)
 
-        returns_step = feedback.start_step("cálculo de retornos", detail=tk)
-        compute_info = _compute_returns_for_ticker(tk, None, None, False)
-        rows = compute_info.get("rows", 0)
-        if rows == 0:
-            # zero rows is not necessarily an error; could mean no new data
-            warnings += 1
-            feedback.finish_step(
-                returns_step,
-                status="warning",
-                detail="nenhum retorno calculado",
-            )
-            continue
-        ok += 1
-        feedback.finish_step(
-            returns_step,
-            detail=f"{rows} retorno(s) persistidos",
-        )
+    summary_status, exit_code, success_count, warning_count, failure_count = (
+        _aggregate_run_results(results)
+    )
+    summary = {
+        "status": summary_status,
+        "job_id": job_id,
+        "duration_sec": time.monotonic() - run_started,
+        "ticks": results,
+    }
 
-    summary = f"Resumo run: sucesso={ok}, falhas={failed}"
-    if warnings:
-        summary += f", avisos={warnings}"
-    feedback.summary(summary)
+    if output_json:
+        CliFeedback("executar").json_output(summary)
+        raise typer.Exit(code=exit_code)
+
+    assert feedback is not None
+    feedback.summary(
+        f"Resumo run: sucesso={success_count}, falhas={failure_count}"
+        + (f", avisos={warning_count}" if warning_count else "")
+    )
+    raise typer.Exit(code=exit_code)
+
+
+def _parse_duration(duration: str) -> float:
+    """Parse duration string like '1.23s' into seconds.
+
+    Returns 0.0 when parsing fails.
+    """
+
+    try:
+        return float(duration[:-1]) if duration.endswith("s") else float(duration)
+    except Exception:
+        return 0.0
+
+
+def _read_ingest_logs(path: str) -> list[dict]:
+    """Read JSONL ingest log file into a list of dicts."""
+
+    if not os.path.exists(path):
+        return []
+
+    out: list[dict] = []
+    with open(path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                out.append(json.loads(line))
+            except Exception:
+                continue
+    return out
+
+
+def _compute_health_metrics(logs: list[dict], threshold_seconds: int) -> dict:  # noqa: C901
+    now = datetime.utcnow().replace(tzinfo=timezone.utc)
+    last_finished = None
+
+    errors_last_24h = 0
+    jobs_last_24h = 0
+    latency_values: list[float] = []
+
+    for rec in logs:
+        finished = rec.get("finished_at")
+        if not finished:
+            continue
+        try:
+            finished_dt = datetime.fromisoformat(finished.replace("Z", "+00:00"))
+        except Exception:
+            continue
+
+        if last_finished is None or finished_dt > last_finished:
+            last_finished = finished_dt
+
+        delta = now - finished_dt
+        if delta <= timedelta(hours=24):
+            jobs_last_24h += 1
+            if rec.get("status") != "success":
+                errors_last_24h += 1
+
+        dur = rec.get("duration")
+        if isinstance(dur, str):
+            latency = _parse_duration(dur)
+            if latency > 0:
+                latency_values.append(latency)
+
+    ingest_lag = (
+        (now - last_finished).total_seconds()
+        if last_finished is not None
+        else float("inf")
+    )
+
+    if latency_values:
+        avg_latency = sum(latency_values) / len(latency_values)
+    else:
+        avg_latency = 0.0
+
+    status = "healthy"
+    if ingest_lag > threshold_seconds:
+        status = "degraded"
+    if ingest_lag > threshold_seconds * 2:
+        status = "unhealthy"
+    if errors_last_24h > 0 and status == "healthy":
+        status = "degraded"
+
+    return {
+        "status": status,
+        "timestamp": now.isoformat().replace("+00:00", "Z"),
+        "metrics": {
+            "ingest_lag_seconds": ingest_lag,
+            "errors_last_24h": errors_last_24h,
+            "jobs_last_24h": jobs_last_24h,
+            "avg_latency_seconds": avg_latency,
+        },
+        "thresholds": {"ingest_lag_seconds": threshold_seconds},
+    }
+
+
+@app.command("metrics")
+def metrics_cmd(
+    output_format: Literal["text", "json"] = typer.Option(
+        "text",
+        "--format",
+        "-f",
+        help="Formato de saída: text (padrão) ou json (para CI/integração).",
+        case_sensitive=False,
+    ),
+    ingest_log_path: Optional[str] = typer.Option(
+        None,
+        "--ingest-log-path",
+        help=(
+            "Caminho para o arquivo ingest_logs.jsonl "
+            "(default: metadata/ingest_logs.jsonl)."
+        ),
+    ),
+    threshold: int = typer.Option(
+        int(os.getenv("INGEST_LAG_THRESHOLD", "86400")),
+        "--threshold",
+        help="Valor em segundos para o limite de ingest lag (default 86400).",
+    ),
+) -> None:
+    """Exibe métricas de health do pipeline."""
+
+    path = ingest_log_path or os.getenv("INGEST_LOG_PATH") or str(DEFAULT_METADATA)
+    logs = _read_ingest_logs(path)
+    summary = _compute_health_metrics(logs, threshold)
+
+    if output_format.lower() == "json":
+        CliFeedback("metrics").json_output(summary)
+        raise typer.Exit(code=0)
+
+    typer.echo(f"status: {summary['status']}")
+    typer.echo(f"ingest_lag_seconds: {summary['metrics']['ingest_lag_seconds']}")
+    typer.echo(f"errors_last_24h: {summary['metrics']['errors_last_24h']}")
+    typer.echo(f"jobs_last_24h: {summary['metrics']['jobs_last_24h']}")
+    typer.echo(f"avg_latency_seconds: {summary['metrics']['avg_latency_seconds']:.3f}")
+
+
+@app.command("test-conn")
+def test_conn_cmd(
+    provider: str = typer.Option(
+        "yfinance",
+        help="Nome do provider/adaptador a ser usado (ex.: yfinance)",
+        is_flag=False,
+    ),
+    output_format: Literal["text", "json"] = typer.Option(
+        "text",
+        "--format",
+        "-f",
+        help="Formato de saída: text (padrão) ou json (para CI/integração).",
+        case_sensitive=False,
+    ),
+) -> None:
+    """Verifica conectividade com um provider/adaptador."""
+
+    from src.adapters.factory import get_adapter
+
+    start = time.monotonic()
+    status = "failure"
+    error = None
+
+    try:
+        adapter = get_adapter(provider)
+        test_connection = getattr(adapter, "test_connection", None)
+        if callable(test_connection):
+            healthy = test_connection()
+            status = "success" if healthy else "failure"
+        elif provider == "dummy":
+            status = "success"
+        else:
+            status = "failure"
+            error = "provider does not support test-conn"
+    except Exception as exc:
+        status = "failure"
+        error = str(exc)
+
+    duration = time.monotonic() - start
+    result = {
+        "status": status,
+        "provider": provider,
+        "latency_ms": round(duration * 1000, 2),
+        "error": error,
+    }
+
+    if output_format.lower() == "json":
+        CliFeedback("test-conn").json_output(result)
+        raise typer.Exit(code=0 if status == "success" else 2)
+
+    if status == "success":
+        typer.echo(f"OK ({duration:.3f}s)")
+    else:
+        typer.echo(f"FAIL: {error}")
+        raise typer.Exit(code=2)
 
 
 @app.command("compute-returns")
@@ -410,17 +813,16 @@ def export_csv_cmd(
         # try the provider-specific variant (e.g. add .SA)
         _, provider_variant = ticker_variants(normalized)
         alt = _db.resolve_existing_ticker(provider_variant)
-        if alt is not None:
-            resolved = alt
-            feedback.warn(
-                "Ticker não encontrado com nome base no banco; "
-                f"usando variante {provider_variant}"
-            )
-        else:
+        if alt is None:
             raise typer.BadParameter(
                 f"Ticker {normalized} não encontrado no banco (base ou variante)"
             )
 
+        resolved = alt
+        feedback.warn(
+            "Ticker não encontrado com nome base no banco; "
+            f"usando variante {provider_variant}"
+        )
     read_step = feedback.start_step("leitura no banco", detail=resolved)
     df = _db.read_prices(resolved, start=start, end=end)
     if df.empty:

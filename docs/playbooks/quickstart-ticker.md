@@ -15,12 +15,20 @@ Exemplo rápido
 poetry run main pipeline ingest PETR4 --force-refresh
 ```
 
+> Para uso em CI ou em scripts, você pode gerar saída JSON e rodar em modo offline:
+>
+> ```bash
+> poetry run main --ticker PETR4 --format json --no-network
+> ```
+>
+> O JSON segue o contrato descrito em `CLI_CONTRACT.md`.
+
 2. Arquivos/paths esperados (exemplos):
-- Snapshot CSV: `snapshots/PETR4_snapshot.csv`
+- Snapshot CSV: `snapshots/<TICKER>-YYYYMMDD.csv` (ex.: `snapshots/PETR4-20260215.csv`)
 - Banco SQLite: `dados/data.db`
 - Relatórios derivados: `reports/PETR4_report.csv` (quando aplicável)
 - Raw provider CSVs: `raw/<provider>/<TICKER>-YYYYMMDDTHHMMSSZ.csv`
-- Checksum ao lado do raw CSV: `raw/<provider>/<TICKER>-YYYYMMDDTHHMMSSZ.csv.checksum`
+- Checksum ao lado do raw CSV: `snapshots/<TICKER>-YYYYMMDD.csv.checksum` (ou `raw/<provider>/<TICKER>-YYYYMMDDTHHMMSSZ.csv.checksum` para arquivos raw)
 - Metadados de ingestão (JSONL, append-only): `metadata/ingest_logs.jsonl` (uma linha JSON por ingest com `job_id, source, fetched_at, raw_checksum, rows, filepath, status, created_at`)
 
 Verificações mínimas

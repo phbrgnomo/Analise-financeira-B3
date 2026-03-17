@@ -1,3 +1,4 @@
+import json
 import re
 import subprocess
 import sys
@@ -194,6 +195,38 @@ def test_compute_returns_all_when_empty(monkeypatch):
     result = runner.invoke(app, ["compute-returns"])
     assert result.exit_code == 0
     assert "Nenhum ticker encontrado" in result.output
+
+
+def test_run_json_output(monkeypatch):
+    """Verifica que `main --ticker ... --format json` retorna JSON válido."""
+    from src.main import app
+
+    def fake_ingest(*args, **kwargs):
+        return {
+            "status": "success",
+            "persist": {
+                "rows_processed": 1,
+                "snapshot_path": "snapshots/PETR4-20260215.csv",
+                "checksum": "abc",
+            },
+        }
+
+    monkeypatch.setattr("src.ingest.pipeline.ingest", fake_ingest)
+
+    def fake_compute(*args, **kwargs):
+        return {"rows": 1, "persisted": True, "sample_df": None}
+
+    monkeypatch.setattr("src.main._compute_returns_for_ticker", fake_compute)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        app, ["--ticker", "PETR4", "--format", "json", "--no-network"]
+    )
+    assert result.exit_code == 0
+    data = json.loads(result.output)
+    assert data["status"] in {"success", "warning", "failure"}
+    assert isinstance(data.get("ticks"), list)
+    assert data["ticks"][0]["ticker"] == "PETR4"
 
 
 def test_export_csv_success(tmp_path, monkeypatch):

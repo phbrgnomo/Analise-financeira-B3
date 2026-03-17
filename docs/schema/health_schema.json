@@ -1,0 +1,33 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Health / Metrics Schema",
+  "type": "object",
+  "required": ["status", "timestamp", "metrics", "thresholds"],
+  "properties": {
+    "status": {
+      "type": "string",
+      "enum": ["healthy", "degraded", "unhealthy"]
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "metrics": {
+      "type": "object",
+      "required": ["ingest_lag_seconds", "errors_last_24h", "jobs_last_24h", "avg_latency_seconds"],
+      "properties": {
+        "ingest_lag_seconds": { "type": "number", "minimum": 0 },
+        "errors_last_24h": { "type": "integer", "minimum": 0 },
+        "jobs_last_24h": { "type": "integer", "minimum": 0 },
+        "avg_latency_seconds": { "type": "number", "minimum": 0 }
+      }
+    },
+    "thresholds": {
+      "type": "object",
+      "required": ["ingest_lag_seconds"],
+      "properties": {
+        "ingest_lag_seconds": { "type": "number", "minimum": 0 }
+      }
+    }
+  }
+}

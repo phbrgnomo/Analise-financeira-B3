@@ -26,15 +26,17 @@ so that I can validate the environment and understand expected outputs.
 2. The example script documents expected run time and outputs in comments and exits with non-zero on failures to enable CI detection.
 3. The example supports `--config` or respects `ENV` vars and writes artifacts to `outputs/` by default.
 4. Script uses `--no-network` / fixtures (`tests/fixtures/sample_ticker.csv`) for CI determinism.
+5. `examples/run_quickstart_example.sh` invokes --no-network and CI have a deterministic fixture (`tests/fixtures/sample_ticker.csv`) to validate the quickstart flow without external calls.
 
 ## Tasks / Subtasks
 
-- [ ] Create `examples/run_quickstart_example.sh` (executable) that runs the quickstart using fixtures
+- [ ] Verify the current implementation of `examples/run_quickstart_example.sh` (executable) that runs the quickstart using fixtures
   - [ ] Implement `--no-network` invocation to use `tests/fixtures/sample_ticker.csv`
   - [ ] Write short run log to `logs/` and artifacts to `outputs/`/`snapshots/`
 - [ ] Add README section with copy-paste example and expected JSON/text summary
 - [ ] Add CI smoke job example (or instructions) that runs the example script and validates exit code and artifact presence
 - [ ] Add simple integration test (pytest) that executes the script in a controlled tempdir and asserts snapshot + log created
+- [ ] Document implemented features, usage examples and rationale in `docs/sprint-reports/3-5-quickstart-examples-and-reproducible-scripts.md`.
 
 ## Dev Notes
 
