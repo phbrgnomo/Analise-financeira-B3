@@ -38,12 +38,14 @@ def test_available_providers_reflects_registry(monkeypatch) -> None:
     class A(Adapter):
         def fetch(self, ticker: str, **kwargs):
             pass
+
         def _fetch_once(self, ticker: str, start: str, end: str, **kwargs):
             pass
 
     class B(Adapter):
         def fetch(self, ticker: str, **kwargs):
             pass
+
         def _fetch_once(self, ticker: str, start: str, end: str, **kwargs):
             pass
 

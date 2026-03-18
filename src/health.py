@@ -135,7 +135,7 @@ def _extract_latency(rec: Dict[str, Any]) -> Optional[float]:
 def _analyze_logs(
     logs: List[Dict[str, Any]],
     now: datetime,
-    ) -> Tuple[Optional[datetime], int, int, List[float]]:
+) -> Tuple[Optional[datetime], int, int, List[float]]:
     """Analyze log entries and extract metrics used for health computation."""
 
     last_finished: Optional[datetime] = None

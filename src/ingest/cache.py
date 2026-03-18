@@ -43,6 +43,12 @@ def load_cache(path: Path) -> Dict[str, Any]:
             path,
             exc_info=True,
         )
+        try:
+            from src import metrics
+
+            metrics.increment_counter("snapshot_cache_fallback")
+        except Exception:  # pragma: no cover — metrics optional
+            logger.debug("metrics increment failed", exc_info=True)
         return {}
     except OSError:
         logger.warning(
@@ -50,6 +56,12 @@ def load_cache(path: Path) -> Dict[str, Any]:
             path,
             exc_info=True,
         )
+        try:
+            from src import metrics
+
+            metrics.increment_counter("snapshot_cache_fallback")
+        except Exception:  # pragma: no cover — metrics optional
+            logger.debug("metrics increment failed", exc_info=True)
         return {}
 
 

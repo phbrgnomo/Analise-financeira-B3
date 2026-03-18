@@ -17,15 +17,18 @@ def make_sample_df(dates, values=None):
     return pd.DataFrame({"date": pd.to_datetime(dates), "close": values})
 
 
-def setup_env(tmp_path, ttl="0", snapshot_dir=None):
+def setup_env(tmp_path, ttl="0", snapshot_dir=None, cache_file=None):
     """Configure environment variables for snapshot tests."""
     if snapshot_dir is None:
         snapshot_dir = tmp_path / "snapshots"
+    if cache_file is None:
+        cache_file = tmp_path / "snapshot_cache.json"
     monkeypatch = pytest.MonkeyPatch()
     monkeypatch.setenv("SNAPSHOT_DIR", str(snapshot_dir))
     monkeypatch.setenv("SNAPSHOT_TTL", ttl)
+    monkeypatch.setenv("SNAPSHOT_CACHE_FILE", str(cache_file))
     monkeypatch.delenv("FORCE_REFRESH", raising=False)
-    return monkeypatch, snapshot_dir
+    return monkeypatch, snapshot_dir, cache_file
 
 
 @pytest.mark.parametrize("val", ["1", "true", "True", "yes", " YES "])
@@ -90,13 +93,16 @@ def test_corrupted_snapshot_metadata_logs(tmp_path, monkeypatch, caplog):
     conn.commit()
     conn.close()
 
-    mp, snap_dir = setup_env(tmp_path, ttl="100000")
+    mp, snap_dir, cache_file = setup_env(tmp_path, ttl="100000")
     caplog.set_level("WARNING")
+
+    # corrupt the cache file so it can't be parsed
+    cache_file.write_text("not a json string")
 
     df = make_sample_df(["2026-01-01"])
     r = ingest_from_snapshot(df, "TEST", db_path=str(db_path))
     assert not r["cached"]
-    assert "invalid snapshot metadata" in caplog.text.lower()
+    assert "snapshot cache" in caplog.text.lower()
 
     mp.undo()
 
@@ -107,7 +113,7 @@ def test_cache_hit_for_unchanged_snapshot(tmp_path, monkeypatch):
     db.init_db(str(db_path))
 
     # set environment with generous TTL so cache is valid
-    mp, snap_dir = setup_env(tmp_path, ttl="100000")
+    mp, snap_dir, cache_file = setup_env(tmp_path, ttl="100000")
 
     df = make_sample_df(["2026-01-01", "2026-01-02"])
 
@@ -134,7 +140,7 @@ def test_ingest_cache_ttl_expiration(tmp_path, monkeypatch):
     db.init_db(str(db_path))
 
     # very tiny TTL so it expires quickly
-    mp, snap_dir = setup_env(tmp_path, ttl="0.001")
+    mp, snap_dir, cache_file = setup_env(tmp_path, ttl="0.001")
 
     df = make_sample_df(["2026-01-01", "2026-01-02"], values=[10, 20])
 
@@ -225,7 +231,7 @@ def test_shared_diff_helper_and_cli_agree():
 def test_snapshot_change_triggers_reprocess(tmp_path, monkeypatch):
     db_path = tmp_path / "dados" / "data.db"
     db.init_db(str(db_path))
-    mp, snap_dir = setup_env(tmp_path, ttl="100000")
+    mp, snap_dir, cache_file = setup_env(tmp_path, ttl="100000")
 
     base = make_sample_df(["2026-01-01"])
     ingest_snapshot_and_assert_not_cached(base, db_path)
@@ -249,7 +255,7 @@ def ingest_snapshot_and_assert_not_cached(snapshot, db_path):
 def test_incremental_ingest_only_new_and_changed_rows(tmp_path, monkeypatch):
     db_path = tmp_path / "dados" / "data.db"
     db.init_db(str(db_path))
-    mp, snap_dir = setup_env(tmp_path, ttl="100000")
+    mp, snap_dir, cache_file = setup_env(tmp_path, ttl="100000")
 
     ingest_only_new_and_changed_rows_helper(
         date="2026-01-02",
@@ -293,37 +299,35 @@ def ingest_only_new_and_changed_rows_helper(
     assert r1["rows_processed"] == expected_rows_processed
 
 
-def test_snapshot_metadata_cache_fallback(tmp_path, monkeypatch, caplog):
-    """If reading the metadata file fails initially we should log a warning
-    and increment the fallback metric.
+def test_cache_file_read_fallback_logs_and_metrics(tmp_path, monkeypatch, caplog):
+    """If reading the cache file fails we should log a warning and
+    increment the metric.
     """
-    # sourcery skip: no-conditionals-in-tests
-    import src.db as _db
+    import src.ingest.snapshot_ingest as sis
     from src import metrics
 
-    # set up a real file so _connect is callable
     db_path = tmp_path / "dados" / "data.db"
-    _db.init_db(str(db_path))
+    db.init_db(str(db_path))
+
+    mp, snap_dir, cache_file = setup_env(tmp_path, ttl="100000")
 
     call_count = {"n": 0}
-    orig_get = _db.get_last_snapshot_payload
+    orig_load = sis.load_cache
 
-    def fake_get_payload(*args, **kwargs):
-        # fail on first call (metadata read) but succeed thereafter
+    def fake_load_cache(path):
         if call_count["n"] == 0:
             call_count["n"] += 1
             raise OSError("simulated IO failure")
-        # otherwise delegate to original implementation
-        return orig_get(*args, **kwargs)
+        return orig_load(path)
 
-    monkeypatch.setattr(_db, "get_last_snapshot_payload", fake_get_payload)
+    monkeypatch.setattr(sis, "load_cache", fake_load_cache)
 
     caplog.set_level("WARNING")
     called = False
 
     def fake_inc(name):
         nonlocal called
-        if name == "snapshot_metadata_cache_fallback":
+        if name == "snapshot_cache_fallback":
             called = True
 
     monkeypatch.setattr(metrics, "increment_counter", fake_inc)
@@ -331,8 +335,10 @@ def test_snapshot_metadata_cache_fallback(tmp_path, monkeypatch, caplog):
     df = make_sample_df(["2026-01-01"])
     r = ingest_from_snapshot(df, "TEST", db_path=str(db_path))
     assert r["cached"] is False
-    assert "cache fallback" in caplog.text.lower()
+    assert "snapshot cache" in caplog.text.lower()
     assert called
+
+    mp.undo()
 
 
 @pytest.fixture
@@ -348,7 +354,8 @@ def mock_time_progression(monkeypatch):
 
     def _now(tz=None):
         nonlocal base
-        base += timedelta(seconds=1)
+        # advance by one day so date-only snapshot filenames change per ingest
+        base += timedelta(days=1)
         return base
 
     class DummyDatetime:

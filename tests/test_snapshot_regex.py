@@ -5,10 +5,10 @@ from src.etl import snapshot
 
 def test_snapshot_filename_regex_matches_valid_names():
     names = [
-        "PETR4-20260302T021451Z.csv",
+        "PETR4-20260302.csv",
         "ABC123-20200101T120000.csv",
         "TICKER-20211231T235959-extra.csv",
-        "PETR4.SA-20230303T030303.csv",
+        "PETR4.SA-20230303.csv",
     ]
     pattern = snapshot._SNAPSHOT_FILENAME_RE
     for name in names:
@@ -41,6 +41,14 @@ def test_parse_snapshot_timestamp_behavior(tmp_path):
     assert isinstance(ts, datetime)
     assert ts == datetime(2020, 1, 1, 1, 1, 1)
     assert isinstance(mtime, float)
+
+    # valid name with date-only timestamp
+    p2 = tmp_path / "PETR4-20200101.csv"
+    p2.write_text("")
+    ts2, mtime2 = snapshot._parse_snapshot_timestamp(p2)
+    assert isinstance(ts2, datetime)
+    assert ts2 == datetime(2020, 1, 1)
+    assert isinstance(mtime2, float)
 
     # invalid name returns (None, mtime)
     p2 = tmp_path / "foo-bar.csv"

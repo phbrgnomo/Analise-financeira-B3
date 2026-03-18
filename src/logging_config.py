@@ -85,8 +85,7 @@ class JSONFormatter(logging.Formatter):
 
         extra_keys = set(record.__dict__.keys()) - DEFAULT_RECORD_KEYS
         return {
-            k: self._serialize_extra_field(k, record.__dict__[k])
-            for k in extra_keys
+            k: self._serialize_extra_field(k, record.__dict__[k]) for k in extra_keys
         }
 
     def format(self, record: logging.LogRecord) -> str:

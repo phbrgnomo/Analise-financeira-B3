@@ -89,11 +89,12 @@ def test_pipeline_ingest_error_logging(monkeypatch, capsys):
 def test_force_refresh_flag_propagation(monkeypatch):
     seen = {}
 
-    def fake_ingest(ticker, source, dry_run=False, force_refresh=False):
+    def fake_ingest(ticker, source, dry_run=False, force_refresh=False, **kwargs):
         seen["ticker"] = ticker
         seen["source"] = source
         seen["dry_run"] = dry_run
         seen["force_refresh"] = force_refresh
+        seen.update(kwargs)
         return {"job_id": "x", "status": "success"}
 
     monkeypatch.setattr(pipeline, "ingest", fake_ingest)

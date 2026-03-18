@@ -17,9 +17,7 @@ def test_cli_json_schema():
     data = json.loads(result.output)
 
     schema_path = (
-        Path(__file__)
-        .resolve()
-        .parents[1]
+        Path(__file__).resolve().parents[1]
         / "docs"
         / "schema"
         / "cli_summary_schema.json"

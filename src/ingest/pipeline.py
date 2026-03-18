@@ -302,6 +302,8 @@ def ingest(  # noqa: C901 - function is intentionally orchestrator-style
     *,
     dry_run: bool = False,
     force_refresh: bool = False,
+    start: str | None = None,
+    end: str | None = None,
 ) -> Dict[str, Any]:
     """Minimal pipeline orchestration used by CLI and tests.
 
@@ -381,7 +383,12 @@ def ingest(  # noqa: C901 - function is intentionally orchestrator-style
                 from src.adapters.factory import get_adapter
 
                 adapter = get_adapter(source)
-                df = adapter.fetch(ticker)
+                fetch_kwargs: dict[str, str] = {}
+                if start is not None:
+                    fetch_kwargs["start_date"] = start
+                if end is not None:
+                    fetch_kwargs["end_date"] = end
+                df = adapter.fetch(ticker, **fetch_kwargs)
             except Exception as exc:  # fetch failure
                 msg = f"adapter.fetch failed: {exc}"
                 logger.exception(msg)

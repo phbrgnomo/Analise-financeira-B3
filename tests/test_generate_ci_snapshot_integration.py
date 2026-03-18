@@ -50,23 +50,10 @@ def test_generate_ci_snapshot_writes_metadata(
     rc = gen.main()
     assert rc == 0
 
-    # verify metadata row exists in our test DB
-    conn2 = db.connect(db_path=str(db_path))
-    try:
-        cur = conn2.cursor()
-        cur.execute(
-            "SELECT id, ticker, snapshot_path, checksum FROM snapshots "
-            "WHERE ticker = ? LIMIT 1",
-            ("PETR4",),
-        )
-        row = cur.fetchone()
-        assert row is not None, "No snapshot metadata recorded"
-        _id, ticker, snapshot_path, checksum = row
-        assert ticker == "PETR4"
-        sp = Path(snapshot_path)
-        if not sp.is_absolute():
-            sp = snap_dir / sp
-        assert sp.exists()
-        assert isinstance(checksum, str) and len(checksum) == 64
-    finally:
-        conn2.close()
+    # verify snapshot file and checksum were created
+    snapshot_file = snap_dir / "PETR4_snapshot.csv"
+    checksum_file = snap_dir / "PETR4_snapshot.csv.checksum"
+
+    assert snapshot_file.exists(), "Snapshot file was not created"
+    assert checksum_file.exists(), "Checksum sidecar file was not created"
+    assert checksum_file.read_text().strip(), "Checksum sidecar should not be empty"

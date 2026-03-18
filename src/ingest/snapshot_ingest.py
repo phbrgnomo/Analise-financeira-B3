@@ -5,7 +5,8 @@ nível é:
 
 1. adquirir um bloqueio específico por ticker via :func:`src.locks.acquire_lock`
    para serializar invocações concorrentes no mesmo processo.
-2. carregar os metadados do snapshot mais recente do cache no banco.
+2. ler o cache de snapshots de um arquivo JSON para evitar reprocessar dados já
+   ingeridos.
 3. calcular um checksum e avaliar se o cache ainda é válido (TTL + sha256
    coincidente) a menos que um refresh for forçado.
 4. quando um refresh é necessário, gravar um novo CSV de snapshot e seu
@@ -28,7 +29,6 @@ Variáveis de ambiente
 
 from __future__ import annotations
 
-import json
 import logging
 import os
 import sqlite3
@@ -39,6 +39,7 @@ from typing import Any, Dict, Optional, Union
 
 import pandas as pd
 
+from src.ingest.cache import load_cache, save_cache
 from src.ingest.ticker_lock import lock_ticker
 
 logger = logging.getLogger(__name__)
@@ -202,48 +203,95 @@ def _resolve_ingest_params(
     return resolved_dir, resolved_ttl, resolved_force
 
 
-def _load_last_snapshot_meta(
-    ticker: str, db_path: Optional[str]
-) -> Optional[Dict[str, Any]]:
-    """Read and deserialise the last snapshot metadata for *ticker* from the DB."""
-    import src.db as _db
+def _get_snapshot_cache_file(snapshot_dir: Path) -> Path:
+    """Return the file path used to persist the snapshot cache.
+
+    The cache is a JSON file mapping snapshot file paths to checksum/processed
+    timestamps. It is used to avoid reprocessing unchanged snapshots.
+
+    The path can be overridden via the ``SNAPSHOT_CACHE_FILE`` environment
+    variable (useful for tests and custom setups)."""
+
+    if cache_path := os.environ.get("SNAPSHOT_CACHE_FILE"):
+        return Path(cache_path)
+    return snapshot_dir / "snapshot_cache.json"
+
+
+def _load_snapshot_cache(cache_file_path: Path) -> Dict[str, Any]:
+    """Load the snapshot cache, handling read errors gracefully.
+
+    When the cache file cannot be read, we log a warning and increment a
+    metrics counter (if available). This mirrors the behavior of the previous
+    metadata-based cache fallback.
+    """
 
     try:
-        payload_str = _db.get_last_snapshot_payload(ticker, db_path=db_path)
-        if payload_str is not None:
-            try:
-                return json.loads(payload_str)
-            except json.JSONDecodeError as exc:
-                logger.warning("invalid snapshot metadata JSON for %s: %s", ticker, exc)
-    except (OSError, sqlite3.DatabaseError) as exc:
+        return load_cache(cache_file_path)
+    except Exception as exc:  # pragma: no cover - best effort fallback
         logger.warning(
-            "snapshot metadata cache fallback; failed to read metadata for %s: %s",
-            ticker,
+            "snapshot cache fallback; failed to read cache %s: %s",
+            cache_file_path,
             exc,
         )
         try:
             from src import metrics
 
-            metrics.increment_counter("snapshot_metadata_cache_fallback")
+            metrics.increment_counter("snapshot_cache_fallback")
         except Exception:  # pragma: no cover — metrics optional
             logger.debug("metrics increment failed", exc_info=True)
-    return None
+        return {}
 
 
-def _evaluate_cache_hit(
-    last_meta: Optional[Dict[str, Any]],
+def _snapshot_path_for_ticker(ticker: str, snapshot_dir: Path) -> Path:
+    """Compute the deterministic snapshot file path for a given ticker.
+
+    The snapshot file name is based on the current UTC date and a sanitized
+    ticker. This is used to determine the cache lookup key before the file
+    exists.
+    """
+
+    now = datetime.now(timezone.utc)
+    ts = now.strftime("%Y%m%d")
+
+    # sanitize ticker so that it cannot escape the snapshot directory or
+    # introduce confusing characters.  Allow alphanumerics, hyphen and
+    # underscore only; everything else becomes underscore.  Also map dots to
+    # underscore for consistency with earlier behaviour.
+    import re
+
+    safe_ticker = re.sub(r"[^A-Za-z0-9_-]", "_", ticker) or "ticker"
+
+    filename = f"{safe_ticker}-{ts}.csv"
+    snapshot_dir_res = snapshot_dir.resolve()
+    out_path = (snapshot_dir_res / filename).resolve()
+    # ensure the resolved output path is inside the snapshot directory
+    if not out_path.is_relative_to(snapshot_dir_res):
+        raise ValueError("sanitized filename escapes snapshot_dir")
+
+    return out_path
+
+
+def _check_cache_hit(
+    cache_file: Dict[str, Any],
+    snapshot_path: Path,
     checksum: str,
     ttl: float,
     force: bool,
     ticker: str,
 ) -> Optional[Dict[str, Any]]:
-    """Return a cache-hit result dict, or ``None`` when a refresh is needed."""
+    """Return a cache-hit dict or ``None`` when a refresh is needed.
+
+    The cache is stored as a JSON mapping of snapshot path -> metadata.
+    """
+
     # Explicitly bypass cache when forced so callers can see the reason in logs
     if force:
         logger.info("force refresh requested for %s; bypassing snapshot cache", ticker)
         return None
 
-    if not last_meta or last_meta.get("sha256") != checksum:
+    key = str(snapshot_path.resolve())
+    entry = cache_file.get(key)
+    if not entry or entry.get("sha256") != checksum:
         # no previous snapshot or checksum mismatch -> miss
         return None
 
@@ -258,16 +306,18 @@ def _evaluate_cache_hit(
         logger.info("snapshot cache hit for %s (ttl=no-expiry)", ticker)
         return _cache_result
 
-    last_ts_str = last_meta.get("generated_at")
-    if not last_ts_str:
-        logger.debug(
-            "snapshot metadata for %s missing 'generated_at'; treating as cache miss",
+    processed_at = entry.get("processed_at")
+    if not isinstance(processed_at, str):
+        logger.warning(
+            "invalid 'processed_at' in snapshot cache for %s: %r; "
+            "treating as cache miss",
             ticker,
+            processed_at,
         )
         return None
 
     try:
-        last_ts = datetime.fromisoformat(last_ts_str.replace("Z", "+00:00"))
+        last_ts = datetime.fromisoformat(processed_at.replace("Z", "+00:00"))
         age = (datetime.now(timezone.utc) - last_ts).total_seconds()
         if age < ttl:
             logger.info(
@@ -276,12 +326,11 @@ def _evaluate_cache_hit(
             _cache_result["reason"] = "within_ttl"
             return _cache_result
     except ValueError as exc:  # parse errors only
-        # keep original message but include the exception text for clarity
         logger.warning(
-            "invalid 'generated_at' in snapshot metadata for %s: %r (%s); "
+            "invalid 'processed_at' in snapshot cache for %s: %r (%s); "
             "treating as cache miss",
             ticker,
-            last_ts_str,
+            processed_at,
             exc,
         )
     return None
@@ -294,11 +343,10 @@ def _write_and_record_snapshot(
     db_path: Optional[str],
 ) -> tuple[str, Path]:
     """Write a versioned snapshot CSV to disk and record metadata in the DB."""
-    import src.db as _db
     from src.etl.snapshot import write_snapshot
 
     now = datetime.now(timezone.utc)
-    ts = now.strftime("%Y%m%dT%H%M%SZ")
+    ts = now.strftime("%Y%m%d")
 
     # sanitize ticker so that it cannot escape the snapshot directory or
     # introduce confusing characters.  Allow alphanumerics, hyphen and
@@ -318,19 +366,21 @@ def _write_and_record_snapshot(
     # write_snapshot also handles pruning old files via _prune_old_snapshots
     sha = write_snapshot(df, out_path)
 
-    snapshot_meta: Dict[str, Any] = {
-        "snapshot_id": filename,
-        "ticker": ticker,
-        "generated_at": now.isoformat().replace("+00:00", "Z"),
-        "rows_count": len(df),
-        "sha256": sha,
-    }
-    try:
-        _db.record_snapshot_metadata(snapshot_meta, db_path=db_path)
-    except Exception as exc:
-        logger.warning("failed to record snapshot metadata: %s", exc)
-
+    # NOTE: snapshot metadata is no longer persisted to the database.
+    # The cache layer is file-backed and contains the information needed
+    # to avoid reprocessing unchanged snapshots.
     return sha, out_path
+
+
+def _write_snapshot_file(
+    df: pd.DataFrame, ticker: str, snapshot_dir: Path
+) -> tuple[str, Path]:
+    """Write a snapshot CSV and return `(checksum, path)`.
+
+    This wrapper exists to keep the public API stable during refactors.
+    """
+
+    return _write_and_record_snapshot(df, ticker, snapshot_dir, db_path=None)
 
 
 def _run_incremental_ingest(
@@ -419,9 +469,12 @@ def ingest_from_snapshot(
     # read-cache → write-snapshot → diff → DB upsert critical section
     # is safe under concurrent callers.
     with lock_ticker(ticker):
-        last_meta = _load_last_snapshot_meta(ticker, resolved_db)
-        cache_result = _evaluate_cache_hit(
-            last_meta, checksum, resolved_ttl, resolved_force, ticker
+        cache_file_path = _get_snapshot_cache_file(resolved_dir)
+        cache_file = _load_snapshot_cache(cache_file_path)
+
+        snapshot_path = _snapshot_path_for_ticker(ticker, resolved_dir)
+        cache_result = _check_cache_hit(
+            cache_file, snapshot_path, checksum, resolved_ttl, resolved_force, ticker
         )
         if cache_result is not None:
             # include duration for the quick-cached path
@@ -429,10 +482,15 @@ def ingest_from_snapshot(
             cache_result["duration"] = f"{elapsed:.2f}s"
             return cache_result
 
-        sha, out_path = _write_and_record_snapshot(
-            df, ticker, resolved_dir, resolved_db
-        )
+        sha, out_path = _write_snapshot_file(df, ticker, resolved_dir)
         rows_processed = _run_incremental_ingest(df, ticker, resolved_db)
+
+        # Update cache for future runs.
+        cache_file[str(out_path.resolve())] = {
+            "sha256": sha,
+            "processed_at": datetime.now(timezone.utc).isoformat(),
+        }
+        save_cache(cache_file_path, cache_file)
 
         elapsed = time.monotonic() - start
         logger.info(

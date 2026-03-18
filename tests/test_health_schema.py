@@ -16,9 +16,9 @@ def _write_sample_ingest_log(path: str) -> None:
             "job_id": "00000000-0000-0000-0000-000000000000",
             "source": "dummy",
             "status": "success",
-            "finished_at": (
-                now - timedelta(hours=1)
-            ).isoformat().replace("+00:00", "Z"),
+            "finished_at": (now - timedelta(hours=1))
+            .isoformat()
+            .replace("+00:00", "Z"),
             "duration": "1.23s",
             "rows": 10,
         },
@@ -26,9 +26,9 @@ def _write_sample_ingest_log(path: str) -> None:
             "job_id": "00000000-0000-0000-0000-000000000001",
             "source": "dummy",
             "status": "error",
-            "finished_at": (
-                now - timedelta(hours=2)
-            ).isoformat().replace("+00:00", "Z"),
+            "finished_at": (now - timedelta(hours=2))
+            .isoformat()
+            .replace("+00:00", "Z"),
             "duration": "0.10s",
             "rows": 0,
         },
