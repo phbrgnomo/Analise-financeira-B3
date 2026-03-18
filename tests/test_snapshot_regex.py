@@ -1,26 +1,31 @@
 from datetime import datetime
 
+import pytest
+
 from src.etl import snapshot
 
 
-def test_snapshot_filename_regex_matches_valid_names():
-    names = [
+@pytest.mark.parametrize(
+    "name",
+    [
         "PETR4-20260302.csv",
         "ABC123-20200101T120000.csv",
         "TICKER-20211231T235959-extra.csv",
         "PETR4.SA-20230303.csv",
-    ]
+    ],
+)
+def test_snapshot_filename_regex_matches_valid_names(name):
     pattern = snapshot._SNAPSHOT_FILENAME_RE
-    for name in names:
-        m = pattern.match(name)
-        assert m, f"deveria casar: {name}"
-        # ensure ticker group is as expected (uppercase)
-        ticker = m.group("ticker")
-        assert ticker.upper() == ticker
+    m = pattern.match(name)
+    assert m, f"deveria casar: {name}"
+    # ensure ticker group is as expected (uppercase)
+    ticker = m.group("ticker")
+    assert ticker.upper() == ticker
 
 
-def test_snapshot_filename_regex_rejects_invalid_names():
-    bad = [
+@pytest.mark.parametrize(
+    "name",
+    [
         "bad-name.csv",  # no timestamp
         "PETR4-2020-01-01.csv",  # wrong timestamp format
         "petr4-20200101T000000.csv",  # lowercase ticker
@@ -29,10 +34,11 @@ def test_snapshot_filename_regex_rejects_invalid_names():
         "ABC-20200101T000000Z.csv.old",  # extra suffix after .csv
         "PETR4-202603.csv",  # incomplete date-only timestamp
         "PETR4-2026032.csv",  # malformed date-only timestamp (7 digits)
-    ]
+    ],
+)
+def test_snapshot_filename_regex_rejects_invalid_names(name):
     pattern = snapshot._SNAPSHOT_FILENAME_RE
-    for name in bad:
-        assert pattern.match(name) is None, f"não deveria casar: {name}"
+    assert pattern.match(name) is None, f"não deveria casar: {name}"
 
 
 def test_parse_snapshot_timestamp_behavior(tmp_path):

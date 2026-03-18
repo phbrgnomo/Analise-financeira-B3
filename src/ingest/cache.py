@@ -15,6 +15,7 @@ which uses these utilities).
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import os
@@ -38,6 +39,44 @@ def _record_cache_fallback_metric() -> None:
         metrics.increment_counter("snapshot_cache_fallback")
     except Exception:  # pragma: no cover — metrics optional
         logger.debug("metrics increment failed", exc_info=True)
+
+
+@contextlib.contextmanager
+def cache_file_lock(path: Path):
+    """Context manager that serializes access to the cache file across processes.
+
+    The snapshot cache is shared by all tickers within the same directory, and
+    concurrent ingest runs (even for different tickers) may race when updating
+    the cache file.  This helper uses an OS lock file (via ``fcntl`` on Unix)
+    so that only one process can read/modify/write the cache at a time.
+
+    The lock is best-effort: on platforms where ``fcntl`` is unavailable, no
+    locking is performed.
+    """
+
+    # Use a sibling lock file to avoid interfering with the cache itself.
+    lock_path = path.with_suffix(path.suffix + ".lock")
+    # Ensure the lock file exists (a no-op if already present).
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # We deliberately open in append mode so the file exists without truncating.
+    with open(lock_path, "a+") as fh:
+        try:
+            import fcntl  # type: ignore
+
+            fcntl.flock(fh, fcntl.LOCK_EX)
+        except Exception:
+            # If we can't lock (e.g. on Windows), proceed without locking.
+            yield
+            return
+
+        try:
+            yield
+        finally:
+            try:
+                fcntl.flock(fh, fcntl.LOCK_UN)
+            except Exception:
+                pass
 
 
 def load_cache(path: Path) -> Dict[str, Any]:
@@ -128,4 +167,9 @@ def entry_is_fresh(entry: Dict[str, Any], ttl: Optional[float]) -> bool:
     return age.total_seconds() < ttl
 
 
-__all__ = ["load_cache", "save_cache", "entry_is_fresh"]
+__all__ = [
+    "load_cache",
+    "save_cache",
+    "entry_is_fresh",
+    "cache_file_lock",
+]

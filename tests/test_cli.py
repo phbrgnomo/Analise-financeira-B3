@@ -1,8 +1,10 @@
+import importlib.util
 import json
 import re
 import subprocess
 import sys
 
+import pytest
 from typer.testing import CliRunner
 
 from src.main import app
@@ -355,6 +357,48 @@ def test_run_max_days_passed_to_ingest(monkeypatch):
     assert called[0].get("end") == "2020-01-17"
 
 
+def test_run_dry_run_flag_propagated_to_ingest_and_compute(monkeypatch):
+    """`--dry-run` deve ser propagado até ingest e
+    _compute_returns_for_ticker via CLI."""
+    import src.ingest.pipeline as pipeline_module
+    from src.main import app
+
+    ingest_call = {}
+    compute_call = {}
+
+    def fake_ingest(*args, **kwargs):
+        ingest_call["kwargs"] = kwargs
+        return {"status": "success"}
+
+    def fake_compute_returns_for_ticker(*args, **kwargs):
+        compute_call["args"] = args
+        compute_call["kwargs"] = kwargs
+        return {"rows": 1, "persisted": True, "sample_df": None}
+
+    monkeypatch.setattr(pipeline_module, "ingest", fake_ingest)
+    monkeypatch.setattr(
+        "src.main._compute_returns_for_ticker", fake_compute_returns_for_ticker
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(
+        app,
+        [
+            "run",
+            "--ticker",
+            "PETR4",
+            "--dry-run",
+            "--no-network",
+            "--format",
+            "json",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert ingest_call.get("kwargs", {}).get("dry_run") is True
+    assert compute_call.get("args", (None, None, None, None))[3] is True
+
+
 def test_run_notebook_invokes_papermill(monkeypatch):
     """`--run-notebook` deve chamar papermill.excute_notebook quando disponível."""
     from src.main import app
@@ -401,6 +445,68 @@ def test_run_notebook_invokes_papermill(monkeypatch):
     assert result.exit_code == 0
     assert fake_pm.called is True
     assert result.output.strip(), "expected output"  # ensure output was emitted
+
+
+@pytest.mark.skipif(
+    importlib.util.find_spec("papermill") is not None,
+    reason="papermill installed; cannot test missing dependency path",
+)
+def test_run_notebook_missing_papermill():
+    """`--run-notebook` deve falhar com ImportError quando papermill
+    não está instalado."""
+    from src.main import app
+
+    runner = CliRunner()
+    result = runner.invoke(
+        app,
+        [
+            "run",
+            "--ticker",
+            "PETR4",
+            "--run-notebook",
+            "--format",
+            "json",
+            "--no-network",
+        ],
+    )
+
+    assert result.exit_code == 2
+    assert "papermill" in result.output.lower()
+    assert "instal" in result.output.lower()
+
+
+def test_run_notebook_runtime_error(monkeypatch):
+    """`--run-notebook` deve falhar com código 2 quando papermill lança exceção."""
+    from src.main import app
+
+    class FakePMErroring:
+        def execute_notebook(self, *args, **kwargs):
+            raise RuntimeError("dummy notebook failure")
+
+    import sys
+
+    monkeypatch.setitem(sys.modules, "papermill", FakePMErroring())
+
+    runner = CliRunner()
+    result = runner.invoke(
+        app,
+        [
+            "run",
+            "--ticker",
+            "PETR4",
+            "--run-notebook",
+            "--format",
+            "json",
+            "--no-network",
+        ],
+    )
+
+    assert result.exit_code == 2
+    output = result.output.lower()
+    assert (
+        "dummy notebook failure" in output
+        or "notebook" in output
+    )
 
 
 def test_export_csv_success(tmp_path, monkeypatch):

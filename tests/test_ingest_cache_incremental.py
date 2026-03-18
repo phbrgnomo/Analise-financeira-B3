@@ -1,3 +1,4 @@
+import itertools
 import sqlite3
 import time
 from datetime import datetime, timedelta, timezone
@@ -311,24 +312,26 @@ def test_cache_file_read_fallback_logs_and_metrics(tmp_path, monkeypatch, caplog
 
     mp, snap_dir, cache_file = setup_env(tmp_path, ttl="100000")
 
-    call_count = {"n": 0}
     orig_load = sis.load_cache
 
+    def _raise_first_call(path):
+        raise OSError("simulated IO failure")
+
+    load_sequence = itertools.chain(
+        [_raise_first_call],
+        itertools.repeat(orig_load),
+    )
+
     def fake_load_cache(path):
-        if call_count["n"] == 0:
-            call_count["n"] += 1
-            raise OSError("simulated IO failure")
-        return orig_load(path)
+        return next(load_sequence)(path)
 
     monkeypatch.setattr(sis, "load_cache", fake_load_cache)
 
     caplog.set_level("WARNING")
-    called = False
+    calls = []
 
     def fake_inc(name):
-        nonlocal called
-        if name == "snapshot_cache_fallback":
-            called = True
+        calls.append(name)
 
     monkeypatch.setattr(metrics, "increment_counter", fake_inc)
 
@@ -336,7 +339,7 @@ def test_cache_file_read_fallback_logs_and_metrics(tmp_path, monkeypatch, caplog
     r = ingest_from_snapshot(df, "TEST", db_path=str(db_path))
     assert r["cached"] is False
     assert "snapshot cache" in caplog.text.lower()
-    assert called
+    assert "snapshot_cache_fallback" in calls
 
     mp.undo()
 

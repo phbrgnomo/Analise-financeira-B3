@@ -242,16 +242,13 @@ def _load_snapshot_cache(cache_file_path: Path) -> Dict[str, Any]:
         return {}
 
 
-def _snapshot_path_for_ticker(ticker: str, snapshot_dir: Path) -> Path:
+def _snapshot_path_for_ticker(ticker: str, snapshot_dir: Path, ts: str) -> Path:
     """Compute the deterministic snapshot file path for a given ticker.
 
-    The snapshot file name is based on the current UTC date and a sanitized
-    ticker. This is used to determine the cache lookup key before the file
-    exists.
+    The snapshot file name is based on the provided date string (YYYYMMDD)
+    and a sanitized ticker. This is used to determine the cache lookup key
+    before the file exists.
     """
-
-    now = datetime.now(timezone.utc)
-    ts = now.strftime("%Y%m%d")
 
     # sanitize ticker so that it cannot escape the snapshot directory or
     # introduce confusing characters.  Allow alphanumerics, hyphen and
@@ -340,22 +337,20 @@ def _write_and_record_snapshot(
     df: pd.DataFrame,
     ticker: str,
     snapshot_dir: Path,
+    ts: str,
 ) -> tuple[str, Path]:
     """Write a versioned snapshot CSV to disk.
 
     This function used to persist metadata to the database, but the current
     cache-backed workflow keeps metadata in the snapshot cache file instead.
     """
-    from src.etl.snapshot import write_snapshot
-
-    now = datetime.now(timezone.utc)
-    ts = now.strftime("%Y%m%d")
-
     # sanitize ticker so that it cannot escape the snapshot directory or
     # introduce confusing characters.  Allow alphanumerics, hyphen and
     # underscore only; everything else becomes underscore.  Also map dots to
     # underscore for consistency with earlier behaviour.
     import re
+
+    from src.etl.snapshot import write_snapshot
 
     safe_ticker = re.sub(r"[^A-Za-z0-9_-]", "_", ticker) or "ticker"
 
@@ -376,14 +371,24 @@ def _write_and_record_snapshot(
 
 
 def _write_snapshot_file(
-    df: pd.DataFrame, ticker: str, snapshot_dir: Path
+    df: pd.DataFrame,
+    ticker: str,
+    snapshot_dir: Path,
+    ts: str | None = None,
 ) -> tuple[str, Path]:
     """Write a snapshot CSV and return `(checksum, path)`.
 
     This wrapper exists to keep the public API stable during refactors.
+
+    When *ts* is not provided, a timestamp (YYYYMMDD) corresponding to the
+    current UTC date is used. The ingestion pipeline passes an explicit
+    timestamp to avoid races around midnight.
     """
 
-    return _write_and_record_snapshot(df, ticker, snapshot_dir)
+    if ts is None:
+        ts = datetime.now(timezone.utc).strftime("%Y%m%d")
+
+    return _write_and_record_snapshot(df, ticker, snapshot_dir, ts)
 
 
 def _run_incremental_ingest(
@@ -473,27 +478,39 @@ def ingest_from_snapshot(
     # is safe under concurrent callers.
     with lock_ticker(ticker):
         cache_file_path = _get_snapshot_cache_file(resolved_dir)
-        cache_file = _load_snapshot_cache(cache_file_path)
 
-        snapshot_path = _snapshot_path_for_ticker(ticker, resolved_dir)
-        cache_result = _check_cache_hit(
-            cache_file, snapshot_path, checksum, resolved_ttl, resolved_force, ticker
-        )
-        if cache_result is not None:
-            # include duration for the quick-cached path
-            elapsed = time.monotonic() - start
-            cache_result["duration"] = f"{elapsed:.2f}s"
-            return cache_result
+        # Use a single timestamp for this run to avoid pathological cases where
+        # the process crosses midnight between cache lookup and snapshot write.
+        now = datetime.now(timezone.utc)
+        ts = now.strftime("%Y%m%d")
 
-        sha, out_path = _write_snapshot_file(df, ticker, resolved_dir)
-        rows_processed = _run_incremental_ingest(df, ticker, resolved_db)
+        # Ensure cache operations are coordinated, since the cache file is shared
+        # across tickers and processes.
+        from src.ingest.cache import cache_file_lock
 
-        # Update cache for future runs.
-        cache_file[str(out_path.resolve())] = {
-            "sha256": sha,
-            "processed_at": datetime.now(timezone.utc).isoformat(),
-        }
-        save_cache(cache_file_path, cache_file)
+        with cache_file_lock(cache_file_path):
+            cache_file = _load_snapshot_cache(cache_file_path)
+
+            snapshot_path = _snapshot_path_for_ticker(ticker, resolved_dir, ts)
+            cache_result = _check_cache_hit(
+                cache_file, snapshot_path, checksum, resolved_ttl,
+                resolved_force, ticker
+            )
+            if cache_result is not None:
+                # include duration for the quick-cached path
+                elapsed = time.monotonic() - start
+                cache_result["duration"] = f"{elapsed:.2f}s"
+                return cache_result
+
+            sha, out_path = _write_snapshot_file(df, ticker, resolved_dir, ts)
+            rows_processed = _run_incremental_ingest(df, ticker, resolved_db)
+
+            # Update cache for future runs.
+            cache_file[str(out_path.resolve())] = {
+                "sha256": sha,
+                "processed_at": datetime.now(timezone.utc).isoformat(),
+            }
+            save_cache(cache_file_path, cache_file)
 
         elapsed = time.monotonic() - start
         logger.info(

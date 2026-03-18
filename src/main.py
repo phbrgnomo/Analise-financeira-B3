@@ -272,6 +272,44 @@ def _run_notebook(tickers: list[str], job_id: str) -> dict[str, object]:
         raise typer.Exit(code=2) from exc
 
 
+def _finish_ingest_step(
+    feedback: CliFeedback | None,
+    step: StepHandle | None,
+    ingest_result: dict[str, object],
+) -> None:
+    """Finish the ingest step feedback when feedback is enabled."""
+
+    if not feedback or step is None:
+        return
+
+    details: list[str] = []
+    if ingest_result.get("duration"):
+        details.append(f"total={ingest_result['duration']}")
+
+    persist = ingest_result.get("persist")
+    if isinstance(persist, dict):
+        if persist_reason := persist.get("reason"):
+            details.append(f"reason={persist_reason}")
+
+    feedback.finish_step(step, detail=" | ".join(details) if details else None)
+
+
+def _finish_returns_step(
+    feedback: CliFeedback | None,
+    step: StepHandle | None,
+    rows: int,
+) -> None:
+    """Finish the returns step feedback when feedback is enabled."""
+
+    if not feedback or step is None:
+        return
+
+    if rows == 0:
+        feedback.finish_step(step, status="warning", detail="nenhum retorno calculado")
+    else:
+        feedback.finish_step(step, detail=f"{rows} retorno(s) persistidos")
+
+
 def _run_one_ticker(  # noqa: C901
     ticker: str,
     provider: str,
@@ -321,20 +359,7 @@ def _run_one_ticker(  # noqa: C901
             "failure",
         )
 
-    if feedback and ingest_step is not None:
-        ingest_detail = []
-        if ingest_result.get("duration"):
-            ingest_detail.append(f"total={ingest_result['duration']}")
-
-        persist = ingest_result.get("persist")
-        if isinstance(persist, dict):
-            if persist_reason := persist.get("reason"):
-                ingest_detail.append(f"reason={persist_reason}")
-
-        feedback.finish_step(
-            ingest_step,
-            detail=" | ".join(ingest_detail) if ingest_detail else None,
-        )
+    _finish_ingest_step(feedback, ingest_step, ingest_result)
 
     returns_step: StepHandle | None = None
     if feedback:
@@ -343,22 +368,12 @@ def _run_one_ticker(  # noqa: C901
     compute_info = _compute_returns_for_ticker(ticker, start, end, dry_run)
     rows = compute_info.get("rows", 0)
 
+    _finish_returns_step(feedback, returns_step, rows)
+
     if rows == 0:
-        if feedback and returns_step is not None:
-            feedback.finish_step(
-                returns_step,
-                status="warning",
-                detail="nenhum retorno calculado",
-            )
         return (
             _make_ticker_result(ticker, provider, ingest_result, 0, "warning"),
             "warning",
-        )
-
-    if feedback and returns_step is not None:
-        feedback.finish_step(
-            returns_step,
-            detail=f"{rows} retorno(s) persistidos",
         )
 
     return (
@@ -384,10 +399,17 @@ def _parse_sample_tickers(value: str | None) -> list[str] | None:
     else:
         tickers = [t.strip() for t in value.split(",") if t.strip()]
 
-    if not tickers:
-        return None
+    return tickers or None
 
-    return tickers
+
+def _ensure_str_or_none(value: object) -> str | None:
+    """Return the string value or None for non-string inputs.
+
+    Typer/Click may pass an ArgInfo object (not a string) when a positional
+    argument is missing, particularly in some callback invocation paths.
+    """
+
+    return value if isinstance(value, str) else None
 
 
 def _prepare_run_context(
@@ -401,21 +423,10 @@ def _prepare_run_context(
 ) -> tuple[list[str], CliFeedback | None, str]:
     """Prepara tickers, provider efetivo e objeto de feedback para o comando run."""
 
-    # Some Typer callback invocations (notably when the root callback is used)
-    # will pass an ``ArgInfo`` object instead of a plain string when the
-    # positional argument is omitted.  This happens because Typer / Click keeps
-    # the argument metadata around for help generation and can inject it into
-    # the callback call during validation.
-    #
-    # We normalize the value here to avoid crashing (e.g. ``AttributeError``)
-    # when we later treat it as a ticker string.
-    def _normalize_ticker_param(value: object) -> str | None:
-        if isinstance(value, str):
-            return value
-        return None
-
     effective_ticker = (
-        _normalize_ticker_param(ticker) or _normalize_ticker_param(ticker_arg) or None
+        _ensure_str_or_none(ticker)
+        or _ensure_str_or_none(ticker_arg)
+        or None
     )
 
     effective_provider = provider or provider_arg or "yfinance"
@@ -426,27 +437,24 @@ def _prepare_run_context(
 
     if effective_ticker is not None:
         tickers = [_normalize_cli_ticker(effective_ticker)]
-        if feedback:
-            feedback.start(
-                f"processando ticker={tickers[0]} com provider={effective_provider}"
-            )
-        return tickers, feedback, effective_provider
-
-    if sample_tickers:
-        # honor explicit sample list before falling back to defaults
+        msg = f"processando ticker={tickers[0]} com provider={effective_provider}"
+        extra = []
+    elif sample_tickers:
         tickers = [_normalize_cli_ticker(t) for t in sample_tickers]
-        if feedback:
-            feedback.start(
-                f"processando tickers de amostra com provider={effective_provider}"
-            )
-            feedback.info(f"Tickers: {', '.join(tickers)}")
-        return tickers, feedback, effective_provider
+        msg = f"processando tickers de amostra com provider={effective_provider}"
+        extra = [f"Tickers: {', '.join(tickers)}"]
+    else:
+        tickers = list(DEFAULT_TICKERS)
+        msg = f"processando tickers padrão com provider={effective_provider}"
+        extra = [
+            f"Tickers: {', '.join(tickers)}",
+            "Para ticker específico, execute: main --ticker <ticker>",
+        ]
 
-    tickers = list(DEFAULT_TICKERS)
     if feedback:
-        feedback.start(f"processando tickers padrão com provider={effective_provider}")
-        feedback.info(f"Tickers: {', '.join(tickers)}")
-        feedback.info("Para ticker específico, execute: main --ticker <ticker>")
+        feedback.start(msg)
+        for line in extra:
+            feedback.info(line)
 
     return tickers, feedback, effective_provider
 
