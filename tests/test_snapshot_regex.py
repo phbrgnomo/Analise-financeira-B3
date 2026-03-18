@@ -27,6 +27,7 @@ def test_snapshot_filename_regex_rejects_invalid_names():
         "PETR4_20200101T000000.csv",  # underscore instead of dash
         "PETR4-20200101T000000.txt",  # wrong extension
         "ABC-20200101T000000Z.csv.old",  # extra suffix after .csv
+        "PETR4-202603.csv",  # incomplete date-only timestamp
     ]
     pattern = snapshot._SNAPSHOT_FILENAME_RE
     for name in bad:
