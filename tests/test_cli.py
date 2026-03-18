@@ -215,9 +215,18 @@ def test_run_json_output(fake_ingest_success, fake_compute_rows1):
     )
     assert result.exit_code == 0
     data = json.loads(result.output)
+
+    # Basic summary structure
     assert data["status"] == "success"
+    assert isinstance(data.get("job_id"), str)
+    assert isinstance(data.get("duration_sec"), (int, float))
     assert isinstance(data.get("tickers"), list)
-    assert data["tickers"][0]["ticker"] == "PETR4"
+
+    # Validate per-ticker payload shape
+    ticker_payload = data["tickers"][0]
+    assert ticker_payload["ticker"] == "PETR4"
+    assert ticker_payload["snapshot_path"] == "snapshots/PETR4-20260215.csv"
+    assert ticker_payload["snapshot_checksum"] == "abc"
 
 
 def test_run_json_output_warning_no_rows(fake_ingest_success, fake_compute_rows0):

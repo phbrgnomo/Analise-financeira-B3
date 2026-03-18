@@ -340,9 +340,12 @@ def _write_and_record_snapshot(
     df: pd.DataFrame,
     ticker: str,
     snapshot_dir: Path,
-    db_path: Optional[str],
 ) -> tuple[str, Path]:
-    """Write a versioned snapshot CSV to disk and record metadata in the DB."""
+    """Write a versioned snapshot CSV to disk.
+
+    This function used to persist metadata to the database, but the current
+    cache-backed workflow keeps metadata in the snapshot cache file instead.
+    """
     from src.etl.snapshot import write_snapshot
 
     now = datetime.now(timezone.utc)
@@ -380,7 +383,7 @@ def _write_snapshot_file(
     This wrapper exists to keep the public API stable during refactors.
     """
 
-    return _write_and_record_snapshot(df, ticker, snapshot_dir, db_path=None)
+    return _write_and_record_snapshot(df, ticker, snapshot_dir)
 
 
 def _run_incremental_ingest(

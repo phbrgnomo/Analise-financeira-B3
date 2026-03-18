@@ -354,7 +354,10 @@ def mock_time_progression(monkeypatch):
 
     def _now(tz=None):
         nonlocal base
-        # advance by one day so date-only snapshot filenames change per ingest
+        # advance by one day to avoid filename collisions when snapshots use
+        # date-only timestamps (YYYYMMDD) instead of full datetime strings.
+        # Without this, successive ingest calls on the same day would generate
+        # identical snapshot filenames.
         base += timedelta(days=1)
         return base
 

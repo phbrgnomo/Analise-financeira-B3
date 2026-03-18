@@ -25,6 +25,21 @@ from typing import Any, Dict, Optional
 logger = logging.getLogger(__name__)
 
 
+def _record_cache_fallback_metric() -> None:
+    """Increment the metric used when reading the snapshot cache fails.
+
+    The metric is optional (may not be available in all environments), so
+    failures are logged at debug level rather than propagated.
+    """
+
+    try:
+        from src import metrics
+
+        metrics.increment_counter("snapshot_cache_fallback")
+    except Exception:  # pragma: no cover — metrics optional
+        logger.debug("metrics increment failed", exc_info=True)
+
+
 def load_cache(path: Path) -> Dict[str, Any]:
     """Return the cache dictionary stored at ``path`` or an empty dict.
 
@@ -43,12 +58,7 @@ def load_cache(path: Path) -> Dict[str, Any]:
             path,
             exc_info=True,
         )
-        try:
-            from src import metrics
-
-            metrics.increment_counter("snapshot_cache_fallback")
-        except Exception:  # pragma: no cover — metrics optional
-            logger.debug("metrics increment failed", exc_info=True)
+        _record_cache_fallback_metric()
         return {}
     except OSError:
         logger.warning(
@@ -56,12 +66,7 @@ def load_cache(path: Path) -> Dict[str, Any]:
             path,
             exc_info=True,
         )
-        try:
-            from src import metrics
-
-            metrics.increment_counter("snapshot_cache_fallback")
-        except Exception:  # pragma: no cover — metrics optional
-            logger.debug("metrics increment failed", exc_info=True)
+        _record_cache_fallback_metric()
         return {}
 
 

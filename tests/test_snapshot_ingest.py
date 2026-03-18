@@ -66,5 +66,6 @@ def test_sanitized_filename_and_path(tmp_path, monkeypatch):
     # even a ticker that looks like a path should be safely mapped
     evil = "..\\evil"  # backslash on windows-like input
     sha2, out2 = si._write_snapshot_file(df, evil, snap_dir)
+    assert sha2 == "deadbeef"
     assert out2.resolve().is_relative_to(snap_dir.resolve())
     assert "evil" in out2.name

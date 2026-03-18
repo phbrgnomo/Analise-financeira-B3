@@ -401,9 +401,14 @@ def _prepare_run_context(
 ) -> tuple[list[str], CliFeedback | None, str]:
     """Prepara tickers, provider efetivo e objeto de feedback para o comando run."""
 
-    # Some Typer callback invocations (notably via the root callback) may pass
-    # the ArgInfo object itself when the positional argument is missing.  This
-    # defensive normalization avoids crashing during help/validation.
+    # Some Typer callback invocations (notably when the root callback is used)
+    # will pass an ``ArgInfo`` object instead of a plain string when the
+    # positional argument is omitted.  This happens because Typer / Click keeps
+    # the argument metadata around for help generation and can inject it into
+    # the callback call during validation.
+    #
+    # We normalize the value here to avoid crashing (e.g. ``AttributeError``)
+    # when we later treat it as a ticker string.
     def _normalize_ticker_param(value: object) -> str | None:
         if isinstance(value, str):
             return value
@@ -526,7 +531,13 @@ def run_cmd(  # noqa: C901
         help="Força persistência ignorando decisões de cache do pipeline",
     ),
 ) -> None:
-    """Executa fluxo ETL principal (ingestão + cálculo de retornos)."""
+    """Executa fluxo ETL principal (ingestão + cálculo de retornos).
+
+    Saída de código:
+      * 0 - sucesso (todos os tickers processados com status success)
+      * 1 - warning (algum ticker retornou status warning)
+      * 2 - erro (falha em algum ticker ou em steps críticos como notebook)
+    """
 
     output_json = output_format == "json"
     effective_force_refresh = as_bool(force_refresh)
