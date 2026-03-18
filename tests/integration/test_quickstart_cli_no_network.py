@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 
+import pytest
 from typer.testing import CliRunner
 
 from src.main import app
@@ -16,17 +17,28 @@ def _strip_ansi(s: str) -> str:
     return ansi.sub("", s)
 
 
-def test_quickstart_no_network_generates_snapshot_and_checksum(tmp_path, monkeypatch):
-    """Execute quickstart in --no-network mode and validate snapshot checksum."""
+@pytest.fixture
+def isolated_cli_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Isolate CLI artifacts and avoid writing to the repository DB.
 
-    # Keep artifacts isolated from the repository workspace.
+    This fixture configures environment variables and overrides the default
+    database path so tests can run without affecting the repo workspace.
+    """
+
     monkeypatch.setenv("SNAPSHOT_DIR", str(tmp_path / "snapshots"))
     monkeypatch.setenv("LOCK_DIR", str(tmp_path / "locks"))
 
-    # Prevent writing to the repo-local DB.
     from src.db import connection as conn_module
 
     monkeypatch.setattr(conn_module, "DEFAULT_DB_PATH", str(tmp_path / "data.db"))
+
+    return tmp_path
+
+
+def test_quickstart_no_network_generates_snapshot_and_checksum(
+    isolated_cli_env, monkeypatch
+):
+    """Execute quickstart in --no-network mode and validate snapshot checksum."""
 
     runner = CliRunner()
     result = runner.invoke(
@@ -40,7 +52,8 @@ def test_quickstart_no_network_generates_snapshot_and_checksum(tmp_path, monkeyp
     assert data["status"] == "success"
 
     # Ensure the CLI reports snapshot metadata.
-    ticker_info = data.get("tickers", [{}])[0]
+    tickers = data.get("tickers")
+    ticker_info = tickers[0] if tickers and len(tickers) > 0 else {}
     snapshot_path = Path(ticker_info.get("snapshot_path", ""))
     checksum = ticker_info.get("snapshot_checksum")
 
@@ -53,17 +66,12 @@ def test_quickstart_no_network_generates_snapshot_and_checksum(tmp_path, monkeyp
     assert sha256_file(snapshot_path) == checksum
 
 
-def test_quickstart_no_network_run_notebook_json(tmp_path, monkeypatch):
+def test_quickstart_no_network_run_notebook_json(
+    isolated_cli_env, monkeypatch
+):
     """Execute quickstart with --run-notebook and validate notebook summary."""
 
-    # Keep artifacts isolated from the repository workspace.
-    monkeypatch.setenv("SNAPSHOT_DIR", str(tmp_path / "snapshots"))
-    monkeypatch.setenv("LOCK_DIR", str(tmp_path / "locks"))
-
-    # Prevent writing to the repo-local DB.
-    from src.db import connection as conn_module
-
-    monkeypatch.setattr(conn_module, "DEFAULT_DB_PATH", str(tmp_path / "data.db"))
+    tmp_path = isolated_cli_env
 
     def fake_run_notebook(tickers, job_id):
         return {

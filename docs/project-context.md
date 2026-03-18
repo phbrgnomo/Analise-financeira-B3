@@ -29,11 +29,10 @@ _Documento enxuto com regras críticas e padrões que agentes de IA devem seguir
 - yfinance: ^1.2.0
 - pandera: ^0.29.0
 - portalocker: ^3.1.0
+- papermill: ^2.7.0 (opcional; habilite via `poetry install --extras "notebook"`)
 - sqlparse: ^0.5.5
 - Persistência: `sqlite3` (stdlib) — arquivo canônico `dados/data.db`
 - Dev / CI: pytest ^7.4.0, ruff (config em `pyproject.toml`), pre-commit
-
-Nota curta: prefira as versões declaradas em `pyproject.toml` como fonte da verdade; documente e justifique qualquer alteração em `docs/sprint-reports/`.
 
 ## UX
 
@@ -74,7 +73,7 @@ Nota curta: prefira as versões declaradas em `pyproject.toml` como fonte da ver
 - Calcule e persista `raw_checksum` antes de realizar upserts no DB; não mude o algoritmo de checksum sem migração/nota.
 - Em chamadas de rede/IO, favor testar via fixtures/mocks (monkeypatch/patch) em vez de rede real.
 - Use `src.logging_config.get_logger` para logging estruturado; evite `print()` em produção.
-- Sanitize entradas que possam ser usadas em paths/nomes de arquivos para evitar injeção de shell/path traversal.
+- Sanitize as entradas que possam ser usadas em paths/nomes de arquivos para evitar injeção de shell/path traversal.
 - CLI: o projeto usa `typer` para a CLI (`src/main.py`). Mantenha comandos leves; evite imports pesados no topo do módulo da CLI — importe dentro da função do comando quando necessário.
 - Adapter Factory: siga a fábrica de adapters em `src/adapters/factory.py`. Sempre obter instâncias via `get_adapter()` ou `register_adapter()`; não introduza caminhos alternativos de criação de adapters sem atualizar `docs/modules/adapter-guidelines.md`.
 
@@ -128,7 +127,6 @@ Nota curta: prefira as versões declaradas em `pyproject.toml` como fonte da ver
   # tests/test_etl.py
   def test_process_etl_with_mock(yf_mock, tmp_db):
       from src.adapters.factory import get_adapter
-      from src.db import write_prices, compute_raw_checksum
 
       adapter = get_adapter("yfinance")
       df = adapter.fetch("PETR4")  # yfinance.download interceptado pelo yf_mock
@@ -184,17 +182,17 @@ Nota curta: prefira as versões declaradas em `pyproject.toml` como fonte da ver
 
 ### Testes (Conciso e Acionável)
 
-- Run tests with `pytest` via `poetry run pytest -q`. Keep tests fast and deterministic.
-- Organize tests under `tests/` using `test_*.py` files; group by module in subfolders.
-- Separate unit and integration tests: mark integration tests with `@pytest.mark.integration` and run them in a separate CI job.
-- Unit tests must not perform network I/O. Mock external calls (e.g., `yfinance`) using `unittest.mock.patch`, `pytest` fixtures, or `responses`.
-- Use `sqlite3.connect(":memory:")` or a `tmp_path` DB for tests; inject `conn` into functions to allow isolation and rollback.
-- Use `tmp_path`/`tmp_path_factory` for filesystem artifacts and ensure cleanup. Prefer fixtures for snapshot fixtures (place under `tests/fixtures/`).
-- Validate snapshot checksums in tests using `scripts/validate_snapshots.py` helpers; tests that read snapshots must not write them.
-- Mark slow tests with `@pytest.mark.slow` to exclude from the default CI run; include a small smoke/integration job in CI for critical paths.
-- Use `monkeypatch` to control environment variables and patch time/randomness for deterministic tests.
-- Aim for high coverage on core ETL/adapter/persistence modules; add focused integration smoke tests that run in `--no-network` mode.
-- CI: run `poetry run pre-commit --all-files` and `poetry run pytest -q` as minimal pipeline steps; fail CI on checksum/lint/test failures.
+- Execute testes com `pytest` via `poetry run pytest -q`. Mantenha os testes rápidos e determinísticos.
+- Organize os testes em `tests/` usando arquivos `test_*.py`; agrupe por módulo em subpastas.
+- Separe testes unitários e de integração: marque testes de integração com `@pytest.mark.integration` e execute-os em um job de CI separado.
+- Testes unitários não devem realizar I/O de rede. Faça mock de chamadas externas (ex.: `yfinance`) com `unittest.mock.patch`, fixtures do `pytest` ou `responses`.
+- Use `sqlite3.connect(":memory:")` ou um banco em `tmp_path` para testes; injete `conn` nas funções para permitir isolamento e rollback.
+- Use `tmp_path`/`tmp_path_factory` para artefatos de filesystem e garanta limpeza. Prefira fixtures para snapshots (coloque em `tests/fixtures/`).
+- Valide checksums de snapshot em testes usando os helpers de `scripts/validate_snapshots.py`; testes que leem snapshots não devem escrevê-los.
+- Marque testes lentos com `@pytest.mark.slow` para excluí-los da execução padrão do CI; inclua um pequeno job de smoke/integration para caminhos críticos.
+- Use `monkeypatch` para controlar variáveis de ambiente e fazer patch de tempo/aleatoriedade para testes determinísticos.
+- Busque alta cobertura nos módulos centrais de ETL/adapter/persistência; adicione testes de integração focados que rodem em modo `--no-network`.
+- CI: execute `poetry run pre-commit --all-files` e `poetry run pytest -q` como passos mínimos do pipeline; faça o CI falhar em caso de checksum/lint/testes com falha.
 
 
 ### Qualidade de Código e Estilo

@@ -1,11 +1,33 @@
+# Used to serialize/deserialize test payloads.
 import json
+
+# Locate schema file in repo tree.
+import pathlib
+
+# Provide timestamp helpers for test fixtures.
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+# Validate response payloads against the JSON schema.
 from jsonschema import validate
+
+# Test utilities from pytest.
+from pytest import MonkeyPatch
+
+# Invoke the Typer CLI app for end-to-end behavior.
 from typer.testing import CliRunner
 
+# The FastAPI/Typer application under test.
 from src.main import app
+
+
+def _format_iso_z(dt: datetime) -> str:
+    """Format *dt* as an ISO-8601 string ending with ``Z`` (UTC).
+
+    This mirrors the formatting used in ingest logs.
+    """
+
+    return dt.isoformat().replace("+00:00", "Z")
 
 
 def _write_sample_ingest_log(path: str) -> None:
@@ -16,9 +38,7 @@ def _write_sample_ingest_log(path: str) -> None:
             "job_id": "00000000-0000-0000-0000-000000000000",
             "source": "dummy",
             "status": "success",
-            "finished_at": (now - timedelta(hours=1))
-            .isoformat()
-            .replace("+00:00", "Z"),
+            "finished_at": _format_iso_z(now - timedelta(hours=1)),
             "duration": "1.23s",
             "rows": 10,
         },
@@ -26,9 +46,7 @@ def _write_sample_ingest_log(path: str) -> None:
             "job_id": "00000000-0000-0000-0000-000000000001",
             "source": "dummy",
             "status": "error",
-            "finished_at": (now - timedelta(hours=2))
-            .isoformat()
-            .replace("+00:00", "Z"),
+            "finished_at": _format_iso_z(now - timedelta(hours=2)),
             "duration": "0.10s",
             "rows": 0,
         },
@@ -38,7 +56,7 @@ def _write_sample_ingest_log(path: str) -> None:
             f.write(json.dumps(r, ensure_ascii=False) + "\n")
 
 
-def test_metrics_schema(tmp_path, monkeypatch):
+def test_metrics_schema(tmp_path: pathlib.Path, monkeypatch: MonkeyPatch):
     """Valida que a saída de `main metrics` segue o schema definido."""
 
     ingest_log = tmp_path / "ingest_logs.jsonl"

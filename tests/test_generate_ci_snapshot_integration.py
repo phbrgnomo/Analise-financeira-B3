@@ -55,5 +55,8 @@ def test_generate_ci_snapshot_writes_metadata(
     checksum_file = snap_dir / "PETR4_snapshot.csv.checksum"
 
     assert snapshot_file.exists(), "Snapshot file was not created"
+    snapshot_contents = snapshot_file.read_text(encoding="utf-8").strip()
+    assert snapshot_contents, "Snapshot file should not be empty"
+
     assert checksum_file.exists(), "Checksum sidecar file was not created"
     assert checksum_file.read_text().strip(), "Checksum sidecar should not be empty"

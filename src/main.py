@@ -37,6 +37,16 @@ from src.paths import DATA_DIR
 from src.tickers import normalize_b3_ticker, ticker_variants
 from src.utils.conversions import as_bool
 
+# Default notebook path used by the --run-notebook flow.
+DEFAULT_NOTEBOOK_PATH = "examples/notebooks/returns-consumer.ipynb"
+
+# Default Typer option object for notebook execution.
+NOTEBOOK_PATH_OPTION = typer.Option(
+    DEFAULT_NOTEBOOK_PATH,
+    "--notebook-path",
+    help="Caminho para o notebook a ser executado com papermill.",
+)
+
 # load any local .env file early so calls to os.getenv work below; this
 # is a no-op when running in CI or when no file exists.
 load_dotenv()
@@ -242,7 +252,11 @@ def _make_ticker_result(
     }
 
 
-def _run_notebook(tickers: list[str], job_id: str) -> dict[str, object]:
+def _run_notebook(
+    tickers: list[str],
+    job_id: str,
+    notebook_path: str | Path = "examples/notebooks/returns-consumer.ipynb",
+) -> dict[str, object]:
     """Execute notebook em batch via papermill.
 
     This is an optional step invoked via `--run-notebook`.
@@ -251,7 +265,11 @@ def _run_notebook(tickers: list[str], job_id: str) -> dict[str, object]:
     feedback = CliFeedback("notebook")
     feedback.start("executando notebook de análise")
 
-    input_nb = Path("examples") / "notebooks" / "returns-consumer.ipynb"
+    input_nb = Path(notebook_path)
+    if not input_nb.exists():
+        feedback.error(f"Notebook não encontrado: {input_nb}")
+        raise typer.Exit(code=2)
+
     output_dir = Path("reports")
     output_dir.mkdir(parents=True, exist_ok=True)
     output_nb = output_dir / f"quickstart-{job_id}.ipynb"
@@ -531,6 +549,7 @@ def run_cmd(  # noqa: C901
         help="Executa o notebook de análise após o término do pipeline.",
         is_flag=True,
     ),
+    notebook_path: str = NOTEBOOK_PATH_OPTION,
     ticker_arg: Optional[str] = typer.Argument(None, hidden=True),
     provider_arg: Optional[str] = typer.Argument(None, hidden=True),
     force_refresh: bool = typer.Option(
@@ -549,6 +568,12 @@ def run_cmd(  # noqa: C901
 
     output_json = output_format == "json"
     effective_force_refresh = as_bool(force_refresh)
+
+    # When run_cmd is invoked programmatically (e.g. via the root callback), the
+    # `notebook_path` default can arrive as a Typer OptionInfo object instead of a
+    # string/path.  Normalize to the expected default path in that case.
+    if not isinstance(notebook_path, (str, Path)):
+        notebook_path = DEFAULT_NOTEBOOK_PATH
 
     # Determine a time window to pass to the adapter.
     start_date: str | None = None
@@ -596,7 +621,14 @@ def run_cmd(  # noqa: C901
     }
 
     if run_notebook:
-        notebook_results = _run_notebook(tickers, job_id)
+        # Use the default notebook path in the typical case so tests that patch
+        # `_run_notebook` (expecting a 2-arg signature) continue to work.
+        if Path(notebook_path) == Path(DEFAULT_NOTEBOOK_PATH):
+            notebook_results = _run_notebook(tickers, job_id)
+        else:
+            notebook_results = _run_notebook(
+                tickers, job_id, notebook_path=notebook_path
+            )
         summary["notebook"] = notebook_results
 
     if output_json:

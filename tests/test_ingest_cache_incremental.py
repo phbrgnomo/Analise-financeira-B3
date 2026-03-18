@@ -1,7 +1,9 @@
 import itertools
+import pathlib
 import sqlite3
 import time
 from datetime import datetime, timedelta, timezone
+from typing import Optional, Tuple
 
 import pandas as pd
 import pytest
@@ -18,8 +20,31 @@ def make_sample_df(dates, values=None):
     return pd.DataFrame({"date": pd.to_datetime(dates), "close": values})
 
 
-def setup_env(tmp_path, ttl="0", snapshot_dir=None, cache_file=None):
-    """Configure environment variables for snapshot tests."""
+def setup_env(
+    tmp_path: pathlib.Path,
+    ttl: str = "0",
+    snapshot_dir: Optional[pathlib.Path] = None,
+    cache_file: Optional[pathlib.Path] = None,
+) -> Tuple[pytest.MonkeyPatch, pathlib.Path, pathlib.Path]:
+    """Configure environment variables for snapshot tests.
+
+    Parameters
+    ----------
+    tmp_path:
+        Temporary directory provided by pytest.
+    ttl:
+        Snapshot cache TTL (in seconds) set via ``SNAPSHOT_TTL``.
+    snapshot_dir:
+        Optional override for the snapshot directory (``SNAPSHOT_DIR``).
+    cache_file:
+        Optional override for the snapshot cache file path
+        (``SNAPSHOT_CACHE_FILE``).
+
+    Returns
+    -------
+    Tuple[pytest.MonkeyPatch, pathlib.Path, pathlib.Path]
+        ``(monkeypatch, snapshot_dir, cache_file)``.
+    """
     if snapshot_dir is None:
         snapshot_dir = tmp_path / "snapshots"
     if cache_file is None:
@@ -68,8 +93,8 @@ def test_env_bool_parsing_default(monkeypatch):
     assert not env_bool("FLAG")
 
 
-def test_corrupted_snapshot_metadata_logs(tmp_path, monkeypatch, caplog):
-    """If the last snapshot payload is invalid JSON we should warn and
+def test_corrupted_snapshot_cache_file_logs(tmp_path, monkeypatch, caplog):
+    """If the snapshot cache file is invalid JSON we should warn and
     continue as a cache miss.
     """
     db_path = tmp_path / "dados" / "data.db"

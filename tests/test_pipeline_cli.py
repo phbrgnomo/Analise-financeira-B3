@@ -87,6 +87,10 @@ def test_pipeline_ingest_error_logging(monkeypatch, capsys):
 
 
 def test_force_refresh_flag_propagation(monkeypatch):
+    """
+    Verify 'force_refresh' is correctly propagated from the CLI helper to the ingest
+    function.
+    """
     seen = {}
 
     def fake_ingest(ticker, source, dry_run=False, force_refresh=False, **kwargs):

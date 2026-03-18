@@ -242,6 +242,34 @@ def _load_snapshot_cache(cache_file_path: Path) -> Dict[str, Any]:
         return {}
 
 
+def _safe_snapshot_path(ticker: str, snapshot_dir: Path, ts: str) -> Path:
+    """Compute the resolved snapshot file path for a given ticker.
+
+    This helper centralises how snapshot file paths are constructed so both
+    cache lookups and writes use the same logic.
+
+    It performs the following steps:
+
+    - sanitises *ticker* to allow only alphanumeric characters, ``-`` and
+      ``_`` (everything else becomes ``_``)
+    - creates a filename ``{safe_ticker}-{ts}.csv``
+    - resolves *snapshot_dir* and verifies the output is inside it
+
+    Raises:
+        ValueError: if the resolved path would escape *snapshot_dir*.
+    """
+
+    import re
+
+    safe_ticker = re.sub(r"[^A-Za-z0-9_-]", "_", ticker) or "ticker"
+    filename = f"{safe_ticker}-{ts}.csv"
+    snapshot_dir_res = snapshot_dir.resolve()
+    out_path = (snapshot_dir_res / filename).resolve()
+    if not out_path.is_relative_to(snapshot_dir_res):
+        raise ValueError("sanitized filename escapes snapshot_dir")
+    return out_path
+
+
 def _snapshot_path_for_ticker(ticker: str, snapshot_dir: Path, ts: str) -> Path:
     """Compute the deterministic snapshot file path for a given ticker.
 
@@ -250,22 +278,7 @@ def _snapshot_path_for_ticker(ticker: str, snapshot_dir: Path, ts: str) -> Path:
     before the file exists.
     """
 
-    # sanitize ticker so that it cannot escape the snapshot directory or
-    # introduce confusing characters.  Allow alphanumerics, hyphen and
-    # underscore only; everything else becomes underscore.  Also map dots to
-    # underscore for consistency with earlier behaviour.
-    import re
-
-    safe_ticker = re.sub(r"[^A-Za-z0-9_-]", "_", ticker) or "ticker"
-
-    filename = f"{safe_ticker}-{ts}.csv"
-    snapshot_dir_res = snapshot_dir.resolve()
-    out_path = (snapshot_dir_res / filename).resolve()
-    # ensure the resolved output path is inside the snapshot directory
-    if not out_path.is_relative_to(snapshot_dir_res):
-        raise ValueError("sanitized filename escapes snapshot_dir")
-
-    return out_path
+    return _safe_snapshot_path(ticker, snapshot_dir, ts)
 
 
 def _check_cache_hit(
@@ -341,25 +354,27 @@ def _write_and_record_snapshot(
 ) -> tuple[str, Path]:
     """Write a versioned snapshot CSV to disk.
 
-    This function used to persist metadata to the database, but the current
-    cache-backed workflow keeps metadata in the snapshot cache file instead.
-    """
-    # sanitize ticker so that it cannot escape the snapshot directory or
-    # introduce confusing characters.  Allow alphanumerics, hyphen and
-    # underscore only; everything else becomes underscore.  Also map dots to
-    # underscore for consistency with earlier behaviour.
-    import re
+    The filename is derived from a sanitized version of *ticker* and the
+    provided timestamp *ts* (e.g. ``TICKER-YYYYMMDD.csv``).
 
+    The actual write and pruning of old snapshots is delegated to
+    :func:`src.etl.snapshot.write_snapshot`.
+
+    Snapshot metadata (checksum, processed time, etc.) is maintained in a
+    file-backed snapshot cache, not in the database.
+
+    Invariants / caller expectations:
+    - *ticker* is sanitized to allow only alphanumerics, ``-`` and ``_``; all
+      other characters are replaced with ``_``.
+    - *snapshot_dir* is resolved to an absolute path, and the resolved output
+      path is verified to be inside that directory via ``Path.is_relative_to``.
+
+    Returns:
+        A tuple of ``(checksum, path_to_written_snapshot)``.
+    """
     from src.etl.snapshot import write_snapshot
 
-    safe_ticker = re.sub(r"[^A-Za-z0-9_-]", "_", ticker) or "ticker"
-
-    filename = f"{safe_ticker}-{ts}.csv"
-    snapshot_dir_res = snapshot_dir.resolve()
-    out_path = (snapshot_dir_res / filename).resolve()
-    # ensure the resolved output path is inside the snapshot directory
-    if not out_path.is_relative_to(snapshot_dir_res):
-        raise ValueError("sanitized filename escapes snapshot_dir")
+    out_path = _safe_snapshot_path(ticker, snapshot_dir, ts)
 
     # write_snapshot also handles pruning old files via _prune_old_snapshots
     sha = write_snapshot(df, out_path)
@@ -485,7 +500,9 @@ def ingest_from_snapshot(
         ts = now.strftime("%Y%m%d")
 
         # Ensure cache operations are coordinated, since the cache file is shared
-        # across tickers and processes.
+        # across tickers and processes. Hold the lock only for the cache lookup
+        # and the brief cache update, but not for the potentially slow
+        # snapshot write + DB ingest steps.
         from src.ingest.cache import cache_file_lock
 
         with cache_file_lock(cache_file_path):
@@ -502,13 +519,19 @@ def ingest_from_snapshot(
                 cache_result["duration"] = f"{elapsed:.2f}s"
                 return cache_result
 
-            sha, out_path = _write_snapshot_file(df, ticker, resolved_dir, ts)
-            rows_processed = _run_incremental_ingest(df, ticker, resolved_db)
+        # The cache is no longer locked here; doing the write and ingest can
+        # take time and should not block other tickers.
+        sha, out_path = _write_snapshot_file(df, ticker, resolved_dir, ts)
+        rows_processed = _run_incremental_ingest(df, ticker, resolved_db)
 
-            # Update cache for future runs.
+        # Update cache for future runs.
+        # Use the same timestamp used to generate the snapshot filename
+        # to avoid inconsistencies when execution crosses midnight.
+        with cache_file_lock(cache_file_path):
+            cache_file = _load_snapshot_cache(cache_file_path)
             cache_file[str(out_path.resolve())] = {
                 "sha256": sha,
-                "processed_at": datetime.now(timezone.utc).isoformat(),
+                "processed_at": now.isoformat(),
             }
             save_cache(cache_file_path, cache_file)
 

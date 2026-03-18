@@ -3,6 +3,7 @@ import json
 import re
 import subprocess
 import sys
+from pathlib import Path
 
 import pytest
 from typer.testing import CliRunner
@@ -265,6 +266,58 @@ def test_run_json_output_failure_ingest_error(fake_ingest_failure):
     assert data["tickers"][0].get("error_message")
 
 
+def test_parse_sample_tickers_file(tmp_path):
+    """`--sample-tickers` deve aceitar arquivo com tickers listados por linha."""
+    from src.main import _parse_sample_tickers
+
+    file_path = tmp_path / "tickers.txt"
+    file_path.write_text("PETR4\n# comment\n\nITUB3\n")
+
+    assert _parse_sample_tickers(str(file_path)) == ["PETR4", "ITUB3"]
+
+
+def test_parse_sample_tickers_empty_file_returns_none(tmp_path):
+    """Arquivo vazio ou contendo apenas comentários deve retornar None."""
+    from src.main import _parse_sample_tickers
+
+    file_path = tmp_path / "empty.txt"
+    file_path.write_text("# nothing here\n\n")
+
+    assert _parse_sample_tickers(str(file_path)) is None
+
+
+def test_parse_sample_tickers_unreadable_file(monkeypatch, tmp_path):
+    """Falha ao ler o arquivo deve propagar a exceção para o usuário."""
+    from src.main import _parse_sample_tickers
+
+    file_path = tmp_path / "tickers.txt"
+    file_path.write_text("PETR4\n")
+
+    original_read_text = Path.read_text
+
+    def _fail_read_text(self, *args, **kwargs):
+        raise OSError("permission denied")
+
+    monkeypatch.setattr(Path, "read_text", _fail_read_text)
+
+    with pytest.raises(OSError):
+        _parse_sample_tickers(str(file_path))
+
+    monkeypatch.setattr(Path, "read_text", original_read_text)
+
+
+def test_ensure_str_or_none_non_string():
+    """_ensure_str_or_none deve retornar None para valores não-string."""
+    from src.main import _ensure_str_or_none
+
+    class Dummy:
+        pass
+
+    assert _ensure_str_or_none("abc") == "abc"
+    assert _ensure_str_or_none(123) is None
+    assert _ensure_str_or_none(Dummy()) is None
+
+
 def test_run_sample_tickers_option(monkeypatch):
     """`--sample-tickers` deve controlar a lista de tickers processados."""
     from src.main import app
@@ -400,7 +453,7 @@ def test_run_dry_run_flag_propagated_to_ingest_and_compute(monkeypatch):
 
 
 def test_run_notebook_invokes_papermill(monkeypatch):
-    """`--run-notebook` deve chamar papermill.excute_notebook quando disponível."""
+    """`--run-notebook` deve chamar papermill.execute_notebook quando disponível."""
     from src.main import app
 
     # Fake papermill module
@@ -675,7 +728,7 @@ def test_run_with_run_notebook_flag_invokes_notebook_runner(monkeypatch):
 
     called = {}
 
-    def fake_run_notebook(tickers, job_id):
+    def fake_run_notebook(tickers, job_id, **kwargs):
         called["tickers"] = tickers
         called["job_id"] = job_id
         return {"status": "success"}

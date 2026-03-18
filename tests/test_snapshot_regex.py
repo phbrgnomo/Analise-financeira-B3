@@ -59,8 +59,8 @@ def test_parse_snapshot_timestamp_behavior(tmp_path):
     assert isinstance(mtime2, float)
 
     # invalid name returns (None, mtime)
-    p2 = tmp_path / "foo-bar.csv"
-    p2.write_text("")
-    ts2, mtime2 = snapshot._parse_snapshot_timestamp(p2)
+    invalid_path = tmp_path / "foo-bar.csv"
+    invalid_path.write_text("")
+    ts2, mtime2 = snapshot._parse_snapshot_timestamp(invalid_path)
     assert ts2 is None
     assert isinstance(mtime2, float)
