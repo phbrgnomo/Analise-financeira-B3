@@ -18,6 +18,10 @@ yfinance = "^1.2.0"
 pandera = "^0.29.0"
 portalocker = "^3.1.0"
 sqlparse = "^0.5.5"
+papermill = { version = "^2.7.0", optional = true }
+
+[tool.poetry.extras]
+notebook = ["papermill"]
 
 
 [build-system]

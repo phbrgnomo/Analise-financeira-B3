@@ -24,15 +24,18 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install poetry
+          poetry lock
           poetry config virtualenvs.create false
-          poetry install --no-interaction --no-ansi
+          # Poetry v2 defaults to installing only main dependencies. We need dev deps
+          # for tests (e.g., pytest).
+          poetry install --no-interaction --no-ansi --with dev
 
       - name: Run tests with simulated SQLite version ${{ matrix.sqlite_version }}
         env:
           SQLITE_VERSION: ${{ matrix.sqlite_version }}
         run: |
           # Run unit tests quickly; E2E runs in separate job
-          pytest -q -k "not e2e and not property"
+          poetry run pytest -q -k "not e2e and not property"
 
   e2e:
     runs-on: ubuntu-latest

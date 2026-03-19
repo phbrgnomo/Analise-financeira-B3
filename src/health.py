@@ -135,8 +135,28 @@ def _extract_latency(rec: Dict[str, Any]) -> Optional[float]:
 def _analyze_logs(
     logs: List[Dict[str, Any]],
     now: datetime,
-    ) -> Tuple[Optional[datetime], int, int, List[float]]:
-    """Analyze log entries and extract metrics used for health computation."""
+) -> Tuple[Optional[datetime], int, int, List[float]]:
+    """Analyze log entries and extract metrics used for health computation.
+
+    Parameters
+    ----------
+    logs:
+        A list of ingest log records, typically loaded from JSONL.
+    now:
+        Current time (UTC) used to compute recent/24h windows.
+
+    Returns
+    -------
+    Tuple[Optional[datetime], int, int, List[float]]
+        A tuple containing:
+
+        - ``last_event_time``: the most recent successful *finished_at* timestamp
+          seen in *logs* (or ``None`` if missing).
+        - ``error_count``: number of non-"success" events in the last 24h.
+        - ``total_count``: total number of events in the last 24h.
+        - ``latency_samples``: list of parsed latency values (in seconds) found
+          in the logs.
+    """
 
     last_finished: Optional[datetime] = None
     errors_last_24h = 0

@@ -12,7 +12,25 @@ Exemplo rápido
 1. Executar ingest e persist (forçando refresh):
 
 ```bash
-poetry run main pipeline ingest PETR4 --force-refresh
+poetry run main --ticker PETR4 --force-refresh
+```
+
+2. Opcionalmente, executar o notebook de análise (se `papermill` estiver instalado):
+
+```bash
+poetry run main --ticker PETR4 --run-notebook
+```
+
+3. Exemplo em modo CI / offline simulando caixa preta:
+
+```bash
+poetry run main --ticker PETR4 --format json --no-network
+```
+
+4. Exemplo usando um conjunto personalizado de tickers ou limitando o período de ingestão:
+
+```bash
+poetry run main --sample-tickers PETR4,ITUB3 --max-days 30 --no-network
 ```
 
 > Para uso em CI ou em scripts, você pode gerar saída JSON e rodar em modo offline:
@@ -22,6 +40,11 @@ poetry run main pipeline ingest PETR4 --force-refresh
 > ```
 >
 > O JSON segue o contrato descrito em `CLI_CONTRACT.md`.
+>
+> **Nota:** mesmo em modo `--no-network`, o pipeline ainda grava snapshots locais e irá reutilizar (cache hit) os arquivos existentes sempre que o conteúdo não mudar. Mesmo nesses casos, o JSON continua a incluir `snapshot_path` e `snapshot_checksum` para permitir validação consistente em CI.
+>
+> **Observação sobre `--run-notebook`:**
+> O notebook é executado apenas se você passar `--run-notebook`, e pode precisar de rede dependendo do conteúdo das células (mesmo em `--no-network`).
 
 2. Arquivos/paths esperados (exemplos):
 - Snapshot CSV: `snapshots/<TICKER>-YYYYMMDD.csv` (ex.: `snapshots/PETR4-20260215.csv`)
@@ -39,12 +62,15 @@ Verificações mínimas
 ls -l snapshots/PETR4_snapshot.csv
 ```
 
-- Calcular checksum SHA256 do snapshot:
+- Calcular checksum SHA256 do snapshot (ou validar contra o arquivo `.checksum` gerado automaticamente):
 
 ```bash
 sha256sum snapshots/PETR4_snapshot.csv
 # Exemplo de saída:
 # e3b0c44298fc1c149afbf4c8996fb924...  snapshots/PETR4_snapshot.csv
+
+# Verificar que o checksum bate com o arquivo sidecar:
+cat snapshots/PETR4_snapshot.csv.checksum
 ```
 
 Verificar raw provider e metadados

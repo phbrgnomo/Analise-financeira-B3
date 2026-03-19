@@ -40,7 +40,7 @@ development_status:
   epic-2-retrospective: completed
 
   epic-3: in-progress
-  3-1-implementar-quickstart-cli-end-to-end: ready-for-dev
+  3-1-implementar-quickstart-cli-end-to-end: completed
   3-2-notebooks-parametrizaveis-e-quickstart-notebook: ready-for-dev
   3-3-streamlit-poc-basico-que-consome-o-db: ready-for-dev
   3-4-cli-health-metrics-commands-metrics-test-conn: ready-for-dev

@@ -26,6 +26,13 @@ def test_save_raw_csv_and_register(tmp_path):
     # use default metadata file under tmp_path/metadata by patching cwd via raw_root
     metadata_dir = tmp_path / "metadata"
 
+    # Ensure the warning is emitted even if a previous test already triggered
+    # the global suppression flag. Use the module-provided test helper rather
+    # than mutating private state directly.
+    import src.ingest.raw_storage as raw_storage  # noqa: F401
+
+    raw_storage._test_reset_deprecation_warning()
+
     # passing a non-default db_path should trigger a deprecation warning
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")

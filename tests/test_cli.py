@@ -1,8 +1,11 @@
+import importlib.util
 import json
 import re
 import subprocess
 import sys
+from pathlib import Path
 
+import pytest
 from typer.testing import CliRunner
 
 from src.main import app
@@ -77,17 +80,23 @@ def test_run_uses_ingest_pipeline(monkeypatch):
     O teste substitui as funções reais por **mocks** que registram as
     chamadas, permitindo asserts sobre ticker, fonte e fluxo geral.
     """
-    from src.main import app
 
     calls = []
 
-    def fake_ingest(ticker, source="yfinance", dry_run=False, force_refresh=False):
+    def fake_ingest(
+        ticker,
+        source="yfinance",
+        dry_run=False,
+        force_refresh=False,
+        **kwargs,
+    ):
         calls.append(
             {
                 "ticker": ticker,
                 "source": source,
                 "dry_run": dry_run,
                 "force_refresh": force_refresh,
+                **kwargs,
             }
         )
         return {"status": "success"}
@@ -107,7 +116,9 @@ def test_run_uses_ingest_pipeline(monkeypatch):
     result = runner.invoke(app, ["run"])
     assert result.exit_code == 0
     assert calls, "esperávamos que ingest fosse chamado"
-    assert "Resumo run:" in result.output
+    # Ensure the summary includes a job_id and per-ticker snapshot info.
+    assert "job_id=" in result.output
+    assert "snapshot=" in result.output
     assert calls[0]["ticker"] == "PETR4"
     assert calls[0]["source"] == "yfinance"
 
@@ -207,9 +218,18 @@ def test_run_json_output(fake_ingest_success, fake_compute_rows1):
     )
     assert result.exit_code == 0
     data = json.loads(result.output)
+
+    # Basic summary structure
     assert data["status"] == "success"
+    assert isinstance(data.get("job_id"), str)
+    assert isinstance(data.get("duration_sec"), (int, float))
     assert isinstance(data.get("tickers"), list)
-    assert data["tickers"][0]["ticker"] == "PETR4"
+
+    # Validate per-ticker payload shape
+    ticker_payload = data["tickers"][0]
+    assert ticker_payload["ticker"] == "PETR4"
+    assert ticker_payload["snapshot_path"] == "snapshots/PETR4-20260215.csv"
+    assert ticker_payload["snapshot_checksum"] == "abc"
 
 
 def test_run_json_output_warning_no_rows(fake_ingest_success, fake_compute_rows0):
@@ -229,6 +249,39 @@ def test_run_json_output_warning_no_rows(fake_ingest_success, fake_compute_rows0
     assert data["tickers"][0].get("rows_returns") == 0
 
 
+def test_run_json_output_dry_run_includes_rows(monkeypatch):
+    """Verifica que --dry-run gera JSON com rows_ingested preenchido."""
+    from src.main import app
+
+    def fake_ingest(*args, **kwargs):
+        return {"status": "success", "dry_run": True, "rows": 5}
+
+    monkeypatch.setattr("src.ingest.pipeline.ingest", fake_ingest)
+
+    def fake_compute(*args, **kwargs):
+        return {"rows": 1, "persisted": True, "sample_df": None}
+
+    monkeypatch.setattr("src.main._compute_returns_for_ticker", fake_compute)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        app,
+        [
+            "--ticker",
+            "PETR4",
+            "--format",
+            "json",
+            "--dry-run",
+            "--no-network",
+        ],
+    )
+
+    assert result.exit_code == 0
+    data = json.loads(result.output)
+    ticker_payload = data["tickers"][0]
+    assert ticker_payload["rows_ingested"] == 5
+
+
 def test_run_json_output_failure_ingest_error(fake_ingest_failure):
     """Verifica o fluxo de failure quando ingest falha."""
     from src.main import app
@@ -244,6 +297,302 @@ def test_run_json_output_failure_ingest_error(fake_ingest_failure):
     assert isinstance(data.get("tickers"), list)
     assert data["tickers"][0]["ticker"] == "PETR4"
     assert data["tickers"][0].get("error_message")
+
+
+def test_parse_sample_tickers_file(tmp_path):
+    """`--sample-tickers` deve aceitar arquivo com tickers listados por linha."""
+    from src.main import _parse_sample_tickers
+
+    file_path = tmp_path / "tickers.txt"
+    file_path.write_text("PETR4\n# comment\n\nITUB3\n")
+
+    assert _parse_sample_tickers(str(file_path)) == ["PETR4", "ITUB3"]
+
+
+def test_parse_sample_tickers_empty_file_returns_none(tmp_path):
+    """Arquivo vazio ou contendo apenas comentários deve retornar None."""
+    from src.main import _parse_sample_tickers
+
+    file_path = tmp_path / "empty.txt"
+    file_path.write_text("# nothing here\n\n")
+
+    assert _parse_sample_tickers(str(file_path)) is None
+
+
+def test_parse_sample_tickers_unreadable_file(monkeypatch, tmp_path):
+    """Falha ao ler o arquivo deve propagar a exceção para o usuário."""
+    from src.main import _parse_sample_tickers
+
+    file_path = tmp_path / "tickers.txt"
+    file_path.write_text("PETR4\n")
+
+    original_read_text = Path.read_text
+
+    def _fail_read_text(self, *args, **kwargs):
+        raise OSError("permission denied")
+
+    monkeypatch.setattr(Path, "read_text", _fail_read_text)
+
+    with pytest.raises(OSError):
+        _parse_sample_tickers(str(file_path))
+
+    monkeypatch.setattr(Path, "read_text", original_read_text)
+
+
+def test_ensure_str_or_none_non_string():
+    """_ensure_str_or_none deve retornar None para valores não-string."""
+    from src.main import _ensure_str_or_none
+
+    class Dummy:
+        pass
+
+    assert _ensure_str_or_none("abc") == "abc"
+    assert _ensure_str_or_none(123) is None
+    assert _ensure_str_or_none(Dummy()) is None
+
+
+def test_run_sample_tickers_option(monkeypatch):
+    """`--sample-tickers` deve controlar a lista de tickers processados."""
+    from src.main import app
+
+    calls = []
+
+    def fake_ingest(
+        ticker,
+        source="yfinance",
+        dry_run=False,
+        force_refresh=False,
+        **kwargs,
+    ):
+        calls.append({"ticker": ticker, "source": source, **kwargs})
+        return {"status": "success"}
+
+    monkeypatch.setattr("src.ingest.pipeline.ingest", fake_ingest)
+
+    # reduce output noise by also faking compute
+    def fake_compute(*args, **kwargs):
+        return {"rows": 1, "persisted": True, "sample_df": None}
+
+    monkeypatch.setattr("src.main._compute_returns_for_ticker", fake_compute)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        app,
+        [
+            "run",
+            "--sample-tickers",
+            "PETR4,ITUB3",
+            "--no-network",
+            "--format",
+            "json",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert {c["ticker"] for c in calls} == {"PETR4", "ITUB3"}
+
+
+def test_run_max_days_passed_to_ingest(monkeypatch):
+    """`--max-days` deve ser traduzido em start/end passados para ingest."""
+    # Patch time window resolver to stable values
+    import src.ingest.pipeline as pipeline_module
+    from src.main import app
+
+    monkeypatch.setattr(
+        pipeline_module,
+        "_resolve_sample_window",
+        lambda d, s, e: ("2020-01-10", "2020-01-17"),
+    )
+
+    called = []
+
+    def fake_ingest(
+        ticker,
+        source="yfinance",
+        dry_run=False,
+        force_refresh=False,
+        **kwargs,
+    ):
+        called.append(kwargs)
+        return {"status": "success"}
+
+    monkeypatch.setattr("src.ingest.pipeline.ingest", fake_ingest)
+
+    def fake_compute(*args, **kwargs):
+        return {"rows": 1, "persisted": True, "sample_df": None}
+
+    monkeypatch.setattr("src.main._compute_returns_for_ticker", fake_compute)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        app,
+        [
+            "run",
+            "--ticker",
+            "PETR4",
+            "--max-days",
+            "7",
+            "--no-network",
+            "--format",
+            "json",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert called and called[0].get("start") == "2020-01-10"
+    assert called[0].get("end") == "2020-01-17"
+
+
+def test_run_dry_run_flag_propagated_to_ingest_and_compute(monkeypatch):
+    """`--dry-run` deve ser propagado até ingest e
+    _compute_returns_for_ticker via CLI."""
+    import src.ingest.pipeline as pipeline_module
+    from src.main import app
+
+    ingest_call = {}
+    compute_call = {}
+
+    def fake_ingest(*args, **kwargs):
+        ingest_call["kwargs"] = kwargs
+        return {"status": "success"}
+
+    def fake_compute_returns_for_ticker(*args, **kwargs):
+        compute_call["args"] = args
+        compute_call["kwargs"] = kwargs
+        return {"rows": 1, "persisted": True, "sample_df": None}
+
+    monkeypatch.setattr(pipeline_module, "ingest", fake_ingest)
+    monkeypatch.setattr(
+        "src.main._compute_returns_for_ticker", fake_compute_returns_for_ticker
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(
+        app,
+        [
+            "run",
+            "--ticker",
+            "PETR4",
+            "--dry-run",
+            "--no-network",
+            "--format",
+            "json",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert ingest_call.get("kwargs", {}).get("dry_run") is True
+    assert compute_call.get("args", (None, None, None, None))[3] is True
+
+
+def test_run_notebook_invokes_papermill(monkeypatch):
+    """`--run-notebook` deve chamar papermill.execute_notebook quando disponível."""
+    from src.main import app
+
+    # Fake papermill module
+    class FakePM:
+        def __init__(self):
+            self.called = False
+            self.args = None
+
+        def execute_notebook(self, input_nb, output_nb):
+            self.called = True
+            self.args = (input_nb, output_nb)
+
+    fake_pm = FakePM()
+    import sys
+
+    monkeypatch.setitem(sys.modules, "papermill", fake_pm)
+
+    # ensure ingestion pipeline doesn't interfere
+    monkeypatch.setattr(
+        "src.ingest.pipeline.ingest",
+        lambda *a, **k: {"status": "success", "persist": {"rows_processed": 0}},
+    )
+    monkeypatch.setattr(
+        "src.main._compute_returns_for_ticker",
+        lambda *args, **kwargs: {"rows": 1, "persisted": True, "sample_df": None},
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(
+        app,
+        [
+            "run",
+            "--ticker",
+            "PETR4",
+            "--run-notebook",
+            "--format",
+            "json",
+            "--no-network",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert fake_pm.called is True
+    assert result.output.strip(), "expected output"  # ensure output was emitted
+
+
+@pytest.mark.skipif(
+    importlib.util.find_spec("papermill") is not None,
+    reason="papermill installed; cannot test missing dependency path",
+)
+def test_run_notebook_missing_papermill():
+    """`--run-notebook` deve falhar com ImportError quando papermill
+    não está instalado."""
+    from src.main import app
+
+    runner = CliRunner()
+    result = runner.invoke(
+        app,
+        [
+            "run",
+            "--ticker",
+            "PETR4",
+            "--run-notebook",
+            "--format",
+            "json",
+            "--no-network",
+        ],
+    )
+
+    assert result.exit_code == 2
+    assert "papermill" in result.output.lower()
+    assert "instal" in result.output.lower()
+
+
+def test_run_notebook_runtime_error(monkeypatch):
+    """`--run-notebook` deve falhar com código 2 quando papermill lança exceção."""
+    from src.main import app
+
+    class FakePMErroring:
+        def execute_notebook(self, *args, **kwargs):
+            raise RuntimeError("dummy notebook failure")
+
+    import sys
+
+    monkeypatch.setitem(sys.modules, "papermill", FakePMErroring())
+
+    runner = CliRunner()
+    result = runner.invoke(
+        app,
+        [
+            "run",
+            "--ticker",
+            "PETR4",
+            "--run-notebook",
+            "--format",
+            "json",
+            "--no-network",
+        ],
+    )
+
+    assert result.exit_code == 2
+    output = result.output.lower()
+    assert (
+        "dummy notebook failure" in output
+        or "notebook" in output
+    )
 
 
 def test_export_csv_success(tmp_path, monkeypatch):
@@ -330,3 +679,99 @@ def test_ingest_snapshot_command(monkeypatch, tmp_path):
     assert called[0][3] == 123.0
     assert called[0][4] == "foo.json"
     assert "Ingestão de snapshot concluída" in result.output
+
+
+def test_run_supports_sample_tickers_and_max_days(monkeypatch):
+    """Verifica os flags --sample-tickers e --max-days são passados ao pipeline."""
+    from src.main import app
+
+    called = []
+
+    def fake_ingest(
+        ticker, source="yfinance", dry_run=False, force_refresh=False, **kwargs
+    ):
+        called.append(
+            {
+                "ticker": ticker,
+                "dry_run": dry_run,
+                "force_refresh": force_refresh,
+                **kwargs,
+            }
+        )
+        return {"status": "success"}
+
+    monkeypatch.setattr("src.ingest.pipeline.ingest", fake_ingest)
+
+    # force deterministic window
+    import src.ingest.pipeline as pipeline
+
+    monkeypatch.setattr(
+        pipeline,
+        "_resolve_sample_window",
+        lambda days, start, end: ("2020-01-01", "2020-01-31"),
+    )
+
+    # stub retorno calculation to avoid warnings from missing DB data
+    monkeypatch.setattr(
+        "src.main._compute_returns_for_ticker",
+        lambda ticker, start, end, dry_run: {
+            "rows": 1,
+            "persisted": True,
+            "sample_df": None,
+        },
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(
+        app,
+        [
+            "run",
+            "--sample-tickers",
+            "PETR4,ITUB3",
+            "--max-days",
+            "5",
+            "--no-network",
+        ],
+    )
+    assert result.exit_code == 0
+    assert called, "esperávamos que ingest fosse chamado"
+    assert called[0]["ticker"] == "PETR4"
+    assert called[1]["ticker"] == "ITUB3"
+    assert called[0]["start"] == "2020-01-01"
+    assert called[0]["end"] == "2020-01-31"
+
+
+def test_run_with_run_notebook_flag_invokes_notebook_runner(monkeypatch):
+    """`--run-notebook` should invoke the notebook runner after the pipeline."""
+    from src.main import app
+
+    # stub ingest and returns to avoid edge cases
+    monkeypatch.setattr(
+        "src.ingest.pipeline.ingest",
+        lambda *args, **kwargs: {"status": "success", "persist": {"rows_processed": 1}},
+    )
+    monkeypatch.setattr(
+        "src.main._compute_returns_for_ticker",
+        lambda ticker, start, end, dry_run: {
+            "rows": 1,
+            "persisted": True,
+            "sample_df": None,
+        },
+    )
+
+    called = {}
+
+    def fake_run_notebook(tickers, job_id, **kwargs):
+        called["tickers"] = tickers
+        called["job_id"] = job_id
+        return {"status": "success"}
+
+    monkeypatch.setattr("src.main._run_notebook", fake_run_notebook)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        app, ["run", "--ticker", "PETR4", "--run-notebook", "--no-network"]
+    )
+    assert result.exit_code == 0
+    assert called.get("tickers") == ["PETR4"]
+    assert "job_id" in called
