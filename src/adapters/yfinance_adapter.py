@@ -155,6 +155,11 @@ class YFinanceAdapter(Adapter):
 
         logger.info("Iniciando fetch de dados", extra=log_context)
 
+        # Permite sobrescrever o timeout via kwargs (compatibilidade com consumers que
+        # repassam parâmetros arbitrários). Isso evita que o timeout seja passado duas
+        # vezes para `_fetch_once` se `timeout` estiver presente em kwargs.
+        timeout = kwargs.pop("timeout", self.timeout)
+
         # Delegar obtenção com retry para helper implementado no Adapter base
         df = super()._fetch_with_retries(
             normalized_ticker,
@@ -163,7 +168,7 @@ class YFinanceAdapter(Adapter):
             log_context=log_context,
             max_retries=self.max_retries,
             backoff_factor=self.backoff_factor,
-            timeout=self.timeout,
+            timeout=timeout,
             **kwargs,
         )
 
@@ -274,9 +279,7 @@ class YFinanceAdapter(Adapter):
             # Presence of core API objects (Ticker/download) is a cheap check
             # that the library is importable and likely usable without making
             # network requests here.
-            if hasattr(yf, "Ticker") or hasattr(yf, "download"):
-                return True
-            return False
+            return bool(hasattr(yf, "Ticker") or hasattr(yf, "download"))
         except Exception:
             logger.exception("error during yfinance test_connection")
             return False

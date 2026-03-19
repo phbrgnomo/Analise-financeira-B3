@@ -256,6 +256,36 @@ class TestYFinanceAdapter:
         assert result.attrs["adapter"] == "YFinanceAdapter"
 
     @patch("src.adapters.yfinance_adapter.web.DataReader")
+    def test_fetch_flattens_multiindex_columns(self, mock_datareader):
+        """Testa que `fetch` retorna colunas planas quando yfinance retorna
+        MultiIndex."""
+        dates = pd.date_range("2024-01-01", periods=3)
+
+        arrays = [
+            ["Close", "High", "Low", "Open", "Volume"],
+            ["PETR4.SA"] * 5,
+        ]
+        cols = pd.MultiIndex.from_arrays(arrays, names=["Price", "Ticker"])
+        multi_df = pd.DataFrame(
+            [[1, 2, 3, 4, 5], [6, 7, 8, 9, 10], [11, 12, 13, 14, 15]],
+            columns=cols,
+            index=dates,
+        )
+
+        mock_datareader.return_value = multi_df
+
+        adapter = YFinanceAdapter()
+        result = adapter.fetch("PETR4", start_date="2024-01-01", end_date="2024-01-03")
+
+        assert list(result.columns) == [
+            "Close",
+            "High",
+            "Low",
+            "Open",
+            "Volume",
+        ]
+
+    @patch("src.adapters.yfinance_adapter.web.DataReader")
     def test_fetch_empty_dataframe_raises_validation_error(self, mock_datareader):
         """Testa que DataFrame vazio levanta ValidationError."""
         mock_datareader.return_value = pd.DataFrame()

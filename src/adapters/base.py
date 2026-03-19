@@ -21,15 +21,18 @@ logger = logging.getLogger(__name__)
 
 
 class Adapter(ABC):
-    """
-    Interface abstrata para adaptadores de provedores de dados financeiros.
+    """Abstract base class for financial data provider adapters.
 
-    Todos os adaptadores concretos devem herdar desta classe e implementar
-    o método fetch() para buscar dados de um ticker específico.
+    Subclasses must implement `fetch()` and `_fetch_once()`.
 
-    O adaptador é responsável apenas por buscar dados brutos do provedor,
-    sem realizar persistência ou transformações complexas.
+    Attributes:
+        REQUIRED_COLUMNS: Optional list of columns that must be present in the
+            fetched DataFrame. Subclasses or tests may set this class-level
+            attribute to customize validation.
     """
+
+    # Static hint for optional required columns list (used by `_validate_dataframe`).
+    REQUIRED_COLUMNS: Optional[List[str]] = None
 
     def __init__(self, retry_config: Optional[RetryConfig] = None):
         """
