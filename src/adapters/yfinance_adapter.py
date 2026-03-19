@@ -293,12 +293,16 @@ class YFinanceAdapter(Adapter):
             if getattr(yf, "__is_stub__", False):
                 raise RuntimeError("yfinance dependency not installed")
 
+            # yfinance expects an integer timeout; coerce floats into seconds
+            # to satisfy both runtime behavior and static type checking.
+            timeout_seconds: int = int(timeout) if timeout is not None else self.timeout
+
             yf.download(
                 "AAPL",
                 period="1d",
                 interval="1d",
                 progress=False,
-                timeout=timeout or self.timeout,
+                timeout=timeout_seconds,
             )
             status = "success"
             error = None
