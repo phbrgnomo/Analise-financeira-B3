@@ -5,9 +5,18 @@ installed so tests and minimal environments don't require the package.
 """
 
 import logging
-from typing import Any, Dict
+from typing import Any, Dict, Protocol, cast, runtime_checkable
 
 logger = logging.getLogger(__name__)
+
+
+@runtime_checkable
+class Metric(Protocol):
+    def inc(self, amount: int = 1) -> Any:
+        ...
+
+    def observe(self, value: float) -> Any:
+        ...
 
 _HAS_PROM = False
 try:
@@ -29,8 +38,8 @@ class _NoopMetric:
         return None
 
 
-_counters: Dict[str, object] = {}
-_histograms: Dict[str, object] = {}
+_counters: Dict[str, Metric] = {}
+_histograms: Dict[str, Metric] = {}
 
 
 def get_counter(name: str, documentation: str = ""):
@@ -40,7 +49,7 @@ def get_counter(name: str, documentation: str = ""):
         return _NoopMetric()
     if name not in _counters:
         assert Counter is not None
-        _counters[name] = Counter(name, documentation)  # type: ignore[operator]
+        _counters[name] = cast(Metric, Counter(name, documentation))
     return _counters[name]
 
 
@@ -51,7 +60,7 @@ def get_histogram(name: str, documentation: str = ""):
         return _NoopMetric()
     if name not in _histograms:
         assert Histogram is not None
-        _histograms[name] = Histogram(name, documentation)  # type: ignore[operator]
+        _histograms[name] = cast(Metric, Histogram(name, documentation))
     return _histograms[name]
 
 
