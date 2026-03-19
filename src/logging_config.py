@@ -131,3 +131,18 @@ def configure_logging(level: int = logging.INFO) -> None:
         root.removeHandler(h)
     root.setLevel(level)
     root.addHandler(handler)
+
+
+def get_logger(name: str) -> logging.Logger:
+    """Return a logger configured to emit structured JSON logs.
+
+    This helper ensures a default logging configuration is applied even if the
+    application entrypoint did not explicitly call :func:`configure_logging`.
+    """
+
+    # Ensure there is at least one handler so logs are not silently discarded
+    # when the module is used in isolation (e.g. in tests).
+    if not logging.getLogger().handlers:
+        configure_logging()
+
+    return logging.getLogger(name)

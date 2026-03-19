@@ -27,13 +27,14 @@ from src import metrics
 from src.cli_feedback import CliFeedback, StepHandle
 from src.cli_options import output_format_option
 from src.connectivity import test_provider_connection
+from src.db.connection import DEFAULT_DB_PATH
 from src.health import (
     compute_health_metrics,
     read_ingest_logs,
     resolve_ingest_log_path,
 )
 from src.logging_config import configure_logging
-from src.paths import DATA_DIR
+from src.paths import DATA_DIR, RAW_DIR, SNAPSHOTS_DIR
 from src.tickers import normalize_b3_ticker, ticker_variants
 from src.utils.conversions import as_bool
 
@@ -713,6 +714,97 @@ def metrics_cmd(
         feedback.info(f"avg_latency_seconds: {avg:.3f}")
 
 
+@app.command("health")
+def health_cmd(
+    output_format: Literal["text", "json"] = output_format_option(),
+    ingest_log_path: Optional[str] = typer.Option(
+        None,
+        "--ingest-log-path",
+        help=(
+            "Caminho para o arquivo ingest_logs.jsonl "
+            "(default: metadata/ingest_logs.jsonl)."
+        ),
+    ),
+    db_path: Optional[str] = typer.Option(
+        None,
+        "--db-path",
+        help=(
+            "Caminho para o arquivo de banco de dados SQLite "
+            "(default: dados/data.db)."
+        ),
+    ),
+    data_dir: Optional[str] = typer.Option(
+        None,
+        "--data-dir",
+        help="Diretório de dados (default: dados/).",
+    ),
+    raw_dir: Optional[str] = typer.Option(
+        None,
+        "--raw-dir",
+        help="Diretório de dados brutos (default: raw/).",
+    ),
+    snapshots_dir: Optional[str] = typer.Option(
+        None,
+        "--snapshots-dir",
+        help="Diretório de snapshots (default: snapshots/).",
+    ),
+) -> None:
+    """Exibe um resumo rápido de saúde do sistema local."""
+
+    from src.utils.health import check_paths_health
+
+    paths = {
+        "db": db_path or DEFAULT_DB_PATH,
+        "dados": data_dir or str(DATA_DIR),
+        "raw": raw_dir or str(RAW_DIR),
+        "snapshots": snapshots_dir or str(SNAPSHOTS_DIR),
+    }
+
+    health = check_paths_health(paths)
+
+    # Include ingest health metrics in the response by reusing the metrics command
+    # logic (but avoid circular imports).
+    log_path = resolve_ingest_log_path(ingest_log_path)
+    logs = read_ingest_logs(log_path)
+    # Reuse existing helper to compute metrics (same structure as `metrics`)
+    threshold_str = os.getenv("INGEST_LAG_THRESHOLD", "86400")
+    try:
+        threshold_seconds = int(threshold_str)
+    except ValueError:
+        logging.getLogger(__name__).warning(
+            "invalid INGEST_LAG_THRESHOLD=%r, using default 86400", threshold_str
+        )
+        threshold_seconds = 86400
+
+    metrics_summary = compute_health_metrics(logs, threshold_seconds)
+
+    result = {
+        "status": health["status"],
+        "paths": health,
+        "metrics": metrics_summary,
+    }
+
+    feedback = CliFeedback("health")
+    if output_format == "json":
+        feedback.json_output(result)
+        raise typer.Exit(code=0)
+
+    feedback.info(f"status: {result['status']}")
+    for reason in health.get("reasons", []):
+        feedback.info(f"- {reason}")
+
+    # Emit the same metrics block as `metrics` command
+    metrics_data = metrics_summary["metrics"]
+    feedback.info(f"ingest_lag_seconds: {metrics_data['ingest_lag_seconds']}")
+    feedback.info(f"errors_last_24h: {metrics_data['errors_last_24h']}")
+    feedback.info(f"jobs_last_24h: {metrics_data['jobs_last_24h']}")
+    avg2 = metrics_summary["metrics"].get("avg_latency_seconds")
+    if avg2 is None:
+        feedback.info("avg_latency_seconds: null")
+    else:
+        feedback.info(f"avg_latency_seconds: {avg2:.3f}")
+
+
 @app.command("test-conn")
 def test_conn_cmd(
     provider: str = typer.Option(
@@ -720,11 +812,16 @@ def test_conn_cmd(
         help="Nome do provider/adaptador a ser usado (ex.: yfinance)",
         is_flag=False,
     ),
+    timeout: float | None = typer.Option(
+        None,
+        "--timeout",
+        help="Timeout em segundos para a verificação de conectividade.",
+    ),
     output_format: Literal["text", "json"] = output_format_option(),
 ) -> None:
     """Verifica conectividade com um provider/adaptador."""
 
-    result = test_provider_connection(provider)
+    result = test_provider_connection(provider, timeout=timeout)
 
     feedback = CliFeedback("test-conn")
 
@@ -734,10 +831,13 @@ def test_conn_cmd(
 
     if result.get("status") == "success":
         latency = result.get("latency_ms")
+        last = result.get("last_success_at")
+        msg = "OK"
         if isinstance(latency, (int, float)):
-            feedback.success(f"OK ({latency / 1000:.3f}s)")
-        else:
-            feedback.success("OK")
+            msg = f"OK ({latency / 1000:.3f}s)"
+        if last:
+            msg = f"{msg} (last_success_at={last})"
+        feedback.success(msg)
     else:
         error_msg = result.get("error") or "erro desconhecido"
         feedback.error(error_msg)

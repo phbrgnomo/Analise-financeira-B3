@@ -9,7 +9,7 @@ import logging
 import time
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, TypedDict
 
 import pandas as pd
 
@@ -20,16 +20,31 @@ from src.adapters.retry_metrics import get_global_metrics
 logger = logging.getLogger(__name__)
 
 
+class ConnectionCheckResult(TypedDict):
+    """TypedDict para o resultado do check de conexão.
+
+    Usado por `Adapter.check_connection` para garantir que os chamadores
+    recebam um dicionário com campos tipados.
+    """
+
+    status: str
+    error: Optional[str]
+    latency_ms: float
+
+
 class Adapter(ABC):
-    """
-    Interface abstrata para adaptadores de provedores de dados financeiros.
+    """Abstract base class for financial data provider adapters.
 
-    Todos os adaptadores concretos devem herdar desta classe e implementar
-    o método fetch() para buscar dados de um ticker específico.
+    Subclasses must implement `fetch()` and `_fetch_once()`.
 
-    O adaptador é responsável apenas por buscar dados brutos do provedor,
-    sem realizar persistência ou transformações complexas.
+    Attributes:
+        REQUIRED_COLUMNS: Optional list of columns that must be present in the
+            fetched DataFrame. Subclasses or tests may set this class-level
+            attribute to customize validation.
     """
+
+    # Static hint for optional required columns list (used by `_validate_dataframe`).
+    REQUIRED_COLUMNS: Optional[List[str]] = None
 
     def __init__(self, retry_config: Optional[RetryConfig] = None):
         """
@@ -57,6 +72,50 @@ class Adapter(ABC):
             self.__class__.__name__,
         )
         return True
+
+    def check_connection(self,
+                         timeout: Optional[float] = None) -> ConnectionCheckResult:
+        """Check provider connectivity and return structured status.
+
+        This is the canonical method used by CLI health checks.
+
+        The default implementation delegates to ``test_connection`` (for
+        backward compatibility) and returns a ``ConnectionCheckResult``.
+
+        The base implementation does not enforce timeout behavior, but it will
+        forward the timeout argument to ``test_connection`` if the method
+        supports it (e.g., subclasses may accept a timeout parameter).
+
+        Parameters
+        ----------
+        timeout:
+            Optional timeout in seconds for the connectivity check.
+
+        Returns
+        -------
+        ConnectionCheckResult
+            A minimal health check result (status, error, latency_ms).
+        """
+
+        start = time.monotonic()
+        try:
+            # Some subclasses may accept a timeout parameter in test_connection.
+            # We attempt to pass it through when supported.
+            if timeout is not None:
+                try:
+                    healthy = self.test_connection(timeout=timeout)  # type: ignore[arg-type]
+                except TypeError:
+                    healthy = self.test_connection()
+            else:
+                healthy = self.test_connection()
+
+            status = "success" if healthy else "failure"
+            error = None
+        except Exception as exc:
+            status = "failure"
+            error = str(exc)
+        latency_ms = round((time.monotonic() - start) * 1000, 2)
+        return {"status": status, "error": error, "latency_ms": latency_ms}
 
     @abstractmethod
     def fetch(self, ticker: str, **kwargs) -> pd.DataFrame:
