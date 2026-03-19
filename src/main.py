@@ -240,14 +240,19 @@ def _make_ticker_result(
         persist = {}
     persist = cast(dict[str, object], persist)
 
+    rows_ingested = persist.get("rows_processed")
+    if rows_ingested is None:
+        rows_ingested = ingest_result.get("rows")
+
     return {
         "ticker": ticker,
         "provider": provider,
         "status": status,
-        "rows_ingested": persist.get("rows_processed"),
+        "rows_ingested": rows_ingested,
         "rows_returns": rows_returns,
-        "snapshot_path": persist.get("snapshot_path"),
-        "snapshot_checksum": persist.get("checksum"),
+        "snapshot_path": persist.get("snapshot_path")
+        or ingest_result.get("snapshot_path"),
+        "snapshot_checksum": persist.get("checksum") or ingest_result.get("checksum"),
         "error_message": ingest_result.get("error_message"),
     }
 

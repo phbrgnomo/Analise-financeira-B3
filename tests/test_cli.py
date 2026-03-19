@@ -249,6 +249,39 @@ def test_run_json_output_warning_no_rows(fake_ingest_success, fake_compute_rows0
     assert data["tickers"][0].get("rows_returns") == 0
 
 
+def test_run_json_output_dry_run_includes_rows(monkeypatch):
+    """Verifica que --dry-run gera JSON com rows_ingested preenchido."""
+    from src.main import app
+
+    def fake_ingest(*args, **kwargs):
+        return {"status": "success", "dry_run": True, "rows": 5}
+
+    monkeypatch.setattr("src.ingest.pipeline.ingest", fake_ingest)
+
+    def fake_compute(*args, **kwargs):
+        return {"rows": 1, "persisted": True, "sample_df": None}
+
+    monkeypatch.setattr("src.main._compute_returns_for_ticker", fake_compute)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        app,
+        [
+            "--ticker",
+            "PETR4",
+            "--format",
+            "json",
+            "--dry-run",
+            "--no-network",
+        ],
+    )
+
+    assert result.exit_code == 0
+    data = json.loads(result.output)
+    ticker_payload = data["tickers"][0]
+    assert ticker_payload["rows_ingested"] == 5
+
+
 def test_run_json_output_failure_ingest_error(fake_ingest_failure):
     """Verifica o fluxo de failure quando ingest falha."""
     from src.main import app

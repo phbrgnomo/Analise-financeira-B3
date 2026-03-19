@@ -310,6 +310,8 @@ def _check_cache_hit(
         "cached": True,
         "rows_processed": 0,
         "reason": "checksum_match",
+        "snapshot_path": str(snapshot_path),
+        "checksum": checksum,
     }
 
     if ttl <= 0:

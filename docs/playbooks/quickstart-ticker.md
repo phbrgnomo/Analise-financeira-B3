@@ -40,6 +40,11 @@ poetry run main --sample-tickers PETR4,ITUB3 --max-days 30 --no-network
 > ```
 >
 > O JSON segue o contrato descrito em `CLI_CONTRACT.md`.
+>
+> **Nota:** mesmo em modo `--no-network`, o pipeline ainda grava snapshots locais e irá reutilizar (cache hit) os arquivos existentes sempre que o conteúdo não mudar. Mesmo nesses casos, o JSON continua a incluir `snapshot_path` e `snapshot_checksum` para permitir validação consistente em CI.
+>
+> **Observação sobre `--run-notebook`:**
+> O notebook é executado apenas se você passar `--run-notebook`, e pode precisar de rede dependendo do conteúdo das células (mesmo em `--no-network`).
 
 2. Arquivos/paths esperados (exemplos):
 - Snapshot CSV: `snapshots/<TICKER>-YYYYMMDD.csv` (ex.: `snapshots/PETR4-20260215.csv`)

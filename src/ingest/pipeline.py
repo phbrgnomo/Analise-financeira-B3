@@ -478,6 +478,10 @@ def ingest(  # noqa: C901 - function is intentionally orchestrator-style
                     "dry run completed",
                     extra={"job_id": job_id, "rows": len(canonical)},
                 )
+                persist_info = {
+                    "rows_processed": len(canonical),
+                    "reason": "dry_run",
+                }
                 result = {
                     "job_id": job_id,
                     "ticker": ticker,
@@ -485,6 +489,7 @@ def ingest(  # noqa: C901 - function is intentionally orchestrator-style
                     "status": "success",
                     "dry_run": True,
                     "rows": len(canonical),
+                    "persist": persist_info,
                     **lock_meta,
                 }
                 metadata = _make_metadata(

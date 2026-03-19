@@ -8,7 +8,7 @@ created_at: 2026-02-17T00:00:00Z
 
 # Story 3.1: Implementar Quickstart CLI end‑to‑end
 
-Status: ready-for-review
+Status: completed
 
 ## Story
 

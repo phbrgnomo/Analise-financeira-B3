@@ -66,6 +66,37 @@ def test_quickstart_no_network_generates_snapshot_and_checksum(
     assert sha256_file(snapshot_path) == checksum
 
 
+def test_quickstart_no_network_cache_hit_json(isolated_cli_env):
+    """Cache hit should still include snapshot metadata in the JSON payload."""
+
+    runner = CliRunner()
+    result1 = runner.invoke(
+        app,
+        ["--ticker", "PETR4", "--format", "json", "--no-network"],
+    )
+    assert result1.exit_code == 0
+    data1 = json.loads(_strip_ansi(result1.output))
+
+    ticker1 = data1["tickers"][0]
+    path1 = ticker1["snapshot_path"]
+    checksum1 = ticker1["snapshot_checksum"]
+
+    assert path1
+    assert checksum1
+
+    # Second run should hit cache and still return the same metadata.
+    result2 = runner.invoke(
+        app,
+        ["--ticker", "PETR4", "--format", "json", "--no-network"],
+    )
+    assert result2.exit_code == 0
+    data2 = json.loads(_strip_ansi(result2.output))
+
+    ticker2 = data2["tickers"][0]
+    assert ticker2["snapshot_path"] == path1
+    assert ticker2["snapshot_checksum"] == checksum1
+
+
 def test_quickstart_no_network_run_notebook_json(
     isolated_cli_env, monkeypatch
 ):
