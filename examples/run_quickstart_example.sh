@@ -1,79 +1,241 @@
 #!/usr/bin/env bash
-# Example quickstart runner (CI-friendly skeleton)
+# Quickstart runner (CI-friendly, deterministic, fixture-based)
+#
+# This script is intended to be a lightweight example that:
+#   - Runs the main pipeline in `--no-network` mode using a deterministic fixture
+#   - Writes a snapshot under `SNAPSHOT_DIR` (defaults to ./snapshots)
+#   - Writes a run log under `LOG_DIR` (defaults to ./logs)
+#   - Optionally writes command output to `OUTPUTS_DIR` (defaults to ./outputs)
+#
+# Expected usage:
+#   examples/run_quickstart_example.sh --no-network --format json
+
 set -euo pipefail
 
-# Defaults
+# Defaults (can be overridden via env vars)
 DATA_DIR=${DATA_DIR:-./dados}
 SNAPSHOT_DIR=${SNAPSHOT_DIR:-./snapshots}
-# By default do not persist example outputs to repository; set OUTPUTS_DIR to
-# a directory to enable saving artifacts (useful in CI or debugging).
-OUTPUTS_DIR=${OUTPUTS_DIR:-}
+OUTPUTS_DIR=${OUTPUTS_DIR:-./outputs}
 LOG_DIR=${LOG_DIR:-./logs}
+
 TICKER="PETR4.SA"
 FORMAT="json"
-NO_NETWORK=0
+NO_NETWORK=1
+SAMPLE_TICKERS=
+CONFIG_FILE=
 
 usage(){
-  echo "Usage: $0 [--no-network] [--ticker TICKER] [--format json|text]"
+  cat <<'EOF'
+Usage: $0 [--no-network] [--network] [--ticker TICKER] [--format json|text] [--sample-tickers FILE] [--config FILE]
+
+Options:
+  --no-network          Run without network access (default, uses deterministic fixtures)
+  --network             Allow network access (overrides --no-network)
+  --ticker TICKER       Ticker to run (default PETR4.SA)
+  --format json|text    Output format (default: json)
+  --sample-tickers FILE Use this file (one ticker per line) instead of the default fixture
+  --config FILE         Source environment variables from a file (e.g. .env)
+  --help, -h            Show this help message
+EOF
   exit 2
 }
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --no-network) NO_NETWORK=1; shift ;;
-    --ticker) TICKER="$2"; shift 2 ;;
-    --format) FORMAT="$2"; shift 2 ;;
-    --help|-h) usage ;;
-    *) echo "Unknown arg: $1"; usage ;;
+    --no-network)
+      NO_NETWORK=1
+      shift
+      ;;
+    --network)
+      NO_NETWORK=0
+      shift
+      ;;
+    --ticker)
+      TICKER="$2"
+      shift 2
+      ;;
+    --format)
+      FORMAT="$2"
+      shift 2
+      ;;
+    --sample-tickers)
+      SAMPLE_TICKERS="$2"
+      shift 2
+      ;;
+    --config)
+      CONFIG_FILE="$2"
+      shift 2
+      ;;
+    --help|-h)
+      usage
+      ;;
+    *)
+      echo "Unknown arg: $1"
+      usage
+      ;;
   esac
 done
+
+# If configured, source env vars from a file (e.g. .env).
+if [[ -n "$CONFIG_FILE" ]]; then
+  if [[ ! -f "$CONFIG_FILE" ]]; then
+    echo "Config file not found: $CONFIG_FILE" >&2
+    exit 2
+  fi
+  # shellcheck disable=SC1090
+  set -a
+  source "$CONFIG_FILE"
+  set +a
+fi
 
 mkdir -p "$SNAPSHOT_DIR" "$LOG_DIR"
 if [ -n "$OUTPUTS_DIR" ]; then
   mkdir -p "$OUTPUTS_DIR"
 fi
 
+# Export key dirs so underlying CLI uses the same paths.
+export DATA_DIR SNAPSHOT_DIR LOG_DIR OUTPUTS_DIR
+
 JOB_ID=$(uuidgen 2>/dev/null || date +%s)
 TIMESTAMP=$(date -u +%Y%m%dT%H%M%SZ)
-SNAPFILE="$SNAPSHOT_DIR/${TICKER//./_}-$TIMESTAMP.csv"
 LOGFILE="$LOG_DIR/run_quickstart_${TIMESTAMP}.log"
 
 echo "job_id=$JOB_ID ticker=$TICKER no_network=$NO_NETWORK" > "$LOGFILE"
-
 echo "Running quickstart example for $TICKER (no_network=$NO_NETWORK)..." >> "$LOGFILE"
 
-# Build base command and append conditional flags to avoid duplication
-CMD=(poetry run main)
+# Build base command and append conditional flags to avoid duplication.
+## Prefer `poetry run main` when available, fallback to python module if not.
+if command -v poetry >/dev/null 2>&1; then
+  CMD=(poetry run main)
+else
+  # Attempt to run the package entrypoint directly via python
+  if python -c "import importlib,sys
+try:
+    importlib.import_module('main')
+except Exception:
+    try:
+        importlib.import_module('src.main')
+    except Exception:
+        sys.exit(2)
+" >/dev/null 2>&1; then
+    # Use `python -m main` or `python -m src.main` depending on availability
+    if python -c "import importlib,sys
+try:
+    importlib.import_module('main')
+    print('main')
+except Exception:
+    try:
+        importlib.import_module('src.main')
+        print('src.main')
+    except Exception:
+        sys.exit(2)
+" | grep -q src.main; then
+      CMD=(python -m src.main)
+    else
+      CMD=(python -m main)
+    fi
+  else
+    CMD=(poetry run main)
+  fi
+fi
 CMD+=(--ticker "$TICKER")
 CMD+=(--format "$FORMAT")
 if [[ $NO_NETWORK -eq 1 ]]; then
   CMD+=(--no-network)
-  CMD+=(--sample-tickers tests/fixtures/sample_ticker.csv)
+  if [[ -z "$SAMPLE_TICKERS" ]]; then
+    SAMPLE_TICKERS="tests/fixtures/sample_ticker.csv"
+  fi
+fi
+if [[ -n "$SAMPLE_TICKERS" ]]; then
+  CMD+=(--sample-tickers "$SAMPLE_TICKERS")
 fi
 
-# Execute and handle redirections: stdout -> OUTPUTS_DIR file only when set;
-# stderr always appended to LOGFILE. Preserve exit capture semantics.
+# Execute the command capturing stdout for later summary extraction.
+set +e
+CMD_OUTPUT=$("${CMD[@]}" 2>>"$LOGFILE")
+EXIT_CODE=$?
+set -e
+
+# Log the CLI output, and optionally persist it to OUTPUTS_DIR for inspection.
+echo "$CMD_OUTPUT" >> "$LOGFILE"
 if [ -n "$OUTPUTS_DIR" ]; then
-  "${CMD[@]}" >"$OUTPUTS_DIR/quickstart_${TIMESTAMP}.out" 2>>"$LOGFILE" || EXIT_CODE=$?
-else
-  "${CMD[@]}" 2>>"$LOGFILE" || EXIT_CODE=$?
+  echo "$CMD_OUTPUT" > "$OUTPUTS_DIR/quickstart_${TIMESTAMP}.out"
 fi
-
-EXIT_CODE=${EXIT_CODE:-0}
 
 if [[ $EXIT_CODE -ne 0 ]]; then
-  echo "{\"job_id\":\"$JOB_ID\",\"status\":\"failure\"}" >> "$LOGFILE"
-  echo "Script failed; see $LOGFILE"
+  # Ensure we always emit a JSON summary on failure for CI
+  FALLBACK_SUMMARY=$(jq -n --arg j "$JOB_ID" '{job_id:$j,status:"failure"}') 2>/dev/null || \
+    echo "{\"job_id\":\"$JOB_ID\",\"status\":\"failure\"}"
+  echo "$FALLBACK_SUMMARY" >> "$LOGFILE"
+  echo "$FALLBACK_SUMMARY"
+  echo "Script failed; see $LOGFILE" >&2
   exit $EXIT_CODE
 fi
 
-# On success, record a simple JSON summary to stdout and log
-SUMMARY=$(jq -n --arg job_id "$JOB_ID" --arg status "success" --arg snapshot "$SNAPFILE" --argjson elapsed_sec 1 '{job_id:$job_id,status:$status,elapsed_sec:$elapsed_sec,snapshot:$snapshot}')
+# Derive a compact summary (JSON) from the CLI output when JSON mode is active.
+SUMMARY="$CMD_OUTPUT"
+# If JSON requested, try to parse CLI output; otherwise produce a defensive fallback JSON.
 if [[ "$FORMAT" == "json" ]]; then
-  echo "$SUMMARY"
-else
-  echo "Quickstart completed: $JOB_ID -> $SNAPFILE"
+  export CMD_OUTPUT
+  PARSED=$(python - <<'PY'
+import json, os, sys
+raw = os.environ.get('CMD_OUTPUT', '')
+out = {'job_id': None, 'status': None, 'elapsed_sec': None, 'snapshot': None, 'rows': None}
+try:
+    data = json.loads(raw)
+    out['job_id'] = data.get('job_id')
+    out['status'] = data.get('status')
+    out['elapsed_sec'] = data.get('duration_sec')
+    tickers = data.get('tickers') or []
+    if tickers:
+        first = tickers[0]
+        out['snapshot'] = first.get('snapshot_path')
+        out['rows'] = first.get('rows_ingested') or first.get('rows')
+except Exception:
+    # parsing failed, leave as-is; we'll produce a fallback later
+    pass
+print(json.dumps(out, separators=(',', ':')))
+PY
+  ) || PARSED="{}"
+  unset CMD_OUTPUT
+  SUMMARY="$PARSED"
 fi
 
+# Post-process: ensure a snapshot checksum sidecar exists. If CLI didn't
+# generate a .checksum, compute SHA256 for the most-recent CSV matching the
+# ticker under SNAPSHOT_DIR and write the sidecar file.
+if [[ -d "$SNAPSHOT_DIR" ]]; then
+  # find newest csv for ticker pattern (allow both with/without .SA suffix)
+  BASE_TICKER=$(echo "$TICKER" | sed 's/\.SA$//')
+  LATEST_CSV=$(ls -1t "$SNAPSHOT_DIR"/*${BASE_TICKER}*.csv 2>/dev/null | head -n1 || true)
+  if [[ -n "$LATEST_CSV" ]]; then
+    CHECKSUM_PATH="${LATEST_CSV}.checksum"
+    if [[ ! -f "$CHECKSUM_PATH" ]]; then
+      if command -v sha256sum >/dev/null 2>&1; then
+        sha256sum "$LATEST_CSV" | awk '{print $1}' > "$CHECKSUM_PATH"
+      else
+        # fallback to python
+        python - <<PY > "$CHECKSUM_PATH"
+import hashlib
+import sys
+h=hashlib.sha256()
+with open(sys.argv[1],'rb') as f:
+    for b in iter(lambda: f.read(8192), b''):
+        h.update(b)
+print(h.hexdigest())
+PY
+      fi
+    fi
+    # if SUMMARY lacks snapshot path, inject it into fallback JSON
+    if ! echo "$SUMMARY" | grep -q '"snapshot"' || echo "$SUMMARY" | grep -q '"snapshot":null'; then
+      # produce minimal JSON summary including snapshot path
+      SUMMARY=$(jq -n --arg j "$JOB_ID" --arg s "$LATEST_CSV" '{job_id:$j,status:"success",snapshot:$s}') 2>/dev/null || \
+        echo "{\"job_id\":\"$JOB_ID\",\"status\":\"success\",\"snapshot\":\"$LATEST_CSV\"}"
+    fi
+  fi
+fi
+
+# Emit final summary to stdout and the log.
+echo "$SUMMARY"
 echo "$SUMMARY" >> "$LOGFILE"
 exit 0

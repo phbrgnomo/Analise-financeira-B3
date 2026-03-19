@@ -3,7 +3,7 @@ story_key: 3-5-quickstart-examples-and-reproducible-scripts
 epic: 3
 story_num: 5
 title: Quickstart examples and reproducible scripts
-status: ready-for-dev
+status: completed
 created_by: Phbr
 created_at: 2026-02-17T00:00:00Z
 ---
@@ -30,13 +30,13 @@ so that I can validate the environment and understand expected outputs.
 
 ## Tasks / Subtasks
 
-- [ ] Verify the implementation of `examples/run_quickstart_example.sh` (executable) that runs the quickstart using fixtures
-  - [ ] Implement `--no-network` invocation to use `tests/fixtures/sample_ticker.csv`
-  - [ ] Write short run log to `logs/` and artifacts to `outputs/`/`snapshots/`
-- [ ] Add README section with copy-paste example and expected JSON/text summary
-- [ ] Add CI smoke job example (or instructions) that runs the example script and validates exit code and artifact presence
-- [ ] Add simple integration test (pytest) that executes the script in a controlled tempdir and asserts snapshot + log created
-- [ ] Document implemented features, usage examples and rationale in `docs/sprint-reports/3-5-quickstart-examples-and-reproducible-scripts.md`.
+- [x] Verify the implementation of `examples/run_quickstart_example.sh` (executable) that runs the quickstart using fixtures
+  - [x] Implement `--no-network` invocation to use `tests/fixtures/sample_ticker.csv`
+  - [x] Write short run log to `logs/` and artifacts to `outputs/`/`snapshots/`
+- [x] Add README section with copy-paste example and expected JSON/text summary
+- [x] Add CI smoke job example (or instructions) that runs the example script and validates exit code and artifact presence
+- [x] Add simple integration test (pytest) that executes the script in a controlled tempdir and asserts snapshot + log created
+- [x] Document implemented features, usage examples and rationale in `docs/sprint-reports/3-5-quickstart-examples-and-reproducible-scripts.md`.
 
 ## Dev Notes
 

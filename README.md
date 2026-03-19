@@ -117,7 +117,8 @@ poetry run main --ticker PETR4 --format json --no-network
 
 ```bash
 poetry run pytest -q
-./examples/run_quickstart_example.sh
+# Exemplo rápido (modo offline, saída JSON, grava snapshot em snapshots/ e log em logs/)
+./examples/run_quickstart_example.sh --no-network --format json
 ```
 
 ### Métricas / health check (CI)

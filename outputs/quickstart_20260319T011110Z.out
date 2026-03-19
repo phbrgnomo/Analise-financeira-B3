@@ -1,0 +1,17 @@
+{
+  "status": "success",
+  "job_id": "0a99616a-7591-45b4-90e2-f61d262e4e88",
+  "duration_sec": 0.3060143680195324,
+  "tickers": [
+    {
+      "ticker": "PETR4",
+      "provider": "dummy",
+      "status": "success",
+      "rows_ingested": 3,
+      "rows_returns": 251,
+      "snapshot_path": "/home/phbr/Projects/01-owned/Analise-financeira-B3/snapshots/PETR4-20260319.csv",
+      "snapshot_checksum": "4eeff2a306196548fd4ad7d9fa4dce427aef8794dd695bda1d22a17e7c9213d8",
+      "error_message": null
+    }
+  ]
+}
