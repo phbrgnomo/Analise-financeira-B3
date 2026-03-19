@@ -9,7 +9,7 @@ import logging
 import time
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional, TypedDict
 
 import pandas as pd
 
@@ -18,6 +18,18 @@ from src.adapters.retry_config import RetryConfig
 from src.adapters.retry_metrics import get_global_metrics
 
 logger = logging.getLogger(__name__)
+
+
+class ConnectionCheckResult(TypedDict):
+    """TypedDict para o resultado do check de conexão.
+
+    Usado por `Adapter.check_connection` para garantir que os chamadores
+    recebam um dicionário com campos tipados.
+    """
+
+    status: str
+    error: Optional[str]
+    latency_ms: float
 
 
 class Adapter(ABC):
@@ -61,14 +73,18 @@ class Adapter(ABC):
         )
         return True
 
-    def check_connection(self, timeout: Optional[float] = None) -> Dict[str, Any]:
+    def check_connection(self,
+                         timeout: Optional[float] = None) -> ConnectionCheckResult:
         """Check provider connectivity and return structured status.
 
         This is the canonical method used by CLI health checks.
 
         The default implementation delegates to ``test_connection`` (for
-        backward compatibility) and returns a dict with fields compatible with
-        ``src.connectivity.ConnectionStatus``.
+        backward compatibility) and returns a ``ConnectionCheckResult``.
+
+        The base implementation does not enforce timeout behavior, but it will
+        forward the timeout argument to ``test_connection`` if the method
+        supports it (e.g., subclasses may accept a timeout parameter).
 
         Parameters
         ----------
@@ -77,13 +93,22 @@ class Adapter(ABC):
 
         Returns
         -------
-        Dict[str, Any]
+        ConnectionCheckResult
             A minimal health check result (status, error, latency_ms).
         """
 
         start = time.monotonic()
         try:
-            healthy = self.test_connection()
+            # Some subclasses may accept a timeout parameter in test_connection.
+            # We attempt to pass it through when supported.
+            if timeout is not None:
+                try:
+                    healthy = self.test_connection(timeout=timeout)  # type: ignore[arg-type]
+                except TypeError:
+                    healthy = self.test_connection()
+            else:
+                healthy = self.test_connection()
+
             status = "success" if healthy else "failure"
             error = None
         except Exception as exc:

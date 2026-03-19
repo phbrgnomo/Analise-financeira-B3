@@ -17,8 +17,8 @@
   - `src/connectivity.py` agora retorna `last_success_at` e grava falhas em `metadata/ingest_logs.jsonl`
 
 - Testes adicionados:
-  - `tests/test_cli_test_conn.py` validates `test-conn` output and exit codes.
-  - `tests/test_cli_health_metrics.py` validates `health` + `metrics` output and JSON structure.
+  - `tests/test_cli_test_conn.py` valida a saída e os códigos de saída do `test-conn`.
+  - `tests/test_cli_health_metrics.py` valida a saída do `health` e `metrics` e a estrutura JSON.
 
 - Documentação atualizada:
   - `docs/playbooks/quickstart-ticker.md` possui novos exemplos de uso para `test-conn`, `metrics`, `health`.

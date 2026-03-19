@@ -7,6 +7,9 @@ from src.main import app
 
 
 def test_test_conn_dummy_provider_success():
+    """Verify invoking CLI "test-conn" with provider "dummy"
+    and JSON format returns exit code 0 and a JSON payload
+    containing status "success", provider "dummy", latency_ms, and last_success_at."""
     runner = CliRunner()
     result = runner.invoke(
         app,
@@ -28,6 +31,10 @@ def test_test_conn_dummy_provider_success():
 
 
 def test_test_conn_unknown_provider_fails():
+    """Validate CLI error handling when an unknown provider is passed.
+
+    It should exit non-zero and return a JSON failure payload with an "error" field.
+    """
     runner = CliRunner()
     result = runner.invoke(
         app,
@@ -45,7 +52,8 @@ def test_test_conn_unknown_provider_fails():
     assert "error" in data
 
 
-def test_health_command_reports_paths_and_metrics(tmp_path: Path, monkeypatch):
+def test_health_command_reports_paths_and_metrics(tmp_path: Path):
+    """Verify health command reports expected paths and metrics."""
     # Create minimal filesystem structure for health checks
     db_file = tmp_path / "dados" / "data.db"
     db_file.parent.mkdir(parents=True, exist_ok=True)

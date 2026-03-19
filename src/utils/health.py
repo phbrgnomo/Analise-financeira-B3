@@ -7,15 +7,28 @@ It is intended to replace the legacy `src/health.py` module while keeping
 backwards compatibility (via a thin shim in `src/health.py`).
 """
 
+
 from __future__ import annotations
 
+import contextlib
 import json
+import logging
 import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from src.ingest.raw_storage import DEFAULT_METADATA
+
+__all__ = [
+    "resolve_ingest_log_path",
+    "read_ingest_logs",
+    "get_last_success_timestamp",
+    "append_ingest_log_entry",
+    "compute_health_metrics",
+    "check_paths_health",
+    "DEFAULT_INGEST_LOG_NAME",
+]
 
 DEFAULT_INGEST_LOG_NAME = "ingest_logs.jsonl"
 
@@ -35,12 +48,12 @@ def resolve_ingest_log_path(ingest_log_path: Optional[str]) -> str:
     filename ``ingest_logs.jsonl`` is appended.
     """
 
-    raw = ingest_log_path or os.getenv("INGEST_LOG_PATH")
-    if not raw:
-        return str(DEFAULT_METADATA)
+    # Resolve order of precedence: explicit CLI arg, env var, then default.
+    raw = ingest_log_path or os.getenv("INGEST_LOG_PATH") or str(DEFAULT_METADATA)
 
+    # Support directory-like values (or values without an extension) by appending
+    # the canonical filename.
     path = Path(raw)
-
     if raw.endswith(("/", os.sep)) or not path.suffix:
         path = path / DEFAULT_INGEST_LOG_NAME
 
@@ -48,7 +61,21 @@ def resolve_ingest_log_path(ingest_log_path: Optional[str]) -> str:
 
 
 def read_ingest_logs(path: str) -> List[Dict[str, Any]]:
-    """Read an ingest audit log file (JSONL) into a list of dicts."""
+    """Read an ingest audit log file (JSONL) into a list of dicts.
+
+    Returns an empty list if the path does not exist.
+    Blank lines are ignored, and any line that fails JSON parsing is skipped.
+
+    Parameters
+    ----------
+    path:
+        Path to a JSONL file (one JSON object per line).
+
+    Returns
+    -------
+    List[Dict[str, Any]]
+        Parsed log entries.
+    """
 
     if not os.path.exists(path):
         return []
@@ -73,6 +100,63 @@ def _parse_iso_dt(dt_str: str) -> Optional[datetime]:
         return datetime.fromisoformat(dt_str.replace("Z", "+00:00"))
     except Exception:
         return None
+
+
+def get_last_success_timestamp(
+    provider: str,
+    ingest_log_path: Optional[str] = None,
+) -> Optional[str]:
+    """Return the latest successful ingestion timestamp for a provider.
+
+    This is a convenience wrapper around ``read_ingest_logs`` that filters for
+    successful entries for a given provider and returns the most recent
+    ``created_at``/``finished_at`` timestamp in normalized ISO8601 format.
+    """
+
+    path = resolve_ingest_log_path(ingest_log_path)
+    records = read_ingest_logs(path)
+
+    latest: Optional[datetime] = None
+    for rec in records:
+        if rec.get("provider") != provider:
+            continue
+        if rec.get("status") != "success":
+            continue
+        created = rec.get("created_at") or rec.get("finished_at")
+        if not created:
+            continue
+        dt = _parse_iso_dt(created)
+        if dt is None:
+            continue
+        if latest is None or dt > latest:
+            latest = dt
+
+    if latest is None:
+        return None
+
+    return latest.replace(tzinfo=timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def append_ingest_log_entry(
+    entry: Dict[str, Any],
+    ingest_log_path: Optional[str] = None,
+) -> None:
+    """Append a JSONL record to the ingest logs file.
+
+    This is a small helper that ensures the containing directory exists and
+    will not raise on failures, mirroring the existing behavior in
+    :mod:`src.connectivity`.
+    """
+
+    try:
+        path = resolve_ingest_log_path(ingest_log_path)
+        dirpath = os.path.dirname(path)
+        if dirpath:
+            os.makedirs(dirpath, exist_ok=True)
+        with open(path, "a", encoding="utf-8") as fh:
+            fh.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    except Exception:
+        logging.getLogger(__name__).exception("failed to write ingest log entry")
 
 
 def compute_health_metrics(
@@ -121,7 +205,8 @@ def _build_health_metrics_summary(
             last_finished = finished_dt
 
         delta = now - finished_dt
-        if delta.total_seconds() <= 24 * 3600:
+        # Ignore future-dated records; only count strictly past 24h.
+        if 0 <= delta.total_seconds() <= 24 * 3600:
             jobs_last_24h += 1
             if rec.get("status") != "success":
                 errors_last_24h += 1
@@ -129,12 +214,15 @@ def _build_health_metrics_summary(
         duration = rec.get("duration")
         if isinstance(duration, (int, float)):
             latency_values.append(float(duration))
-        elif isinstance(duration, str) and duration.endswith("s"):
-            try:
-                latency_values.append(float(duration[:-1]))
-            except Exception:
-                pass
-
+        elif isinstance(duration, str):
+            # Support both legacy format (numeric string) and '1.23s' suffix.
+            with contextlib.suppress(Exception):
+                duration_val = (
+                    float(duration[:-1])
+                    if duration.endswith("s")
+                    else float(duration)
+                )
+                latency_values.append(duration_val)
     if last_finished is not None:
         ingest_lag = (now - last_finished).total_seconds()
     else:
@@ -195,15 +283,36 @@ def check_paths_health(paths: Dict[str, str]) -> Dict[str, Any]:
             except Exception as exc:
                 status = "error"
                 reasons.append(f"db unreadable: {exc}")
-            try:
-                # Check owner-only permissions (600) if supported.
+            with contextlib.suppress(Exception):
+                # Best-effort permission check:
+                # warn only on clearly too-permissive modes.
                 mode = path.stat().st_mode & 0o777
-                if mode not in (0o600, 0o644):
+                # World-writable or group-writable and world-readable are suspicious.
+                if mode & 0o002 or mode & 0o004 and mode & 0o020:
                     reasons.append(
-                        f"db permissions are {oct(mode)} (expected 0o600 or 0o644)"
+                        f"db permissions are {oct(mode)}; "
+                        "file may be too broadly accessible"
                     )
-            except Exception:
-                pass
+        if name == "db" and path.is_file():
+            try:
+                # Ensure we can open the file in read-only mode.
+                with open(path, "rb"):
+                    pass
+            except Exception as exc:
+                status = "error"
+                reasons.append(f"db unreadable: {exc}")
+            with contextlib.suppress(Exception):
+                # Best-effort permission check: warn only on clearly too-permissive
+                # modes.
+                # On non-Unix platforms (Windows) this may not be meaningful.
+                mode = path.stat().st_mode & 0o777
+                # World-writable is almost always incorrect; also warn if the file is
+                # world-readable and group-writable (more permissive than typical).
+                if mode & 0o002 or (mode & 0o004 and mode & 0o020):
+                    reasons.append(
+                        f"db permissions are {oct(mode)}; "
+                        f"file may be too broadly accessible"
+                    )
         elif name != "db" and not path.is_dir():
             status = "warn" if status == "ok" else status
             reasons.append(f"{name} not a directory: {path}")

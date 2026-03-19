@@ -4,15 +4,19 @@ This module provides no-op implementations when `prometheus_client` is not
 installed so tests and minimal environments don't require the package.
 """
 
-import logging
+import threading
 from typing import Any, Dict, Protocol, cast, runtime_checkable
 
-logger = logging.getLogger(__name__)
+from src.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 
 @runtime_checkable
 class Metric(Protocol):
-    def inc(self, amount: int = 1) -> Any:
+    """Interface for Prometheus-style metrics."""
+
+    def inc(self, amount: float = 1.0) -> Any:
         ...
 
     def observe(self, value: float) -> Any:
@@ -31,40 +35,51 @@ except ImportError:
 
 
 class _NoopMetric:
-    def inc(self, *_, **__):
+    """No-op metric implementation used when metrics are disabled.
+
+    This implementation is returned when `prometheus_client` is not available,
+    ensuring callers can safely call `inc()` and `observe()` without errors.
+    """
+
+    def inc(self, *args: Any, **kwargs: Any) -> None:
         return None
 
-    def observe(self, *_, **__):
+    def observe(self, *args: Any, **kwargs: Any) -> None:
         return None
 
 
 _counters: Dict[str, Metric] = {}
 _histograms: Dict[str, Metric] = {}
+_metrics_lock = threading.Lock()
 
 
-def get_counter(name: str, documentation: str = ""):
+def get_counter(name: str, documentation: str = "") -> Metric:
     """Return a counter-like metric for the given name."""
 
     if not _HAS_PROM:
         return _NoopMetric()
-    if name not in _counters:
-        assert Counter is not None
-        _counters[name] = cast(Metric, Counter(name, documentation))
-    return _counters[name]
+
+    with _metrics_lock:
+        if name not in _counters:
+            assert Counter is not None
+            _counters[name] = cast(Metric, Counter(name, documentation))
+        return _counters[name]
 
 
-def get_histogram(name: str, documentation: str = ""):
+def get_histogram(name: str, documentation: str = "") -> Metric:
     """Return a histogram-like metric for the given name."""
 
     if not _HAS_PROM:
         return _NoopMetric()
-    if name not in _histograms:
-        assert Histogram is not None
-        _histograms[name] = cast(Metric, Histogram(name, documentation))
-    return _histograms[name]
+
+    with _metrics_lock:
+        if name not in _histograms:
+            assert Histogram is not None
+            _histograms[name] = cast(Metric, Histogram(name, documentation))
+        return _histograms[name]
 
 
-def increment_counter(name: str, amount: int = 1) -> None:
+def increment_counter(name: str, amount: float = 1.0) -> None:
     """Increment a named counter metric."""
 
     try:

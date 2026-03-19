@@ -767,7 +767,15 @@ def health_cmd(
     log_path = resolve_ingest_log_path(ingest_log_path)
     logs = read_ingest_logs(log_path)
     # Reuse existing helper to compute metrics (same structure as `metrics`)
-    threshold_seconds = int(os.getenv("INGEST_LAG_THRESHOLD", "86400"))
+    threshold_str = os.getenv("INGEST_LAG_THRESHOLD", "86400")
+    try:
+        threshold_seconds = int(threshold_str)
+    except ValueError:
+        logging.getLogger(__name__).warning(
+            "invalid INGEST_LAG_THRESHOLD=%r, using default 86400", threshold_str
+        )
+        threshold_seconds = 86400
+
     metrics_summary = compute_health_metrics(logs, threshold_seconds)
 
     result = {

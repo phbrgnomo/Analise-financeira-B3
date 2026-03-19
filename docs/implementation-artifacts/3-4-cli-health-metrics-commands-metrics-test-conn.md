@@ -25,7 +25,7 @@ so that I can verify provider connectivity and system health before running inge
 - [x] Implement CLI entrypoints in `src/main.py`:
   - [x] Add `test_conn` command implementing `--provider`, `--timeout`, `--json` flags.
   - [x] Add `metrics` and `health` commands with `--json` output option.
-- [x] Add health/metrics helpers in `src/utils/health.py` and `src/utils/metrics.py` (moved legacy `src/health.py` and `src/metrics.py` as shims).
+- [x] Add health/metrics helpers in `src/utils/health.py` and `src/utils/metrics_prometheus.py` (moved legacy `src/health.py` and `src/metrics.py` as shims).
 - [x] Implement provider connectivity check in adapter base: added `Adapter.check_connection()` contract and implemented for `yfinance` & fallback for others.
 - [x] Wire logging and structured output (uses existing JSON logger in `src/logging_config.py`).
 - [x] Add tests:
@@ -43,7 +43,7 @@ so that I can verify provider connectivity and system health before running inge
 - Source tree components to touch:
   - `src/main.py` (Typer entrypoints)
   - `src/adapters/*` (add `check_connection()` implementations)
-  - `src/utils/health.py`, `src/utils/metrics.py`, `src/utils/logging.py`
+  - `src/utils/health.py`, `src/utils/metrics_prometheus.py`, `src/utils/logging.py`
   - `tests/test_cli_*.py`
   - `src/metrics.py` (previously implemented lightweight Prometheus metrics wrapper. Move functionality to `src/utils/metrics_prometheus.py`.)
 - Testing standards summary:
@@ -53,7 +53,7 @@ so that I can verify provider connectivity and system health before running inge
 
 - File locations (recommended):
   - CLI: `src/main.py` (Typer)
-  - Health/metrics helpers: `src/utils/health.py`, `src/utils/metrics.py`
+  - Health/metrics helpers: `src/utils/health.py`, `src/utils/metrics_prometheus.py`
   - Adapter checks: `src/adapters/<provider>_adapter.py` (implement `check_connection()`)
   - Tests: `tests/test_cli_test_conn.py`, `tests/test_cli_health_metrics.py`
 
@@ -77,17 +77,6 @@ GPT-5 mini
 
 - Story document created and saved at `docs/implementation-artifacts/3-4-cli-health-metrics-commands-metrics-test-conn.md`.
 
-### File List
-
-- src/main.py (new/updated)
-- src/utils/health.py (new)
-- src/utils/metrics.py (new)
-- src/adapters/* (update: add check_connection implementations)
-- src/utils/metrics_prometheus.py (previously implemented, existing functionality must be moved here)
-- tests/test_cli_test_conn.py (new)
-- tests/test_cli_health_metrics.py (new)
-
-
 Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/132
 
 ## File List
@@ -97,6 +86,7 @@ Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/132
 - `src/adapters/base.py`
 - `src/adapters/yfinance_adapter.py`
 - `src/utils/health.py`
+- `src/utils/logging.py`
 - `src/utils/metrics_prometheus.py`
 - `src/health.py` (shim)
 - `src/metrics.py` (shim)

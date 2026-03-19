@@ -125,6 +125,85 @@ poetry run main metrics --format json
 poetry run main health --format json
 ```
 
+## 🧾 Saída JSON esperada (schema)
+
+### `test-conn` (conectividade com provider)
+
+Exemplo de schema retornado por `poetry run main test-conn --format json`:
+
+```json
+{
+  "status": "success" | "failure",
+  "provider": "yfinance",                        // provider solicitado
+  "latency_ms": 12.34,                            // tempo de resposta em ms
+  "last_success_at": "2026-03-18T12:34:56Z" | null,
+  "error": null | "<mensagem de erro>"
+}
+```
+
+- **Exit code:** `0` em sucesso (`status == "success"`), `2` em erro (`status == "failure"`).
+- **Edge cases:**
+  - Provider indisponível / sem rede: `status: "failure"`, `error` com mensagem de conexão (e.g. "gaierror" ou "timeout").
+  - Provider desconhecido ou sem suporte a `test-conn`: `status: "failure"` e `error: "provider does not support test-conn"`.
+  - Em caso de falha, o CLI também grava um registro no `metadata/ingest_logs.jsonl` para observabilidade.
+
+### `metrics` (health de ingestão)
+
+Exemplo de schema retornado por `poetry run main metrics --format json`:
+
+```json
+{
+  "status": "healthy" | "degraded" | "unhealthy" | "unknown",
+  "timestamp": "2026-03-18T12:34:56Z",
+  "metrics": {
+    "ingest_lag_seconds": 123.45 | null,
+    "errors_last_24h": 0,
+    "jobs_last_24h": 0,
+    "avg_latency_seconds": 0.123 | null
+  },
+  "thresholds": {
+    "ingest_lag_seconds": 86400
+  }
+}
+```
+
+- **Exit code:** `0` (não há falhas no comando em si; qualquer problema geralmente é refletido no campo `status`).
+- **Edge cases:**
+  - Arquivo de log `metadata/ingest_logs.jsonl` ausente ou vazio => `status: "unknown"`, `ingest_lag_seconds: null`, `avg_latency_seconds: null`, `errors_last_24h: 0`, `jobs_last_24h: 0`.
+
+### `health` (saúde local + métricas)
+
+Exemplo de schema retornado por `poetry run main health --format json`:
+
+```json
+{
+  "status": "ok" | "warn" | "error",
+  "paths": {
+    "status": "ok" | "warn" | "error",
+    "reasons": ["<mensagem de problema>"]
+  },
+  "metrics": {
+    "status": "healthy" | "degraded" | "unhealthy" | "unknown",
+    "timestamp": "2026-03-18T12:34:56Z",
+    "metrics": {
+      "ingest_lag_seconds": 123.45 | null,
+      "errors_last_24h": 0,
+      "jobs_last_24h": 0,
+      "avg_latency_seconds": 0.123 | null
+    },
+    "thresholds": {
+      "ingest_lag_seconds": 86400
+    }
+  }
+}
+```
+
+- **Exit code:** `0` (o comando não falha, apenas relata o estado dos caminhos e métricas).
+- **Edge cases:**
+  - Banco de dados ausente: `paths.status` geralmente será `warn` e `paths.reasons` inclui `"db missing: ..."`.
+  - Banco de dados existe mas não é legível (permissões): `paths.status` será `error` e `paths.reasons` incluirá algo como `"db unreadable: [Errno ...]"`.
+  - Diretórios `raw/` ou `snapshots/` ausentes ou não são diretórios: `paths.status` será `warn` e `paths.reasons` incluirá mensagens como `"raw not a directory: ..."`.
+
 Notas de exemplo e outputs
 
 - Ao executar o quickstart, um CSV com colunas OHLCV e uma coluna `Return` deve ser persistido no snapshot.
