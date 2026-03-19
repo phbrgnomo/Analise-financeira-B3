@@ -66,10 +66,53 @@ def test_quickstart_no_network_generates_snapshot_and_checksum(
     assert sha256_file(snapshot_path) == checksum
 
 
-def test_quickstart_no_network_cache_hit_json(isolated_cli_env):
+def test_quickstart_no_network_cache_hit_json(isolated_cli_env, monkeypatch):
     """Cache hit should still include snapshot metadata in the JSON payload."""
 
+    # Ensure dummy provider produces stable output across runs so caching can occur.
+    from datetime import datetime, timezone
+
+    import pandas as pd
+
+    fixed_dates = pd.date_range(
+        end=pd.Timestamp(datetime(2026, 1, 1, tzinfo=timezone.utc)),
+        periods=3,
+        freq="D",
+        tz="UTC",
+    )
+    fixed_df = pd.DataFrame(
+        {
+            "Open": [1.0, 1.1, 1.2],
+            "High": [1.1, 1.2, 1.3],
+            "Low": [1.0, 1.05, 1.1],
+            "Close": [1.0, 1.1, 1.2],
+            "Adj Close": [1.0, 1.1, 1.2],
+            "Volume": [100, 120, 110],
+        },
+        index=fixed_dates,
+    )
+
+    # Patch DummyAdapter so every run returns the same data
+    monkeypatch.setattr(
+        "src.adapters.dummy.DummyAdapter.fetch",
+        lambda self, *args, **kwargs: fixed_df,
+    )
+
     runner = CliRunner()
+    ticker1 = _extracted_from_test_quickstart_no_network_cache_hit_json_34(runner)
+    path1 = ticker1["snapshot_path"]
+    checksum1 = ticker1["snapshot_checksum"]
+
+    assert path1
+    assert checksum1
+
+    ticker2 = _extracted_from_test_quickstart_no_network_cache_hit_json_34(runner)
+    assert ticker2["snapshot_path"] == path1
+    assert ticker2["snapshot_checksum"] == checksum1
+
+
+# TODO Rename this here and in `test_quickstart_no_network_cache_hit_json`
+def _extracted_from_test_quickstart_no_network_cache_hit_json_34(runner):
     result1 = runner.invoke(
         app,
         ["--ticker", "PETR4", "--format", "json", "--no-network"],
@@ -77,24 +120,7 @@ def test_quickstart_no_network_cache_hit_json(isolated_cli_env):
     assert result1.exit_code == 0
     data1 = json.loads(_strip_ansi(result1.output))
 
-    ticker1 = data1["tickers"][0]
-    path1 = ticker1["snapshot_path"]
-    checksum1 = ticker1["snapshot_checksum"]
-
-    assert path1
-    assert checksum1
-
-    # Second run should hit cache and still return the same metadata.
-    result2 = runner.invoke(
-        app,
-        ["--ticker", "PETR4", "--format", "json", "--no-network"],
-    )
-    assert result2.exit_code == 0
-    data2 = json.loads(_strip_ansi(result2.output))
-
-    ticker2 = data2["tickers"][0]
-    assert ticker2["snapshot_path"] == path1
-    assert ticker2["snapshot_checksum"] == checksum1
+    return data1["tickers"][0]
 
 
 def test_quickstart_no_network_run_notebook_json(
