@@ -76,3 +76,18 @@ def test_metrics_schema(tmp_path: pathlib.Path, monkeypatch: MonkeyPatch):
     schema = json.load(schema_path.open("r", encoding="utf-8"))
 
     validate(instance=data, schema=schema)
+
+    # Also validate the `health` command output using the same ingest log.
+    result_health = runner.invoke(app, ["health", "--format", "json"])
+    assert result_health.exit_code == 0
+    health_data = json.loads(result_health.output)
+
+    health_schema_path = (
+        Path(__file__).resolve().parents[1]
+        / "docs"
+        / "schema"
+        / "health_schema.json"
+    )
+    health_schema = json.load(health_schema_path.open("r", encoding="utf-8"))
+
+    validate(instance=health_data, schema=health_schema)

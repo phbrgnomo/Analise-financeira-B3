@@ -34,7 +34,7 @@ def _record_cache_fallback_metric() -> None:
     """
 
     try:
-        from src import metrics
+        from src.utils import metrics_prometheus as metrics
 
         metrics.increment_counter("snapshot_cache_fallback")
     except Exception:  # pragma: no cover — metrics optional

@@ -20,10 +20,11 @@ Métricas expostas (resumo observado)
 Observação: o código grava `rows_written` e `job_id` como metadados de snapshot
 via `repo.record_snapshot_metadata(...)` (armazenado em `snapshots/` ou na tabela
 `snapshots`), mas esses valores não são expostos automaticamente como métricas
-Prometheus pelo wrapper atual. O wrapper `src.metrics` é intencionalmente
-leve e não adiciona labels automaticamente; se desejar métricas rotuladas
-(`ticker` etc.) ou métricas adicionais (`returns_rows_written`,
-`returns_last_job_id`) é possível estender `src.metrics` para suportar labels
+Prometheus pelo wrapper atual. O wrapper `src.utils.metrics_prometheus` é
+intencionalmente leve e não adiciona labels automaticamente; se desejar métricas
+rotuladas (`ticker` etc.) ou métricas adicionais (`returns_rows_written`,
+`returns_last_job_id`) é possível estender `src.utils.metrics_prometheus` para
+suportar labels
 e incrementar/observar essas métricas no ponto de persistência (`_persist_returns`).
 
 Observações de implementação

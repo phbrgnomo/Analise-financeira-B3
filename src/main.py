@@ -13,7 +13,7 @@ import time
 import uuid
 from contextlib import suppress
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal, Optional, TypedDict, cast
+from typing import TYPE_CHECKING, Any, Literal, Optional, TypedDict, cast
 
 import typer
 
@@ -23,20 +23,20 @@ from dotenv import load_dotenv
 
 import src.db as _db
 import src.retorno as _retorno
-from src import metrics
 from src.cli_feedback import CliFeedback, StepHandle
 from src.cli_options import output_format_option
 from src.connectivity import test_provider_connection
 from src.db.connection import DEFAULT_DB_PATH
-from src.health import (
+from src.logging_config import configure_logging
+from src.paths import DATA_DIR, RAW_DIR, SNAPSHOTS_DIR
+from src.tickers import normalize_b3_ticker, ticker_variants
+from src.utils import metrics_prometheus as metrics
+from src.utils.conversions import as_bool
+from src.utils.health import (
     compute_health_metrics,
     read_ingest_logs,
     resolve_ingest_log_path,
 )
-from src.logging_config import configure_logging
-from src.paths import DATA_DIR, RAW_DIR, SNAPSHOTS_DIR
-from src.tickers import normalize_b3_ticker, ticker_variants
-from src.utils.conversions import as_bool
 
 # Default notebook path used by the --run-notebook flow.
 DEFAULT_NOTEBOOK_PATH = "examples/notebooks/returns-consumer.ipynb"
@@ -245,7 +245,7 @@ def _make_ticker_result(
     if rows_ingested is None:
         rows_ingested = ingest_result.get("rows")
 
-    return {
+    result: dict[str, object] = {
         "ticker": ticker,
         "provider": provider,
         "status": status,
@@ -256,6 +256,15 @@ def _make_ticker_result(
         "snapshot_checksum": persist.get("checksum") or ingest_result.get("checksum"),
         "error_message": ingest_result.get("error_message"),
     }
+
+    # Include cache metadata when available so callers can verify cache hits.
+    if isinstance(persist, dict):
+        if "cached" in persist:
+            result["cached"] = persist["cached"]
+        if "reason" in persist:
+            result["cache_reason"] = persist["reason"]
+
+    return result
 
 
 def _run_notebook(
@@ -290,10 +299,10 @@ def _run_notebook(
         feedback.error(
             "papermill não está instalado. Instale com `pip install papermill`."
         )
-        raise typer.Exit(code=2) from exc
+        return {"status": "error", "error": str(exc), "output_notebook": None}
     except Exception as exc:
         feedback.error(f"falha ao executar notebook: {exc}")
-        raise typer.Exit(code=2) from exc
+        return {"status": "error", "error": str(exc), "output_notebook": None}
 
 
 def _finish_ingest_step(
@@ -322,6 +331,7 @@ def _finish_returns_step(
     feedback: CliFeedback | None,
     step: StepHandle | None,
     rows: int,
+    dry_run: bool = False,
 ) -> None:
     """Finish the returns step feedback when feedback is enabled."""
 
@@ -329,7 +339,14 @@ def _finish_returns_step(
         return
 
     if rows == 0:
-        feedback.finish_step(step, status="warning", detail="nenhum retorno calculado")
+        detail = (
+            "nenhum retorno preparado (dry-run)"
+            if dry_run
+            else "nenhum retorno calculado"
+        )
+        feedback.finish_step(step, status="warning", detail=detail)
+    elif dry_run:
+        feedback.finish_step(step, detail=f"{rows} retorno(s) preparados (dry-run)")
     else:
         feedback.finish_step(step, detail=f"{rows} retorno(s) persistidos")
 
@@ -392,7 +409,7 @@ def _run_one_ticker(  # noqa: C901
     compute_info = _compute_returns_for_ticker(ticker, start, end, dry_run)
     rows = compute_info.get("rows", 0)
 
-    _finish_returns_step(feedback, returns_step, rows)
+    _finish_returns_step(feedback, returns_step, rows, dry_run)
 
     if rows == 0:
         return (
@@ -508,6 +525,136 @@ def _aggregate_run_results(
     return status, exit_code, success_count, warning_count, failure_count
 
 
+def _normalize_notebook_path(notebook_path: object | str | Path) -> str:
+    """Normalize notebook path input to a usable string path.
+
+    Typer may pass an OptionInfo object instead of a string when invoked
+    programmatically (e.g. via the root callback). In that case we fall back
+    to the default notebook path.
+    """
+
+    if isinstance(notebook_path, (str, Path)):
+        return str(notebook_path)
+    return DEFAULT_NOTEBOOK_PATH
+
+
+def _resolve_run_window(max_days: int | None) -> tuple[Optional[str], Optional[str]]:
+    """Resolve the ingest window (start/end) when max_days is provided."""
+
+    if max_days is None:
+        return None, None
+
+    from src.ingest.pipeline import _resolve_sample_window
+
+    return _resolve_sample_window(max_days, None, None)
+
+
+def _run_tickers(
+    tickers: list[str],
+    provider: str,
+    dry_run: bool,
+    force_refresh: bool,
+    start: Optional[str],
+    end: Optional[str],
+    feedback: CliFeedback | None,
+) -> tuple[list[dict[str, object]], float, str]:
+    """Run ingest+returns for each ticker and return results + run metadata."""
+
+    job_id = str(uuid.uuid4())
+    run_started = time.monotonic()
+
+    results: list[dict[str, object]] = []
+    for tk in tickers:
+        result, _status = _run_one_ticker(
+            ticker=tk,
+            provider=provider,
+            dry_run=dry_run,
+            force_refresh=force_refresh,
+            start=start,
+            end=end,
+            feedback=feedback,
+        )
+        results.append(result)
+
+    duration_sec = time.monotonic() - run_started
+    return results, duration_sec, job_id
+
+
+def _finalize_run_output(
+    summary: dict[str, Any],
+    output_json: bool,
+    feedback: CliFeedback | None,
+    exit_code: int,
+    success_count: int,
+    warning_count: int,
+    failure_count: int,
+) -> None:
+    """Emit output/feedback and exit with the appropriate code."""
+
+    if output_json:
+        CliFeedback("executar").json_output(summary)
+        raise typer.Exit(code=exit_code)
+
+    if feedback is None:
+        # Fallback when feedback is unexpectedly None: print summary to stdout.
+        typer.echo(
+            f"job_id={summary['job_id']} | duration_sec={summary['duration_sec']:.2f} |"
+            f"sucesso={success_count} falhas={failure_count}"
+            + (f" avisos={warning_count}" if warning_count else "")
+        )
+    else:
+        feedback.summary(
+            f"job_id={summary['job_id']} | duration_sec={summary['duration_sec']:.2f} |"
+            f"sucesso={success_count} falhas={failure_count}"
+            + (f" avisos={warning_count}" if warning_count else "")
+        )
+
+    if feedback:
+        for r in summary["tickers"]:
+            snapshot = r.get("snapshot_path") or "-"
+            rows = r.get("rows_ingested") or 0
+            feedback.info(f"ticker={r.get('ticker')} snapshot={snapshot} rows={rows}")
+
+    raise typer.Exit(code=exit_code)
+
+
+def _run_notebook_if_enabled(
+    run_notebook: bool,
+    notebook_path: str,
+    tickers: list[str],
+    job_id: str,
+    summary: dict[str, object],
+    exit_code: int,
+    summary_status: str,
+) -> tuple[int, str, dict[str, object]]:
+    """Run the notebook step when enabled and update the run summary."""
+
+    if not run_notebook:
+        return exit_code, summary_status, summary
+
+    # Use the default notebook path in the typical case so tests that patch
+    # `_run_notebook` (expecting a 2-arg signature) continue to work.
+    if Path(notebook_path) == Path(DEFAULT_NOTEBOOK_PATH):
+        notebook_results = _run_notebook(tickers, job_id)
+    else:
+        notebook_results = _run_notebook(
+            tickers, job_id, notebook_path=notebook_path
+        )
+
+    summary["notebook"] = notebook_results
+
+    # If notebook execution failed, treat the full run as a failure so
+    # structured JSON output still indicates the error via exit code.
+    if notebook_results.get("status") == "error":
+        summary_status = "failure"
+        exit_code = 2
+
+    # Keep the status updated for downstream output
+    summary["status"] = summary_status
+
+    return exit_code, summary_status, summary
+
+
 @app.command("run")
 def run_cmd(  # noqa: C901
     ticker: str = typer.Option(
@@ -575,19 +722,8 @@ def run_cmd(  # noqa: C901
     output_json = output_format == "json"
     effective_force_refresh = as_bool(force_refresh)
 
-    # When run_cmd is invoked programmatically (e.g. via the root callback), the
-    # `notebook_path` default can arrive as a Typer OptionInfo object instead of a
-    # string/path.  Normalize to the expected default path in that case.
-    if not isinstance(notebook_path, (str, Path)):
-        notebook_path = DEFAULT_NOTEBOOK_PATH
-
-    # Determine a time window to pass to the adapter.
-    start_date: str | None = None
-    end_date: str | None = None
-    if max_days is not None:
-        from src.ingest.pipeline import _resolve_sample_window
-
-        start_date, end_date = _resolve_sample_window(max_days, None, None)
+    notebook_path = _normalize_notebook_path(notebook_path)
+    start_date, end_date = _resolve_run_window(max_days)
 
     tickers, feedback, effective_provider = _prepare_run_context(
         ticker=ticker,
@@ -599,26 +735,20 @@ def run_cmd(  # noqa: C901
         sample_tickers=_parse_sample_tickers(sample_tickers),
     )
 
-    job_id = str(uuid.uuid4())
-    run_started = time.monotonic()
-
-    results: list[dict[str, object]] = []
-    for _idx, tk in enumerate(tickers, start=1):
-        result, _status = _run_one_ticker(
-            ticker=tk,
-            provider=effective_provider,
-            dry_run=dry_run,
-            force_refresh=effective_force_refresh,
-            start=start_date,
-            end=end_date,
-            feedback=feedback,
-        )
-        results.append(result)
+    results, duration_sec, job_id = _run_tickers(
+        tickers=tickers,
+        provider=effective_provider,
+        dry_run=dry_run,
+        force_refresh=effective_force_refresh,
+        start=start_date,
+        end=end_date,
+        feedback=feedback,
+    )
 
     summary_status, exit_code, success_count, warning_count, failure_count = (
         _aggregate_run_results(results)
     )
-    duration_sec = time.monotonic() - run_started
+
     summary = {
         "status": summary_status,
         "job_id": job_id,
@@ -627,42 +757,25 @@ def run_cmd(  # noqa: C901
     }
 
     if run_notebook:
-        # Use the default notebook path in the typical case so tests that patch
-        # `_run_notebook` (expecting a 2-arg signature) continue to work.
-        if Path(notebook_path) == Path(DEFAULT_NOTEBOOK_PATH):
-            notebook_results = _run_notebook(tickers, job_id)
-        else:
-            notebook_results = _run_notebook(
-                tickers, job_id, notebook_path=notebook_path
-            )
-        summary["notebook"] = notebook_results
-
-    if output_json:
-        CliFeedback("executar").json_output(summary)
-        raise typer.Exit(code=exit_code)
-
-    if feedback is None:
-        # Fallback when feedback is unexpectedly None: print summary to stdout.
-        typer.echo(
-            f"job_id={job_id} | duration_sec={duration_sec:.2f} | "
-            f"sucesso={success_count} falhas={failure_count}"
-            + (f" avisos={warning_count}" if warning_count else "")
-        )
-    else:
-        feedback.summary(
-            f"job_id={job_id} | duration_sec={duration_sec:.2f} | "
-            f"sucesso={success_count} falhas={failure_count}"
-            + (f" avisos={warning_count}" if warning_count else "")
+        exit_code, summary_status, summary = _run_notebook_if_enabled(
+            run_notebook,
+            notebook_path,
+            tickers,
+            job_id,
+            summary,
+            exit_code,
+            summary_status,
         )
 
-    # Print per-ticker summaries including snapshot path and rows.
-    if feedback:
-        for r in results:
-            snapshot = r.get("snapshot_path") or "-"
-            rows = r.get("rows_ingested") or 0
-            feedback.info(f"ticker={r.get('ticker')} snapshot={snapshot} rows={rows}")
-
-    raise typer.Exit(code=exit_code)
+    _finalize_run_output(
+        summary=summary,
+        output_json=output_json,
+        feedback=feedback,
+        exit_code=exit_code,
+        success_count=success_count,
+        warning_count=warning_count,
+        failure_count=failure_count,
+    )
 
 
 @app.command("metrics")

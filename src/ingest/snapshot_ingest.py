@@ -234,7 +234,7 @@ def _load_snapshot_cache(cache_file_path: Path) -> Dict[str, Any]:
             exc,
         )
         try:
-            from src import metrics
+            from src.utils import metrics_prometheus as metrics
 
             metrics.increment_counter("snapshot_cache_fallback")
         except Exception:  # pragma: no cover — metrics optional
@@ -292,6 +292,11 @@ def _check_cache_hit(
     """Return a cache-hit dict or ``None`` when a refresh is needed.
 
     The cache is stored as a JSON mapping of snapshot path -> metadata.
+
+    The cache key is the snapshot file path, but we also allow hits based on
+    checksum for the same ticker so that new snapshot filenames (e.g. with
+    a refined timestamp) do not prevent cache reuse when the content is
+    unchanged.
     """
 
     # Explicitly bypass cache when forced so callers can see the reason in logs
@@ -301,7 +306,23 @@ def _check_cache_hit(
 
     key = str(snapshot_path.resolve())
     entry = cache_file.get(key)
-    if not entry or entry.get("sha256") != checksum:
+    if entry and entry.get("sha256") == checksum:
+        hit_path = key
+    else:
+        # Try to find a matching checksum for the same ticker (cache key may
+        # differ due to timestamped filenames).
+        hit_path = None
+        for path, data in cache_file.items():
+            if (
+                isinstance(data, dict)
+                and data.get("sha256") == checksum
+                and data.get("ticker") == ticker
+            ):
+                hit_path = path
+                entry = data
+                break
+
+    if not entry or entry.get("sha256") != checksum or hit_path is None:
         # no previous snapshot or checksum mismatch -> miss
         return None
 
@@ -310,7 +331,7 @@ def _check_cache_hit(
         "cached": True,
         "rows_processed": 0,
         "reason": "checksum_match",
-        "snapshot_path": str(snapshot_path),
+        "snapshot_path": hit_path,
         "checksum": checksum,
     }
 
@@ -499,7 +520,9 @@ def ingest_from_snapshot(
         # Use a single timestamp for this run to avoid pathological cases where
         # the process crosses midnight between cache lookup and snapshot write.
         now = datetime.now(timezone.utc)
-        ts = now.strftime("%Y%m%d")
+        # Include time-of-day to avoid same-day collisions in snapshot filenames
+        # and cache keys when multiple runs occur on the same date.
+        ts = now.strftime("%Y%m%dT%H%M%S")
 
         # Ensure cache operations are coordinated, since the cache file is shared
         # across tickers and processes. Hold the lock only for the cache lookup
@@ -533,6 +556,7 @@ def ingest_from_snapshot(
             cache_file = _load_snapshot_cache(cache_file_path)
             cache_file[str(out_path.resolve())] = {
                 "sha256": sha,
+                "ticker": ticker,
                 "processed_at": now.isoformat(),
             }
             save_cache(cache_file_path, cache_file)

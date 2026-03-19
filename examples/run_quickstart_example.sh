@@ -108,7 +108,8 @@ echo "Running quickstart example for $TICKER (no_network=$NO_NETWORK)..." >> "$L
 if command -v poetry >/dev/null 2>&1; then
   CMD=(poetry run main)
 else
-  # Attempt to run the package entrypoint directly via python
+  # Attempt to run the package entrypoint directly via python.
+  # This checks whether either `main` or `src.main` is importable.
   if python -c "import importlib,sys
 try:
     importlib.import_module('main')
@@ -118,7 +119,7 @@ except Exception:
     except Exception:
         sys.exit(2)
 " >/dev/null 2>&1; then
-    # Use `python -m main` or `python -m src.main` depending on availability
+    # Use `python -m main` or `python -m src.main` depending on availability.
     if python -c "import importlib,sys
 try:
     importlib.import_module('main')
@@ -135,7 +136,8 @@ except Exception:
       CMD=(python -m main)
     fi
   else
-    CMD=(poetry run main)
+    echo "ERROR: neither 'poetry' nor the python module 'main'/'src.main' is available." >&2
+    exit 2
   fi
 fi
 CMD+=(--ticker "$TICKER")
@@ -164,8 +166,10 @@ fi
 
 if [[ $EXIT_CODE -ne 0 ]]; then
   # Ensure we always emit a JSON summary on failure for CI
-  FALLBACK_SUMMARY=$(jq -n --arg j "$JOB_ID" '{job_id:$j,status:"failure"}') 2>/dev/null || \
-    echo "{\"job_id\":\"$JOB_ID\",\"status\":\"failure\"}"
+  FALLBACK_SUMMARY=$(
+    jq -n --arg j "$JOB_ID" '{job_id:$j,status:"failure"}' 2>/dev/null ||
+      echo "{\"job_id\":\"$JOB_ID\",\"status\":\"failure\"}"
+  )
   echo "$FALLBACK_SUMMARY" >> "$LOGFILE"
   echo "$FALLBACK_SUMMARY"
   echo "Script failed; see $LOGFILE" >&2
@@ -215,7 +219,8 @@ if [[ -d "$SNAPSHOT_DIR" ]]; then
         sha256sum "$LATEST_CSV" | awk '{print $1}' > "$CHECKSUM_PATH"
       else
         # fallback to python
-        python - <<PY > "$CHECKSUM_PATH"
+        # Pass the filename as an argument so sys.argv[1] is defined.
+        python - "$LATEST_CSV" <<PY > "$CHECKSUM_PATH"
 import hashlib
 import sys
 h=hashlib.sha256()
@@ -229,8 +234,10 @@ PY
     # if SUMMARY lacks snapshot path, inject it into fallback JSON
     if ! echo "$SUMMARY" | grep -q '"snapshot"' || echo "$SUMMARY" | grep -q '"snapshot":null'; then
       # produce minimal JSON summary including snapshot path
-      SUMMARY=$(jq -n --arg j "$JOB_ID" --arg s "$LATEST_CSV" '{job_id:$j,status:"success",snapshot:$s}') 2>/dev/null || \
-        echo "{\"job_id\":\"$JOB_ID\",\"status\":\"success\",\"snapshot\":\"$LATEST_CSV\"}"
+      SUMMARY=$(
+        jq -n --arg j "$JOB_ID" --arg s "$LATEST_CSV" '{job_id:$j,status:"success",snapshot:$s}' 2>/dev/null ||
+          echo "{\"job_id\":\"$JOB_ID\",\"status\":\"success\",\"snapshot\":\"$LATEST_CSV\"}"
+      )
     fi
   fi
 fi

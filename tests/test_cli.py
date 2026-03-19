@@ -537,10 +537,20 @@ def test_run_notebook_invokes_papermill(monkeypatch):
     importlib.util.find_spec("papermill") is not None,
     reason="papermill installed; cannot test missing dependency path",
 )
-def test_run_notebook_missing_papermill():
+def test_run_notebook_missing_papermill(monkeypatch):
     """`--run-notebook` deve falhar com ImportError quando papermill
     não está instalado."""
     from src.main import app
+
+    # Avoid side effects from ingest+returns when papermill isn't available.
+    monkeypatch.setattr(
+        "src.ingest.pipeline.ingest",
+        lambda *args, **kwargs: {"status": "success", "persist": {"rows_processed": 0}},
+    )
+    monkeypatch.setattr(
+        "src.main._compute_returns_for_ticker",
+        lambda *args, **kwargs: {"rows": 0, "persisted": True, "sample_df": None},
+    )
 
     runner = CliRunner()
     result = runner.invoke(
@@ -564,6 +574,16 @@ def test_run_notebook_missing_papermill():
 def test_run_notebook_runtime_error(monkeypatch):
     """`--run-notebook` deve falhar com código 2 quando papermill lança exceção."""
     from src.main import app
+
+    # Avoid side effects from ingest/returns while exercising notebook error handling.
+    monkeypatch.setattr(
+        "src.ingest.pipeline.ingest",
+        lambda *args, **kwargs: {"status": "success", "persist": {"rows_processed": 0}},
+    )
+    monkeypatch.setattr(
+        "src.main._compute_returns_for_ticker",
+        lambda *args, **kwargs: {"rows": 0, "persisted": True, "sample_df": None},
+    )
 
     class FakePMErroring:
         def execute_notebook(self, *args, **kwargs):

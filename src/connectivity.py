@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, Optional, TypedDict, cast
 
 from src.adapters.factory import get_adapter
-from src.health import append_ingest_log_entry, get_last_success_timestamp
+from src.utils.health import append_ingest_log_entry, get_last_success_timestamp
 
 
 class ConnectionStatus(TypedDict):

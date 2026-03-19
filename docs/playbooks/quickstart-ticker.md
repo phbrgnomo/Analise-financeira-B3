@@ -56,21 +56,21 @@ poetry run main --sample-tickers PETR4,ITUB3 --max-days 30 --no-network
 
 Verificações mínimas
 
-- Verificar existência do snapshot:
+- Verificar existência do snapshot (o nome contém data no formato `YYYYMMDD`):
 
 ```bash
-ls -l snapshots/PETR4_snapshot.csv
+ls -l snapshots/PETR4-*.csv
 ```
 
 - Calcular checksum SHA256 do snapshot (ou validar contra o arquivo `.checksum` gerado automaticamente):
 
 ```bash
-sha256sum snapshots/PETR4_snapshot.csv
+sha256sum snapshots/PETR4-20260215.csv
 # Exemplo de saída:
-# e3b0c44298fc1c149afbf4c8996fb924...  snapshots/PETR4_snapshot.csv
+# e3b0c44298fc1c149afbf4c8996fb924...  snapshots/PETR4-20260215.csv
 
 # Verificar que o checksum bate com o arquivo sidecar:
-cat snapshots/PETR4_snapshot.csv.checksum
+cat snapshots/PETR4-20260215.csv.checksum
 ```
 
 Verificar raw provider e metadados
@@ -102,7 +102,7 @@ Comandos de troubleshooting
 - Forçar ingest completo ignorando cache do pipeline:
 
 ```bash
-poetry run main pipeline ingest PETR4 --force-refresh
+poetry run main --ticker PETR4 --force-refresh
 ```
 
 ### Saúde, métricas e conectividade

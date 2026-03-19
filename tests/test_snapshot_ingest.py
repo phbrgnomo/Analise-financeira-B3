@@ -51,12 +51,9 @@ def test_sanitized_filename_and_path(tmp_path, monkeypatch):
     snap_dir.mkdir()
     df = pd.DataFrame({"x": [1, 2]})
 
-    # ticker contains traversal and illegal chars
-    bad = "../foo/bar.TICK?"
-    sha, out_path = si._write_snapshot_file(df, bad, snap_dir)
-    assert sha == "deadbeef"
-    # output path must be inside snapshot directory
-    assert out_path.resolve().is_relative_to(snap_dir.resolve())
+    out_path = _extracted_from_test_sanitized_filename_and_path_16(
+        si, df, "../foo/bar.TICK?", snap_dir
+    )
     # filename should have no path separators and illegal chars replaced
     assert ".." not in out_path.name
     assert "/" not in out_path.name
@@ -65,7 +62,16 @@ def test_sanitized_filename_and_path(tmp_path, monkeypatch):
 
     # even a ticker that looks like a path should be safely mapped
     evil = "..\\evil"  # backslash on windows-like input
-    sha2, out2 = si._write_snapshot_file(df, evil, snap_dir)
-    assert sha2 == "deadbeef"
-    assert out2.resolve().is_relative_to(snap_dir.resolve())
+    out2 = _extracted_from_test_sanitized_filename_and_path_16(
+        si, df, evil, snap_dir
+    )
     assert "evil" in out2.name
+
+
+# TODO Rename this here and in `test_sanitized_filename_and_path`
+def _extracted_from_test_sanitized_filename_and_path_16(si, df, arg2, snap_dir):
+    sha, result = si._write_snapshot_file(df, arg2, snap_dir)
+    assert sha == "deadbeef"
+    # output path must be inside snapshot directory
+    assert result.resolve().is_relative_to(snap_dir.resolve())
+    return result

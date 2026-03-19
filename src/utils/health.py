@@ -134,7 +134,11 @@ def get_last_success_timestamp(
     if latest is None:
         return None
 
-    return latest.replace(tzinfo=timezone.utc).isoformat().replace("+00:00", "Z")
+    # Preserve the original timezone when present; if absent, assume UTC.
+    if latest.tzinfo is None:
+        latest = latest.replace(tzinfo=timezone.utc)
+
+    return latest.isoformat().replace("+00:00", "Z")
 
 
 def append_ingest_log_entry(
@@ -150,8 +154,7 @@ def append_ingest_log_entry(
 
     try:
         path = resolve_ingest_log_path(ingest_log_path)
-        dirpath = os.path.dirname(path)
-        if dirpath:
+        if dirpath := os.path.dirname(path):
             os.makedirs(dirpath, exist_ok=True)
         with open(path, "a", encoding="utf-8") as fh:
             fh.write(json.dumps(entry, ensure_ascii=False) + "\n")
@@ -271,10 +274,6 @@ def check_paths_health(paths: Dict[str, str]) -> Dict[str, Any]:
 
     for name, path_str in paths.items():
         path = Path(path_str)
-        if not path.exists():
-            status = "warn" if status == "ok" else status
-            reasons.append(f"{name} missing: {path}")
-            continue
         if name == "db" and path.is_file():
             try:
                 # Ensure we can open the file in read-only mode.
@@ -293,26 +292,10 @@ def check_paths_health(paths: Dict[str, str]) -> Dict[str, Any]:
                         f"db permissions are {oct(mode)}; "
                         "file may be too broadly accessible"
                     )
-        if name == "db" and path.is_file():
-            try:
-                # Ensure we can open the file in read-only mode.
-                with open(path, "rb"):
-                    pass
-            except Exception as exc:
-                status = "error"
-                reasons.append(f"db unreadable: {exc}")
-            with contextlib.suppress(Exception):
-                # Best-effort permission check: warn only on clearly too-permissive
-                # modes.
-                # On non-Unix platforms (Windows) this may not be meaningful.
-                mode = path.stat().st_mode & 0o777
-                # World-writable is almost always incorrect; also warn if the file is
-                # world-readable and group-writable (more permissive than typical).
-                if mode & 0o002 or (mode & 0o004 and mode & 0o020):
-                    reasons.append(
-                        f"db permissions are {oct(mode)}; "
-                        f"file may be too broadly accessible"
-                    )
+        elif name == "db":
+            # If we were asked to check a database path, it must be a file.
+            status = "error"
+            reasons.append(f"db is not a file: {path}")
         elif name != "db" and not path.is_dir():
             status = "warn" if status == "ok" else status
             reasons.append(f"{name} not a directory: {path}")

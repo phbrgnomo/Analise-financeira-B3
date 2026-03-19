@@ -351,10 +351,15 @@ def _fetch_and_canonical(
     source: str,
     start: str | None,
     end: str | None,
-) -> tuple[pd.DataFrame | None, str | None]:
+) -> tuple[pd.DataFrame | None, pd.DataFrame | None, str | None]:
     """Fetch provider data and map to the canonical schema.
 
-    Returns a tuple (canonical_df, error_message)."""
+    Returns a tuple (raw_df, canonical_df, error_message).
+
+    The raw provider DataFrame is preserved so it can be saved as the raw
+    artifact (CSV) while the canonical DataFrame is used for persistence and
+    downstream processing.
+    """
     try:
         from src.adapters.factory import get_adapter
 
@@ -366,14 +371,14 @@ def _fetch_and_canonical(
             fetch_kwargs["end_date"] = end
         df = adapter.fetch(ticker, **fetch_kwargs)
     except Exception as exc:
-        return None, f"adapter.fetch failed: {exc}"
+        return None, None, f"adapter.fetch failed: {exc}"
 
     try:
         from src.etl.mapper import to_canonical
 
-        return to_canonical(df, provider_name=source, ticker=ticker), None
+        return df, to_canonical(df, provider_name=source, ticker=ticker), None
     except Exception as exc:
-        return None, f"mapper failed: {exc}"
+        return df, None, f"mapper failed: {exc}"
 
 
 def _save_raw_csv_or_error(
@@ -458,19 +463,20 @@ def ingest(  # noqa: C901 - function is intentionally orchestrator-style
 
     try:
         with locks.acquire_lock(
-            ticker, timeout_seconds=lock_timeout, wait=wait_for_lock
+            canonical_ticker, timeout_seconds=lock_timeout, wait=wait_for_lock
         ) as lock_meta:
             log = logging.LoggerAdapter(logger, extra={**lock_meta})
 
-            canonical, err = _fetch_and_canonical(
-                ticker=ticker, source=source, start=start, end=end
+            raw, canonical, err = _fetch_and_canonical(
+                ticker=canonical_ticker, source=source, start=start, end=end
             )
             if err is not None:
                 return _record_error_and_return(
-                    job_id, ticker, source, started_at, err, lock_meta
+                    job_id, canonical_ticker, source, started_at, err, lock_meta
                 )
 
-            # At this point, ``canonical`` must be a DataFrame (not None).
+            # At this point, both ``raw`` and ``canonical`` should be DataFrames.
+            assert raw is not None
             assert canonical is not None
 
             if dry_run:
@@ -484,7 +490,7 @@ def ingest(  # noqa: C901 - function is intentionally orchestrator-style
                 }
                 result = {
                     "job_id": job_id,
-                    "ticker": ticker,
+                    "ticker": canonical_ticker,
                     "source": source,
                     "status": "success",
                     "dry_run": True,
@@ -494,7 +500,7 @@ def ingest(  # noqa: C901 - function is intentionally orchestrator-style
                 }
                 metadata = _make_metadata(
                     job_id,
-                    ticker,
+                    canonical_ticker,
                     source,
                     "success",
                     started_at,
@@ -508,17 +514,17 @@ def ingest(  # noqa: C901 - function is intentionally orchestrator-style
 
             ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
             save_meta, err = _save_raw_csv_or_error(
-                canonical, source, ticker, ts, job_id
+                raw, source, canonical_ticker, ts, job_id
             )
             if err is not None:
                 return _record_error_and_return(
-                    job_id, ticker, source, started_at, err, lock_meta
+                    job_id, canonical_ticker, source, started_at, err, lock_meta
                 )
 
             persist_result: Dict[str, Any] = {}
             try:
                 persist_result = ingest_from_snapshot(
-                    canonical, ticker, force=force_refresh
+                    canonical, canonical_ticker, force=force_refresh
                 )
             except Exception as exc:  # pragma: no cover - just in case
                 logger.exception("persistence step failed: %s", exc)
@@ -530,7 +536,7 @@ def ingest(  # noqa: C901 - function is intentionally orchestrator-style
             duration_str = f"{(time.monotonic() - t0):.2f}s"
             metadata = {
                 "job_id": job_id,
-                "ticker": ticker,
+                "ticker": canonical_ticker,
                 "source": source,
                 "status": top_status,
                 "rows": len(canonical),

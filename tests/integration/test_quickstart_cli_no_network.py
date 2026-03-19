@@ -92,10 +92,16 @@ def test_quickstart_no_network_cache_hit_json(isolated_cli_env, monkeypatch):
         index=fixed_dates,
     )
 
-    # Patch DummyAdapter so every run returns the same data
+    # Patch DummyAdapter so every run returns the same data, and spy on calls.
+    fetch_calls = {"count": 0}
+
+    def fake_fetch(self, *args, **kwargs):
+        fetch_calls["count"] += 1
+        return fixed_df
+
     monkeypatch.setattr(
         "src.adapters.dummy.DummyAdapter.fetch",
-        lambda self, *args, **kwargs: fixed_df,
+        fake_fetch,
     )
 
     runner = CliRunner()
@@ -109,6 +115,10 @@ def test_quickstart_no_network_cache_hit_json(isolated_cli_env, monkeypatch):
     ticker2 = _extracted_from_test_quickstart_no_network_cache_hit_json_34(runner)
     assert ticker2["snapshot_path"] == path1
     assert ticker2["snapshot_checksum"] == checksum1
+
+    # Cache hit should be reflected in the output metadata.
+    assert ticker2.get("cached") is True
+    assert ticker2.get("cache_reason") == "checksum_match"
 
 
 # TODO Rename this here and in `test_quickstart_no_network_cache_hit_json`
