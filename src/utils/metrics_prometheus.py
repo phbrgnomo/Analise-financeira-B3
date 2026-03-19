@@ -5,7 +5,7 @@ installed so tests and minimal environments don't require the package.
 """
 
 import logging
-from typing import Dict
+from typing import Any, Dict
 
 logger = logging.getLogger(__name__)
 
@@ -16,9 +16,9 @@ try:
     _HAS_PROM = True
 except ImportError:
     # prometheus_client not available; fall back to no-op
-    Counter = None  # type: ignore
-    Histogram = None  # type: ignore
-    start_http_server = None  # type: ignore
+    Counter: Any = None  # type: ignore
+    Histogram: Any = None  # type: ignore
+    start_http_server: Any = None  # type: ignore
 
 
 class _NoopMetric:
@@ -39,7 +39,8 @@ def get_counter(name: str, documentation: str = ""):
     if not _HAS_PROM:
         return _NoopMetric()
     if name not in _counters:
-        _counters[name] = Counter(name, documentation)
+        assert Counter is not None
+        _counters[name] = Counter(name, documentation)  # type: ignore[operator]
     return _counters[name]
 
 
@@ -49,7 +50,8 @@ def get_histogram(name: str, documentation: str = ""):
     if not _HAS_PROM:
         return _NoopMetric()
     if name not in _histograms:
-        _histograms[name] = Histogram(name, documentation)
+        assert Histogram is not None
+        _histograms[name] = Histogram(name, documentation)  # type: ignore[operator]
     return _histograms[name]
 
 
