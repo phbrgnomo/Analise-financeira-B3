@@ -7,9 +7,10 @@ e tratamento de erros padronizado.
 
 import logging
 import re
+import time
 import types
 from datetime import datetime, timedelta, timezone
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
 
 import pandas as pd
 
@@ -279,6 +280,33 @@ class YFinanceAdapter(Adapter):
         except Exception:
             logger.exception("error during yfinance test_connection")
             return False
+
+    def check_connection(self, timeout: Optional[float] = None) -> Dict[str, Any]:
+        """Perform a minimal connectivity check against Yahoo Finance.
+
+        This method does a small data request to validate that the network and
+        API are reachable. It is intentionally lightweight.
+        """
+
+        start = time.monotonic()
+        try:
+            if getattr(yf, "__is_stub__", False):
+                raise RuntimeError("yfinance dependency not installed")
+
+            yf.download(
+                "AAPL",
+                period="1d",
+                interval="1d",
+                progress=False,
+                timeout=timeout or self.timeout,
+            )
+            status = "success"
+            error = None
+        except Exception as exc:
+            status = "failure"
+            error = str(exc)
+        latency_ms = round((time.monotonic() - start) * 1000, 2)
+        return {"status": status, "error": error, "latency_ms": latency_ms}
 
     def get_metadata(self) -> Dict[str, str]:
         """

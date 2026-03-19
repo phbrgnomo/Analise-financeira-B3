@@ -9,7 +9,7 @@ import logging
 import time
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 import pandas as pd
 
@@ -57,6 +57,37 @@ class Adapter(ABC):
             self.__class__.__name__,
         )
         return True
+
+    def check_connection(self, timeout: Optional[float] = None) -> Dict[str, Any]:
+        """Check provider connectivity and return structured status.
+
+        This is the canonical method used by CLI health checks.
+
+        The default implementation delegates to ``test_connection`` (for
+        backward compatibility) and returns a dict with fields compatible with
+        ``src.connectivity.ConnectionStatus``.
+
+        Parameters
+        ----------
+        timeout:
+            Optional timeout in seconds for the connectivity check.
+
+        Returns
+        -------
+        Dict[str, Any]
+            A minimal health check result (status, error, latency_ms).
+        """
+
+        start = time.monotonic()
+        try:
+            healthy = self.test_connection()
+            status = "success" if healthy else "failure"
+            error = None
+        except Exception as exc:
+            status = "failure"
+            error = str(exc)
+        latency_ms = round((time.monotonic() - start) * 1000, 2)
+        return {"status": status, "error": error, "latency_ms": latency_ms}
 
     @abstractmethod
     def fetch(self, ticker: str, **kwargs) -> pd.DataFrame:

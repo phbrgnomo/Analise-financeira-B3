@@ -105,6 +105,26 @@ Comandos de troubleshooting
 poetry run main pipeline ingest PETR4 --force-refresh
 ```
 
+### Saúde, métricas e conectividade
+
+- Verificar conectividade com o provider (saída JSON):
+
+```bash
+poetry run main test-conn --provider dummy --format json
+```
+
+- Verificar métricas de ingestão (saída JSON):
+
+```bash
+poetry run main metrics --format json
+```
+
+- Verificar saúde básica do sistema local (BD + diretórios):
+
+```bash
+poetry run main health --format json
+```
+
 Notas de exemplo e outputs
 
 - Ao executar o quickstart, um CSV com colunas OHLCV e uma coluna `Return` deve ser persistido no snapshot.
