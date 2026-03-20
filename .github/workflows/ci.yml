@@ -58,6 +58,7 @@ jobs:
           # the dummy adapter is now registered automatically by the factory,
           # so we can call the ingest command directly.  the helper script is
           # kept for manual experimentation but is not required here.
+          poetry run python -m ipykernel install --user --name python3 --display-name "Python 3"
           poetry run python -c "import sys; from src.ingest.pipeline import ingest_command; sys.exit(ingest_command('TEST', 'dummy', dry_run=True))"
 
       - name: Quickstart example smoke test
