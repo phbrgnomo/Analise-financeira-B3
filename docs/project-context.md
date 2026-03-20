@@ -1,37 +1,62 @@
 ---
 project_name: 'Analise-financeira-B3'
 user_name: 'Phbr'
-date: '2026-02-22'
-sections_completed: ['technology_stack','language_rules','framework_rules','testing','code_quality','workflow_rules','critical_rules']
-existing_patterns_found: 7
+date: '2026-03-17'
+sections_completed: ['technology_stack','language_rules','framework_rules','testing','code_quality','workflow_rules','critical_rules','ux']
+existing_patterns_found: 8
 status: 'complete'
-rule_count: 29
+rule_count: 38
 optimized_for_llm: true
-last_updated: '2026-03-05'
+last_updated: '2026-03-17'
 ---
 
-# Project Context for AI Agents
+# Contexto do Projeto para Agentes de IA
 
 _Documento enxuto com regras críticas e padrões que agentes de IA devem seguir ao implementar código neste projeto. Conteúdo otimizado para consumo por LLMs._
 
 ---
 
-## Technology Stack & Versions
+## Tecnologias e Versões
 
-- Python: ^3.12 (Poetry) — seguir `pyproject.toml`
-- sqlite3 (standard library) — persistência principal
-- SQLAlchemy: ^2.0.x (dependência declarada, mas não usada diretamente no core; pode ser removida em sprint futuro)
-- pandas: ^2.x
-- numpy: ^2.x
-- typer: ^0.9.x (entrypoint: `src.main:app`)
-- python-dotenv: ^1.x
-- Dev: pytest (>=7.x), ruff (config via `pyproject.toml`), pre-commit
+### Resumo de Tecnologias (extraído de `pyproject.toml`)
 
-Nota: documente e justifique qualquer mudança de versão em `pyproject.toml`; confirme compatibilidade antes de alterar a versão mínima do Python (atualmente `^3.12`).
+- Python: ^3.12
+- pandas: ^2.3.2
+- numpy: ^2.3.2
+- SQLAlchemy: ^2.0.18
+- typer: ^0.24  # usar versão declarada em `pyproject.toml`
+- python-dotenv: ^1.0.0
+- yfinance: ^1.2.0
+- pandera: ^0.29.0
+- portalocker: ^3.1.0
+- papermill: ^2.7.0 (opcional; habilite via `poetry install --extras "notebook"`)
+- sqlparse: ^0.5.5
+- Persistência: `sqlite3` (stdlib) — arquivo canônico `dados/data.db`
+- Dev / CI: pytest ^7.4.0, ruff (config em `pyproject.toml`), pre-commit
 
-## Critical Implementation Rules
+## UX
 
-### Language-Specific (Python)
+- CLI: flags mínimas e mensagens esperadas estão documentadas em `docs/planning-artifacts/ux.md`. Principais flags esperadas:
+  - `--ticker <TICKER>`
+  - `--start_date <YYYY-MM-DD>` / `--end_date <YYYY-MM-DD>`
+  - `--force-refresh`
+  - `--format <text|json>` (padrão `text`)
+  - `--no-network` (modo offline para testes/CI)
+  - `--output <path>` (export CSV)
+
+- Mensagens: mensagens concisas voltadas a troubleshooting (ex.: `Executando tickers ...`, `Resumo run: sucesso=<n>, falhas=<n>`, `WARN: ...`, `ERROR: ...`). Use logging estruturado para saída em CI.
+
+- Notebooks: células de preparação devem carregar snapshots de `snapshots/` e parametrização via `ticker`, `start_date`, `end_date` — os notebooks devem gerar ao menos um plot de preços ajustados e um plot de retornos.
+
+- Streamlit (opcional/minimal): telas para selecionar ticker/período, executar e visualizar gráfico + resumo numérico; botão `Run` deve mostrar `Processing...` e desabilitar inputs enquanto processa.
+
+- Observação de compatibilidade: regras UX documentadas em `docs/planning-artifacts/ux.md` devem ser consideradas na implementação do CLI (`src/main.py`) e ao adicionar `--run-notebook`.
+
+**Nota:** há uma pequena divergência de versão do `typer` entre `pyproject.toml` (0.24) e referências em `docs/project-context.md` (0.9.x). Preferir a versão declarada em `pyproject.toml` como fonte da verdade e atualizar a documentação se necessário.
+
+## Regras Críticas de Implementação
+
+### Regras Específicas da Linguagem (Python)
 
 - Use `poetry` para ambiente e execução (`poetry install`, `poetry run main`).
 - Evite imports pesados no startup; importe dentro de funções quando necessário.
@@ -39,8 +64,16 @@ Nota: documente e justifique qualquer mudança de versão em `pyproject.toml`; c
 - Nunca commitar segredos; use `.env` com `python-dotenv` para desenvolvimento local.
 - Quando for implementar alguma variável de configuração, utilize `python-dotenv` e adicione a variável ao `.env.example` para referência. Nunca adicione variáveis de configuração diretamente no código ou em arquivos versionados.
 
-### Framework-Specific Rules
+### Regras Específicas de Framework
 
+- Use `type hints` em APIs públicas e docstrings concisas para funções/módulos exportados.
+- Nunca use `bare except:`; capture exceções específicas e use `raise from` para manter contexto.
+- Prefira `with`/context managers para arquivos, conexões e transações.
+- Funções que gravam/consultam DB devem aceitar `conn` injetado; evite singletons globais para `conn`/engine.
+- Calcule e persista `raw_checksum` antes de realizar upserts no DB; não mude o algoritmo de checksum sem migração/nota.
+- Em chamadas de rede/IO, favor testar via fixtures/mocks (monkeypatch/patch) em vez de rede real.
+- Use `src.logging_config.get_logger` para logging estruturado; evite `print()` em produção.
+- Sanitize as entradas que possam ser usadas em paths/nomes de arquivos para evitar injeção de shell/path traversal.
 - CLI: o projeto usa `typer` para a CLI (`src/main.py`). Mantenha comandos leves; evite imports pesados no topo do módulo da CLI — importe dentro da função do comando quando necessário.
 - Adapter Factory: siga a fábrica de adapters em `src/adapters/factory.py`. Sempre obter instâncias via `get_adapter()` ou `register_adapter()`; não introduza caminhos alternativos de criação de adapters sem atualizar `docs/modules/adapter-guidelines.md`.
 
@@ -94,7 +127,6 @@ Nota: documente e justifique qualquer mudança de versão em `pyproject.toml`; c
   # tests/test_etl.py
   def test_process_etl_with_mock(yf_mock, tmp_db):
       from src.adapters.factory import get_adapter
-      from src.db import write_prices, compute_raw_checksum
 
       adapter = get_adapter("yfinance")
       df = adapter.fetch("PETR4")  # yfinance.download interceptado pelo yf_mock
@@ -148,20 +180,22 @@ Nota: documente e justifique qualquer mudança de versão em `pyproject.toml`; c
   e registrar a justificativa no PR.
 - Scripts utilitários vivem em `scripts/` e servem como helpers de linha de comando (ex.: `validate_snapshots.py`, `init_ingest_db.py`). Leia o cabeçalho antes de alterar ou reutilizar.
 
-### Testing
+### Testes (Conciso e Acionável)
 
-- Cobertura: adicionar testes para novas features; siga as fixtures em `tests/conftest.py`.
-- Organização: coloque testes unitários em `tests/` com nomes `test_*.py`; use subpastas para agrupamento por módulo.
-- Separe unit/integration: marque testes de integração com `@pytest.mark.integration` e execute-os separadamente no CI.
-- Mocks: isole chamadas de rede (ex.: `yfinance`) usando fixtures, `responses`, `requests-mock` ou `pytest` monkeypatch; nunca depender de rede em testes unitários.
-- DB em testes: prefira `sqlite3` in-memory ou um `tmp_path` DB; injete `conn` para permitir isolamento e rollback entre testes.
-- Snapshots: valide checksums de snapshots em fixtures; testes que usam `snapshots/` devem carregar via helpers existentes e impedir escrita acidental.
-- Recursos temporários: use `tmp_path`/`tmp_path_factory` para arquivos temporários e garanta cleanup automático.
-- Testes lentos: marque testes lentos com `@pytest.mark.slow` e exclua-os do pipeline padrão, exceto quando necessário.
-- CI: Pipeline deve executar linters e `poetry run pytest -q` (unit + smoke); integração e testes lentos podem ser jobs separados.
-- Executar localmente: use `poetry run pytest -q` e `poetry run pre-commit --all-files` antes de abrir PR.
+- Execute testes com `pytest` via `poetry run pytest -q`. Mantenha os testes rápidos e determinísticos.
+- Organize os testes em `tests/` usando arquivos `test_*.py`; agrupe por módulo em subpastas.
+- Separe testes unitários e de integração: marque testes de integração com `@pytest.mark.integration` e execute-os em um job de CI separado.
+- Testes unitários não devem realizar I/O de rede. Faça mock de chamadas externas (ex.: `yfinance`) com `unittest.mock.patch`, fixtures do `pytest` ou `responses`.
+- Use `sqlite3.connect(":memory:")` ou um banco em `tmp_path` para testes; injete `conn` nas funções para permitir isolamento e rollback.
+- Use `tmp_path`/`tmp_path_factory` para artefatos de filesystem e garanta limpeza. Prefira fixtures para snapshots (coloque em `tests/fixtures/`).
+- Valide checksums de snapshot em testes usando os helpers de `scripts/validate_snapshots.py`; testes que leem snapshots não devem escrevê-los.
+- Marque testes lentos com `@pytest.mark.slow` para excluí-los da execução padrão do CI; inclua um pequeno job de smoke/integration para caminhos críticos.
+- Use `monkeypatch` para controlar variáveis de ambiente e fazer patch de tempo/aleatoriedade para testes determinísticos.
+- Busque alta cobertura nos módulos centrais de ETL/adapter/persistência; adicione testes de integração focados que rodem em modo `--no-network`.
+- CI: execute `poetry run pre-commit --all-files` e `poetry run pytest -q` como passos mínimos do pipeline; faça o CI falhar em caso de checksum/lint/testes com falha.
 
-### Code Quality & Style
+
+### Qualidade de Código e Estilo
 
 - Lint & Formatting: siga `pyproject.toml` (ruff) e mantenha `line-length: 88`. Execute `pre-commit --all-files` localmente antes de PR; falhas de lint devem bloquear merge.
 - Tipagem: use `type hints` em APIs públicas e novos módulos; adicione docstrings concisas para módulos e funções públicas.
@@ -187,7 +221,7 @@ Nota: documente e justifique qualquer mudança de versão em `pyproject.toml`; c
 - Estilo: preserve convenções de nomes e estrutura de módulos; evite mudanças de estilo massivas em arquivos não relacionados.
 - Documentação: documente decisões de design importantes e mudanças de dependência em `docs/sprint-reports/`.
 
-### Imports & Dependencies
+### Importações e Dependências
 
 - Evitar imports globais de libs pesadas em módulos executados no startup da CLI; prefira imports locais dentro de funções quando apropriado.
 - Organização: siga a ordem `stdlib` → `third-party` → `local` e use `isort`/config compatível com `pyproject.toml`.
@@ -200,7 +234,7 @@ Nota: documente e justifique qualquer mudança de versão em `pyproject.toml`; c
 - Dependências opcionais: para funcionalidades opt-in, documente um extra em `pyproject.toml` (`extras`) ou faça import condicional com fallback claro.
 - Segurança: nunca aceitar pacotes de fontes não verificadas; prefira versões com checksum e verifique CVEs para atualizações críticas.
 
-### Development Workflow
+### Fluxo de Trabalho de Desenvolvimento
 
 - Branches & PRs: nomear branches como `tipo/ticket-descrição` (ex.: `feat/123-add-ingest`). Faça PRs pequenos e focados; inclua descrição, checklist e links para tarefas relacionadas.
 - Pre-commit & CI: execute `pre-commit --all-files` e `poetry run pytest -q` localmente antes de abrir PR. Falhas de linter/test devem bloquear merge no CI.
@@ -214,7 +248,7 @@ Nota: documente e justifique qualquer mudança de versão em `pyproject.toml`; c
 - CI Jobs: separar jobs curtos (linters, unit tests) de jobs pesados (integration/slow); falhas críticas devem bloquear pipeline principal.
 - Hotfixes: criar branches `hotfix/*` e seguir processo de revisão acelerada; documentar a razão do hotfix no PR.
 
-### CI
+### Integração Contínua (CI)
 
 - Pipeline mínimo: `poetry install` + `poetry run pytest -q` + linters.
 - Pre-commit: `poetry run pre-commit run --all-files`.
@@ -222,7 +256,7 @@ Nota: documente e justifique qualquer mudança de versão em `pyproject.toml`; c
 - Manter paridade de runtime entre CI e `pyproject.toml`; hoje o baseline
   esperado é Python 3.12.
 
-### Critical Don't-Miss Rules
+### Regras Críticas — Não Ignorar
 
 - Anti-patterns a evitar:
 	- Alterar formato de CSV/snapshot sem coordenação, testes e atualização de checksums.
@@ -257,6 +291,26 @@ Nota: documente e justifique qualquer mudança de versão em `pyproject.toml`; c
 - Testes & mocks:
 	- Não depender de rede em unit tests; sempre mockar `yfinance`/APIs externas.
 	- Testes que alteram dados reais devem rodar somente em jobs isolados com dados de teste.
+
+---
+
+## Diretrizes de Uso
+
+**Para Agentes de IA:**
+
+- Leia este arquivo antes de implementar qualquer código.
+- Siga todas as regras conforme documentado; em caso de dúvida, prefira a opção mais restritiva.
+- Se uma mudança afetar múltiplas regras (por exemplo, atualização de dependência), atualize este arquivo e adicione uma justificativa curta em `docs/sprint-reports/`.
+- Mantenha saídas determinísticas: faça mock das chamadas de rede nos testes e utilize o modo `--no-network` para execuções de smoke em CI.
+
+**Para Humanos / Mantenedores:**
+
+- Mantenha este arquivo enxuto e focado nas necessidades dos agentes; evite conteúdo tutorial.
+- Atualize quando o stack de tecnologia mudar (editar `pyproject.toml` primeiro) e atualize `last_updated`.
+- Revise trimestralmente para remover regras desatualizadas ou óbvias.
+- Ao alterar o esquema de snapshot ou o algoritmo de checksum, adicione scripts de migração em `migrations/` e atualize os testes.
+
+Última Atualização: 2026-03-17
 
 ---
 

@@ -15,14 +15,101 @@ which uses these utilities).
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import os
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Iterator, Optional
 
 logger = logging.getLogger(__name__)
+
+
+def _record_cache_fallback_metric() -> None:
+    """Increment the metric used when reading the snapshot cache fails.
+
+    The metric is optional (may not be available in all environments), so
+    failures are logged at debug level rather than propagated.
+    """
+
+    try:
+        from src.utils import metrics_prometheus as metrics
+
+        metrics.increment_counter("snapshot_cache_fallback")
+    except Exception:  # pragma: no cover — metrics optional
+        logger.debug("metrics increment failed", exc_info=True)
+
+
+@contextlib.contextmanager
+def cache_file_lock(path: Path) -> Iterator[None]:
+    """Context manager that serializes access to the cache file across processes.
+
+    The snapshot cache is shared by all tickers within the same directory, and
+    concurrent ingest runs (even for different tickers) may race when updating
+    the cache file.  This helper uses a filesystem lock to ensure only one
+    process reads/updates the cache at a time.
+
+    We prefer a cross-platform lock implementation (via `portalocker`) but
+    fall back to a Unix-only ``fcntl``-based lock if portalocker is unavailable.
+    """
+
+    # Use a sibling lock file to avoid interfering with the cache itself.
+    lock_path = path.with_suffix(f"{path.suffix}.lock")
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+
+    try:
+        import portalocker  # type: ignore
+
+        with portalocker.Lock(str(lock_path), "a", timeout=30):
+            yield
+        return
+    except ImportError as e:
+        # Portalocker is the preferred solution; if it's not available, fall
+        # back to a Unix-only fcntl lock. Only swallow the error when the
+        # missing module is actually `portalocker` to avoid hiding other bugs.
+        if getattr(e, "name", None) != "portalocker":
+            raise
+        logger.debug(
+            "portalocker not available; falling back to fcntl-based cache lock",
+            exc_info=True,
+        )
+    except Exception as e:
+        # If locking fails for any reason, proceed anyway (best-effort).
+        logger.debug(
+            "failed to acquire cache lock via portalocker; proceeding without lock: %s",
+            e,
+            exc_info=True,
+        )
+        yield
+        return
+
+    # Fallback for environments without portalocker (e.g. minimal installs).
+    try:
+        import fcntl  # type: ignore
+    except Exception:
+        yield
+        return
+
+    # We deliberately open in append mode so the file exists without truncating.
+    with open(lock_path, "a+") as fh:
+        try:
+            fcntl.flock(fh, fcntl.LOCK_EX)
+        except Exception as e:
+            logger.debug(
+                "failed to acquire fcntl lock for cache file; "
+                "proceeding without lock: %s",
+                e,
+                exc_info=True,
+            )
+            yield
+            return
+
+        try:
+            yield
+        finally:
+            with contextlib.suppress(Exception):
+                fcntl.flock(fh, fcntl.LOCK_UN)
 
 
 def load_cache(path: Path) -> Dict[str, Any]:
@@ -37,20 +124,32 @@ def load_cache(path: Path) -> Dict[str, Any]:
     try:
         with open(path, "r", encoding="utf-8") as fh:
             return json.load(fh)
-    except json.JSONDecodeError:
-        logger.warning(
+    except json.JSONDecodeError as exc:
+        return _handle_load_cache_error(
+            exc,
             "failed to decode JSON in snapshot cache %s; treating as empty cache",
             path,
-            exc_info=True,
         )
-        return {}
-    except OSError:
-        logger.warning(
+    except OSError as exc:
+        return _handle_load_cache_error(
+            exc,
             "failed to read snapshot cache %s due to OS error; treating as empty cache",
             path,
-            exc_info=True,
         )
-        return {}
+
+
+def _handle_load_cache_error(
+    error: Exception, message: str, path: Path | str
+) -> Dict[str, Any]:
+    """Log a cache load failure, record fallback metric, and return empty cache.
+
+    This helper centralizes the behavior used when ``load_cache`` encounters
+    invalid JSON or I/O errors. It logs a warning with exception context,
+    increments the cache-fallback metric, and returns an empty cache dict.
+    """
+    logger.warning(message, path, exc_info=True)
+    _record_cache_fallback_metric()
+    return {}
 
 
 def save_cache(path: Path, cache: Dict[str, Any]) -> None:
@@ -111,4 +210,9 @@ def entry_is_fresh(entry: Dict[str, Any], ttl: Optional[float]) -> bool:
     return age.total_seconds() < ttl
 
 
-__all__ = ["load_cache", "save_cache", "entry_is_fresh"]
+__all__ = [
+    "load_cache",
+    "save_cache",
+    "entry_is_fresh",
+    "cache_file_lock",
+]

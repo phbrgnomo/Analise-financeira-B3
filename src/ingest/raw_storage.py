@@ -41,6 +41,18 @@ DEFAULT_METADATA = Path("metadata/ingest_logs.jsonl")
 _DB_PATH_DEPRECATION_WARNED = False
 
 
+def _test_reset_deprecation_warning() -> None:
+    """Reset the warning suppression state (test helper).
+
+    The module suppresses repeated deprecation warnings for the legacy ``db_path``
+    parameter once it has been emitted. Tests that need to assert the warning is
+    emitted should call this helper instead of mutating module state directly.
+    """
+
+    global _DB_PATH_DEPRECATION_WARNED
+    _DB_PATH_DEPRECATION_WARNED = False
+
+
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------

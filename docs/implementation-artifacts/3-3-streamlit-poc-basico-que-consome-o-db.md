@@ -38,6 +38,7 @@ so that I can quickly inspect price and return series and validate end‑to‑en
   - [ ] Implement plotting (plotly or altair) with fallbacks to matplotlib if missing
 - [ ] Add docs section in `docs/playbooks/quickstart-ticker.md` showing how to run the POC (AC 6)
 - [ ] Add a lightweight smoke test in `tests/test_streamlit_poc.py` that validates data-loading function (AC 8)
+- [ ] Document implemented features, usage examples and rationale in `docs/sprint-reports/3-3-streamlit-poc-basico-que-consome-o-db.md`.
 
 ## Dev Notes
 
@@ -49,7 +50,7 @@ so that I can quickly inspect price and return series and validate end‑to‑en
 ### Project Structure Notes
 
 - Recommended file: `src/apps/streamlit_poc.py`
-- DB helper: `src/db/db.py` (expose `read_prices`) — reuse existing patterns
+- DB helper: `src/db_client.py` (expose `read_prices`) — reuse existing patterns
 - Tests: `tests/test_streamlit_poc.py` (use fixtures/sample_ticker.csv)
 
 ### References
@@ -60,10 +61,6 @@ so that I can quickly inspect price and return series and validate end‑to‑en
 
 ## Dev Agent Record
 
-### Agent Model Used
-
-GPT-5 mini
-
 ### Completion Notes List
 
 - Ultimate context engine analysis completed; file created from template and project artifacts.
@@ -71,7 +68,7 @@ GPT-5 mini
 ### File List
 
 - src/apps/streamlit_poc.py (suggested)
-- src/db/db.py (use existing contract)
+- src/db_client.py (use existing contract)
 - tests/test_streamlit_poc.py (suggested smoke test)
 
 Issue: https://github.com/phbrgnomo/Analise-financeira-B3/issues/131

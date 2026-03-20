@@ -3,7 +3,7 @@ story_key: 3-5-quickstart-examples-and-reproducible-scripts
 epic: 3
 story_num: 5
 title: Quickstart examples and reproducible scripts
-status: ready-for-dev
+status: completed
 created_by: Phbr
 created_at: 2026-02-17T00:00:00Z
 ---
@@ -25,16 +25,18 @@ so that I can validate the environment and understand expected outputs.
    Then the example executes the quickstart for a sample ticker, generates a snapshot in `snapshots/` and writes a short run log to `logs/`.
 2. The example script documents expected run time and outputs in comments and exits with non-zero on failures to enable CI detection.
 3. The example supports `--config` or respects `ENV` vars and writes artifacts to `outputs/` by default.
-4. Script uses `--no-network` / fixtures (`tests/fixtures/sample_ticker.csv`) for CI determinism.
+4. Script uses `--no-network` and a deterministic fixture (`tests/fixtures/sample_ticker.csv`) for CI determinism, and `examples/run_quickstart_example.sh` must invoke `--no-network` so CI validates the quickstart flow without external calls.
+5. See acceptance criterion 4 for the CI determinism requirement (`--no-network` + fixture).
 
 ## Tasks / Subtasks
 
-- [ ] Create `examples/run_quickstart_example.sh` (executable) that runs the quickstart using fixtures
-  - [ ] Implement `--no-network` invocation to use `tests/fixtures/sample_ticker.csv`
-  - [ ] Write short run log to `logs/` and artifacts to `outputs/`/`snapshots/`
-- [ ] Add README section with copy-paste example and expected JSON/text summary
-- [ ] Add CI smoke job example (or instructions) that runs the example script and validates exit code and artifact presence
-- [ ] Add simple integration test (pytest) that executes the script in a controlled tempdir and asserts snapshot + log created
+- [x] Verify the implementation of `examples/run_quickstart_example.sh` (executable) that runs the quickstart using fixtures
+  - [x] Implement `--no-network` invocation to use `tests/fixtures/sample_ticker.csv`
+  - [x] Write short run log to `logs/` and artifacts to `outputs/`/`snapshots/`
+- [x] Add README section with copy-paste example and expected JSON/text summary
+- [x] Add CI smoke job example (or instructions) that runs the example script and validates exit code and artifact presence
+- [x] Add simple integration test (pytest) that executes the script in a controlled tempdir and asserts snapshot + log created
+- [x] Document implemented features, usage examples and rationale in `docs/sprint-reports/3-5-quickstart-examples-and-reproducible-scripts.md`.
 
 ## Dev Notes
 
@@ -87,7 +89,7 @@ GPT-generated artifact (assistant automation)
 
 ### Completion Notes
 
-- Created `examples/run_quickstart_example.sh` (skeleton) — TODO: implement CLI invocation and fixture wiring
+- Verified `examples/run_quickstart_example.sh` is functional: invokes CLI with fixtures (`--no-network` + `tests/fixtures/sample_ticker.csv`), writes a run log, and exits non-zero on failure
 - Updated `docs/implementation-artifacts/sprint-status.yaml` to mark story ready-for-dev
 
 ### File List

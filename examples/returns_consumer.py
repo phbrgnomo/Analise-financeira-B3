@@ -9,6 +9,8 @@ from contextlib import closing
 
 import pandas as pd
 
+from src.logging_config import configure_logging
+
 logger = logging.getLogger(__name__)
 
 
@@ -29,6 +31,9 @@ def main(db_path: str = "dados/data.db", ticker: str = "PETR4.SA") -> None:
     ValueError
         If no rows are found for the provided `ticker` in the `returns` table.
     """
+
+    # Ensure logging is configured to match the project's structured format.
+    configure_logging()
     # Ensure the DB connection is closed after use to release file handles.
     with closing(sqlite3.connect(db_path)) as conn:
         try:

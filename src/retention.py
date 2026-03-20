@@ -45,6 +45,7 @@ class ArchivedSnapshotResult(TypedDict, total=False):
     checksum_ok: bool | None
     error: str
 
+
 logger = logging.getLogger(__name__)
 
 

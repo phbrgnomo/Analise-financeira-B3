@@ -6,14 +6,16 @@ e tratamento de erros padronizado.
 """
 
 import logging
+import math
 import re
+import time
 import types
 from datetime import datetime, timedelta, timezone
 from typing import Dict, Optional
 
 import pandas as pd
 
-from src.adapters.base import Adapter
+from src.adapters.base import Adapter, ConnectionCheckResult
 from src.adapters.errors import FetchError
 
 # Configuração de logging estruturado
@@ -154,6 +156,11 @@ class YFinanceAdapter(Adapter):
 
         logger.info("Iniciando fetch de dados", extra=log_context)
 
+        # Permite sobrescrever o timeout via kwargs (compatibilidade com consumers que
+        # repassam parâmetros arbitrários). Isso evita que o timeout seja passado duas
+        # vezes para `_fetch_once` se `timeout` estiver presente em kwargs.
+        timeout = kwargs.pop("timeout", self.timeout)
+
         # Delegar obtenção com retry para helper implementado no Adapter base
         df = super()._fetch_with_retries(
             normalized_ticker,
@@ -162,7 +169,7 @@ class YFinanceAdapter(Adapter):
             log_context=log_context,
             max_retries=self.max_retries,
             backoff_factor=self.backoff_factor,
-            timeout=self.timeout,
+            timeout=timeout,
             **kwargs,
         )
 
@@ -254,6 +261,78 @@ class YFinanceAdapter(Adapter):
         return web.DataReader(
             ticker, data_source="yfinance", start=start, end=end, **kwargs
         )
+
+    def test_connection(self) -> bool:
+        """Lightweight test for adapter availability.
+
+        Deliberately avoids network calls: it checks only that the yfinance
+        library is present and exposes the expected callables.
+
+        Returns:
+            bool: True if yfinance appears usable, False otherwise.
+        """
+        try:
+            # If yfinance was stubbed at import-time (missing dependency), report
+            # unavailable rather than attempting network I/O.
+            if getattr(yf, "__is_stub__", False):
+                return False
+
+            # Presence of core API objects (Ticker/download) is a cheap check
+            # that the library is importable and likely usable without making
+            # network requests here.
+            return hasattr(yf, "Ticker") or hasattr(yf, "download")
+        except Exception:
+            logger.exception("error during yfinance test_connection")
+            return False
+
+    def check_connection(
+        self, timeout: Optional[float] = None
+    ) -> ConnectionCheckResult:
+        """Perform a minimal connectivity check against Yahoo Finance.
+
+        This method does a small data request to validate that the network and
+        API are reachable. It is intentionally lightweight.
+
+        Returns:
+            dict: Result of `check_connection` with these keys:
+                - status (str): "success" when the request succeeds, "failure" when
+                  an error occurs.
+                - error (Optional[str]): Error message on failure, or None on success.
+                - latency_ms (float): Round-trip time in milliseconds for the check.
+        """
+
+        start = time.monotonic()
+        try:
+            if getattr(yf, "__is_stub__", False):
+                raise RuntimeError("yfinance dependency not installed")
+
+            # yfinance expects an integer timeout; coerce floats into seconds
+            # to satisfy both runtime behavior and static type checking.
+            # Use ceiling to avoid truncating small positive values to 0 and enforce
+            # a minimum timeout of 1 second.
+            timeout_seconds: int = (
+                int(max(1, math.ceil(timeout))) if timeout is not None else self.timeout
+            )
+
+            yf.download(
+                "AAPL",
+                period="1d",
+                interval="1d",
+                progress=False,
+                timeout=timeout_seconds,
+            )
+            status = "success"
+            error = None
+        except Exception as exc:
+            status = "failure"
+            error = str(exc)
+        latency_ms = round((time.monotonic() - start) * 1000, 2)
+        log_context = {"status": status, "error": error, "latency_ms": latency_ms}
+        if status == "success":
+            logger.info("yfinance check_connection completed", extra=log_context)
+        else:
+            logger.error("yfinance check_connection failed", extra=log_context)
+        return {"status": status, "error": error, "latency_ms": latency_ms}
 
     def get_metadata(self) -> Dict[str, str]:
         """

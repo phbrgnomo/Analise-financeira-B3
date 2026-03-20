@@ -12,6 +12,7 @@ import pandas as pd
 import pytest
 
 from src.adapters.base import Adapter
+from src.adapters.csv import CSVAdapter
 from src.adapters.errors import (
     AdapterError,
     FetchError,
@@ -207,6 +208,7 @@ class TestYFinanceAdapter:
         assert adapter._normalize_date(date_input) == expected_output
         assert adapter._normalize_date(second_date) == "2024-12-31"
 
+
     @patch("src.adapters.yfinance_adapter.web.DataReader")
     def test_fetch_success(self, mock_datareader):
         """Testa fetch bem-sucedido com mock de dados."""
@@ -254,6 +256,36 @@ class TestYFinanceAdapter:
         assert result.attrs["ticker"] == "PETR4.SA"
         assert "fetched_at" in result.attrs
         assert result.attrs["adapter"] == "YFinanceAdapter"
+
+    @patch("src.adapters.yfinance_adapter.web.DataReader")
+    def test_fetch_flattens_multiindex_columns(self, mock_datareader):
+        """Testa que `fetch` retorna colunas planas quando yfinance retorna
+        MultiIndex."""
+        dates = pd.date_range("2024-01-01", periods=3)
+
+        arrays = [
+            ["Close", "High", "Low", "Open", "Volume"],
+            ["PETR4.SA"] * 5,
+        ]
+        cols = pd.MultiIndex.from_arrays(arrays, names=["Price", "Ticker"])
+        multi_df = pd.DataFrame(
+            [[1, 2, 3, 4, 5], [6, 7, 8, 9, 10], [11, 12, 13, 14, 15]],
+            columns=cols,
+            index=dates,
+        )
+
+        mock_datareader.return_value = multi_df
+
+        adapter = YFinanceAdapter()
+        result = adapter.fetch("PETR4", start_date="2024-01-01", end_date="2024-01-03")
+
+        assert list(result.columns) == [
+            "Close",
+            "High",
+            "Low",
+            "Open",
+            "Volume",
+        ]
 
     @patch("src.adapters.yfinance_adapter.web.DataReader")
     def test_fetch_empty_dataframe_raises_validation_error(self, mock_datareader):
@@ -426,6 +458,47 @@ class TestYFinanceAdapter:
 
         assert metadata["library_available"] == "no"
         assert metadata["library_version"] == "unknown"
+
+
+class TestCSVAdapter:
+    """Testes específicos para o CSVAdapter."""
+
+    def test_validate_dataframe_missing_required_column(self):
+        """Valida que falta de coluna obrigatória levanta ValidationError."""
+        df = pd.DataFrame(
+            {
+                "Open": [1.0],
+                "High": [2.0],
+                # "Low" intencionalmente ausente
+                "Close": [1.5],
+                "Volume": [100],
+            },
+            index=pd.date_range("2024-01-01", periods=1),
+        )
+
+        adapter = CSVAdapter()
+
+        with pytest.raises(
+            ValidationError,
+            match="Missing required columns for CSVAdapter",
+        ):
+            adapter._validate_dataframe(df, "TEST")
+
+    def test_validate_dataframe_all_required_columns_present(self):
+        """Verifica sucesso de validação quando todas colunas obrigatórias existem."""
+        df = pd.DataFrame(
+            {
+                "Open": [1.0],
+                "High": [2.0],
+                "Low": [0.5],
+                "Close": [1.5],
+                "Volume": [100],
+            },
+            index=pd.date_range("2024-01-01", periods=1),
+        )
+
+        adapter = CSVAdapter()
+        adapter._validate_dataframe(df, "TEST")
 
 
 class TestAdapterBaseHelpers:

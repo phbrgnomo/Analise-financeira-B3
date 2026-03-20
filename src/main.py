@@ -9,9 +9,11 @@ Use ``poetry run main --help`` para ver todos os comandos disponíveis.
 import logging
 import os
 import sqlite3
+import time
+import uuid
 from contextlib import suppress
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional, TypedDict
+from typing import TYPE_CHECKING, Any, Literal, Optional, TypedDict, cast
 
 import typer
 
@@ -19,18 +21,40 @@ if TYPE_CHECKING:
     import pandas as pd
 from dotenv import load_dotenv
 
+import src.db as _db
+import src.retorno as _retorno
+from src.cli_feedback import CliFeedback, StepHandle
+from src.cli_options import output_format_option
+from src.connectivity import test_provider_connection
+from src.db.connection import DEFAULT_DB_PATH
+from src.logging_config import configure_logging
+from src.paths import DATA_DIR, RAW_DIR, SNAPSHOTS_DIR
+from src.tickers import normalize_b3_ticker, ticker_variants
+from src.utils import metrics_prometheus as metrics
+from src.utils.conversions import as_bool
+from src.utils.health import (
+    compute_health_metrics,
+    read_ingest_logs,
+    resolve_ingest_log_path,
+)
+
+# Default notebook path used by the --run-notebook flow.
+# The quickstart notebook is the primary end-to-end example for new users / CI.
+# Value can be overridden via environment var DEFAULT_NOTEBOOK_PATH.
+DEFAULT_NOTEBOOK_PATH = os.getenv(
+    "DEFAULT_NOTEBOOK_PATH", "examples/notebooks/quickstart.ipynb"
+)
+
+# Default Typer option object for notebook execution.
+NOTEBOOK_PATH_OPTION = typer.Option(
+    DEFAULT_NOTEBOOK_PATH,
+    "--notebook-path",
+    help="Caminho para o notebook a ser executado com papermill.",
+)
+
 # load any local .env file early so calls to os.getenv work below; this
 # is a no-op when running in CI or when no file exists.
 load_dotenv()
-
-import src.db as _db  # noqa: E402
-import src.retorno as _retorno  # noqa: E402
-from src import metrics  # noqa: E402
-from src.cli_feedback import CliFeedback  # noqa: E402
-from src.logging_config import configure_logging  # noqa: E402
-from src.paths import DATA_DIR  # noqa: E402
-from src.tickers import normalize_b3_ticker, ticker_variants  # noqa: E402
-from src.utils.conversions import as_bool  # noqa: E402
 
 # compatibility shims have been extracted to ``src.cli_compat``; import
 # here to ensure the patches are applied when the CLI is loaded.
@@ -38,6 +62,80 @@ with suppress(ImportError):
     import src.cli_compat  # noqa: F401 - import for side effects
 
 app = typer.Typer()
+
+
+@app.callback(invoke_without_command=True)
+def _main_callback(
+    ctx: typer.Context,
+    ticker: str = typer.Option(
+        "",
+        help=(
+            "Ticker B3 específico (ex.: PETR4). Quando omitido, usa tickers "
+            "padrão do projeto."
+        ),
+        is_flag=False,
+    ),
+    provider: str = typer.Option(
+        "yfinance",
+        help="Nome do provider/adaptador a ser usado (ex.: yfinance)",
+        is_flag=False,
+    ),
+    output_format: Literal["text", "json"] = output_format_option(),
+    no_network: bool = typer.Option(
+        False,
+        "--no-network",
+        help="Usa o provider dummy para execução sem acesso à rede (modo de teste/CI).",
+        is_flag=True,
+    ),
+    dry_run: bool = typer.Option(
+        False,
+        "--dry-run",
+        help="Executa o pipeline sem persistir dados no banco de dados.",
+        is_flag=True,
+    ),
+    sample_tickers: str | None = typer.Option(
+        None,
+        "--sample-tickers",
+        help=(
+            "Ticker(s) para usar em vez da lista padrão. "
+            "Use um arquivo (uma linha por ticker) ou uma lista separada por vírgulas."
+        ),
+    ),
+    max_days: int | None = typer.Option(
+        None,
+        "--max-days",
+        help="Limita o período de ingestão ao número de dias mais recentes. (Ex: 30)",
+    ),
+    run_notebook: bool = typer.Option(
+        False,
+        "--run-notebook",
+        help="Executa o notebook de análise após o término do pipeline.",
+        is_flag=True,
+    ),
+    force_refresh: bool = typer.Option(
+        False,
+        "--force-refresh",
+        help="Força persistência ignorando decisões de cache do pipeline",
+    ),
+) -> None:
+    """Callback que permite usar `main --ticker` como atalho para `main run`.
+
+    Este callback é acionado quando nenhum subcomando é fornecido.
+    """
+    if ctx.invoked_subcommand is None:
+        # Roda o comando principal de forma compatível com o comportamento
+        # esperado pelo quickstart (sem precisar digitar "run").
+        run_cmd(
+            ticker=ticker,
+            provider=provider,
+            output_format=output_format,
+            no_network=no_network,
+            dry_run=dry_run,
+            sample_tickers=sample_tickers,
+            max_days=max_days,
+            run_notebook=run_notebook,
+            force_refresh=force_refresh,
+        )
 
 
 def _load_default_tickers() -> tuple[str, ...]:
@@ -80,8 +178,6 @@ try:
         help="Comandos para ingestão e geração de snapshots.",
     )
 except ImportError as exc:
-    import logging
-
     logging.getLogger(__name__).warning(
         "could not import pipeline subcommands: %s", exc
     )
@@ -135,8 +231,452 @@ def _compute_returns_for_ticker(
     return {"rows": rows, "persisted": persisted, "sample_df": sample_df}
 
 
+def _make_ticker_result(
+    ticker: str,
+    provider: str,
+    ingest_result: dict[str, object],
+    rows_returns: int,
+    status: str,
+) -> dict[str, object]:
+    """Constrói a estrutura de resultado por ticker usada na saída JSON."""
+
+    persist = ingest_result.get("persist") or {}
+    if not isinstance(persist, dict):
+        persist = {}
+    persist = cast(dict[str, object], persist)
+
+    rows_ingested = persist.get("rows_processed")
+    if rows_ingested is None:
+        rows_ingested = ingest_result.get("rows")
+
+    result: dict[str, object] = {
+        "ticker": ticker,
+        "provider": provider,
+        "status": status,
+        "rows_ingested": rows_ingested,
+        "rows_returns": rows_returns,
+        "snapshot_path": persist.get("snapshot_path")
+        or ingest_result.get("snapshot_path"),
+        "snapshot_checksum": persist.get("checksum") or ingest_result.get("checksum"),
+        "error_message": ingest_result.get("error_message"),
+    }
+
+    # Include cache metadata when available so callers can verify cache hits.
+    if isinstance(persist, dict):
+        if "cached" in persist:
+            result["cached"] = persist["cached"]
+        if "reason" in persist:
+            result["cache_reason"] = persist["reason"]
+
+    return result
+
+
+def _run_notebook(
+    tickers: list[str],
+    job_id: str,
+    notebook_path: str | Path = DEFAULT_NOTEBOOK_PATH,
+) -> dict[str, object]:
+    """Execute notebook em batch via papermill.
+
+    This is an optional step invoked via `--run-notebook`.
+    """
+
+    feedback = CliFeedback("notebook")
+    feedback.start("executando notebook de análise")
+
+    input_nb = Path(notebook_path)
+    if not input_nb.exists():
+        feedback.error(f"Notebook não encontrado: {input_nb}")
+        raise typer.Exit(code=2)
+
+    # The notebook will write its own artifacts (CSV/plots) under this directory.
+    output_dir = Path("outputs") / "notebooks" / "quickstart"
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Ensure report directory exists to avoid FileNotFoundError for output notebook.
+    output_nb = Path("reports") / f"quickstart-{job_id}.ipynb"
+    output_nb.parent.mkdir(parents=True, exist_ok=True)
+
+    try:
+        import papermill as pm  # type: ignore
+
+        params = {
+            "tickers": tickers,
+            "output_dir": str(output_dir),
+            # Default dataset for quickstart/CI runs. Can be overridden by papermill.
+            "csv_path": "dados/ticker_example.csv",
+        }
+        pm.execute_notebook(str(input_nb), str(output_nb), parameters=params)
+        feedback.success(f"notebook concluído: {output_nb}")
+        return {"status": "success", "output_notebook": str(output_nb)}
+    except ImportError as exc:
+        feedback.error(
+            "papermill não está instalado. Instale com `pip install papermill`."
+        )
+        return {
+            "status": "error",
+            "error_type": "import",
+            "error": str(exc),
+            "output_notebook": None,
+        }
+    except Exception as exc:
+        feedback.error(f"falha ao executar notebook: {exc}")
+        return {
+            "status": "error",
+            "error_type": "runtime",
+            "error": str(exc),
+            "output_notebook": None,
+        }
+
+
+def _finish_ingest_step(
+    feedback: CliFeedback | None,
+    step: StepHandle | None,
+    ingest_result: dict[str, object],
+) -> None:
+    """Finish the ingest step feedback when feedback is enabled."""
+
+    if not feedback or step is None:
+        return
+
+    details: list[str] = []
+    if ingest_result.get("duration"):
+        details.append(f"total={ingest_result['duration']}")
+
+    persist = ingest_result.get("persist")
+    if isinstance(persist, dict):
+        if persist_reason := persist.get("reason"):
+            details.append(f"reason={persist_reason}")
+
+    feedback.finish_step(step, detail=" | ".join(details) if details else None)
+
+
+def _finish_returns_step(
+    feedback: CliFeedback | None,
+    step: StepHandle | None,
+    rows: int,
+    dry_run: bool = False,
+) -> None:
+    """Finish the returns step feedback when feedback is enabled."""
+
+    if not feedback or step is None:
+        return
+
+    if rows == 0:
+        detail = (
+            "nenhum retorno preparado (dry-run)"
+            if dry_run
+            else "nenhum retorno calculado"
+        )
+        feedback.finish_step(step, status="warning", detail=detail)
+    elif dry_run:
+        feedback.finish_step(step, detail=f"{rows} retorno(s) preparados (dry-run)")
+    else:
+        feedback.finish_step(step, detail=f"{rows} retorno(s) persistidos")
+
+
+def _run_one_ticker(  # noqa: C901
+    ticker: str,
+    provider: str,
+    dry_run: bool,
+    force_refresh: bool,
+    start: str | None,
+    end: str | None,
+    feedback: CliFeedback | None,
+) -> tuple[dict[str, object], str]:
+    """Run ingest + returns for a single ticker.
+
+    Returns a tuple `(result_dict, status)` where `status` is one of
+    ``success``, ``warning`` or ``failure``.
+    """
+
+    from src.ingest.pipeline import ingest
+
+    ingest_step: StepHandle | None = None
+    if feedback:
+        feedback.item(ticker, 1, 1)
+        ingest_step = feedback.start_step(
+            "ingestão",
+            detail=(
+                f"ticker={ticker} | force_refresh={force_refresh} "
+                f"| dry_run={dry_run} | start={start or '-'} | end={end or '-'}"
+            ),
+        )
+
+    ingest_result = ingest(
+        ticker=ticker,
+        source=provider,
+        dry_run=dry_run,
+        force_refresh=force_refresh,
+        start=start,
+        end=end,
+    )
+
+    if ingest_result.get("status") != "success":
+        if feedback and ingest_step is not None:
+            feedback.finish_step(
+                ingest_step,
+                status="error",
+                detail=ingest_result.get("error_message", "erro desconhecido"),
+            )
+        return (
+            _make_ticker_result(ticker, provider, ingest_result, 0, "failure"),
+            "failure",
+        )
+
+    _finish_ingest_step(feedback, ingest_step, ingest_result)
+
+    returns_step: StepHandle | None = None
+    if feedback:
+        returns_step = feedback.start_step("cálculo de retornos", detail=ticker)
+
+    compute_info = _compute_returns_for_ticker(ticker, start, end, dry_run)
+    rows = compute_info.get("rows", 0)
+
+    _finish_returns_step(feedback, returns_step, rows, dry_run)
+
+    if rows == 0:
+        return (
+            _make_ticker_result(ticker, provider, ingest_result, 0, "warning"),
+            "warning",
+        )
+
+    return (
+        _make_ticker_result(ticker, provider, ingest_result, rows, "success"),
+        "success",
+    )
+
+
+def _parse_sample_tickers(value: str | None) -> list[str] | None:
+    """Parse a ticker list from CLI option, supporting file or comma-separated.
+
+    The value can be either a path to a file containing one ticker per line,
+    or a comma-separated list of tickers.
+    """
+
+    if not value:
+        return None
+
+    path = Path(value)
+    if path.exists():
+        lines = [line.strip() for line in path.read_text().splitlines()]
+        tickers = [line for line in lines if line and not line.startswith("#")]
+    else:
+        tickers = [t.strip() for t in value.split(",") if t.strip()]
+
+    return tickers or None
+
+
+def _ensure_str_or_none(value: object) -> str | None:
+    """Return the string value or None for non-string inputs.
+
+    Typer/Click may pass an ArgInfo object (not a string) when a positional
+    argument is missing, particularly in some callback invocation paths.
+    """
+
+    return value if isinstance(value, str) else None
+
+
+def _prepare_run_context(
+    ticker: str,
+    provider: str,
+    output_json: bool,
+    no_network: bool,
+    ticker_arg: Optional[str],
+    provider_arg: Optional[str],
+    sample_tickers: list[str] | None = None,
+) -> tuple[list[str], CliFeedback | None, str]:
+    """Prepara tickers, provider efetivo e objeto de feedback para o comando run."""
+
+    effective_ticker = (
+        _ensure_str_or_none(ticker) or _ensure_str_or_none(ticker_arg) or None
+    )
+
+    effective_provider = provider or provider_arg or "yfinance"
+    # `--no-network` should use the dummy provider by default to avoid making
+    # network calls. However, if the user explicitly requested a different
+    # provider (e.g. `--provider csv`), respect that choice.
+    if no_network and effective_provider == "yfinance":
+        effective_provider = "dummy"
+
+    feedback = None if output_json else CliFeedback("executar")
+
+    if effective_ticker is not None:
+        tickers = [_normalize_cli_ticker(effective_ticker)]
+        msg = f"processando ticker={tickers[0]} com provider={effective_provider}"
+        extra = []
+    elif sample_tickers:
+        tickers = [_normalize_cli_ticker(t) for t in sample_tickers]
+        msg = f"processando tickers de amostra com provider={effective_provider}"
+        extra = [f"Tickers: {', '.join(tickers)}"]
+    else:
+        tickers = list(DEFAULT_TICKERS)
+        msg = f"processando tickers padrão com provider={effective_provider}"
+        extra = [
+            f"Tickers: {', '.join(tickers)}",
+            "Para ticker específico, execute: main --ticker <ticker>",
+        ]
+
+    if feedback:
+        feedback.start(msg)
+        for line in extra:
+            feedback.info(line)
+
+    return tickers, feedback, effective_provider
+
+
+def _aggregate_run_results(
+    results: list[dict[str, object]],
+) -> tuple[str, int, int, int, int]:
+    """Retorna status agregado, código de saída e contagens dos resultados."""
+
+    success_count = sum(r.get("status") == "success" for r in results)
+    warning_count = sum(r.get("status") == "warning" for r in results)
+    failure_count = sum(r.get("status") == "failure" for r in results)
+
+    status = "success"
+    if failure_count:
+        status = "failure"
+    elif warning_count:
+        status = "warning"
+
+    if status == "success":
+        exit_code = 0
+    elif status == "warning":
+        exit_code = 1
+    else:
+        exit_code = 2
+
+    return status, exit_code, success_count, warning_count, failure_count
+
+
+def _normalize_notebook_path(notebook_path: object | str | Path) -> str:
+    """Normalize notebook path input to a usable string path.
+
+    Typer may pass an OptionInfo object instead of a string when invoked
+    programmatically (e.g. via the root callback). In that case we fall back
+    to the default notebook path.
+    """
+
+    if isinstance(notebook_path, (str, Path)):
+        return str(notebook_path)
+    return DEFAULT_NOTEBOOK_PATH
+
+
+def _resolve_run_window(max_days: int | None) -> tuple[Optional[str], Optional[str]]:
+    """Resolve the ingest window (start/end) when max_days is provided."""
+
+    if max_days is None:
+        return None, None
+
+    from src.ingest.pipeline import _resolve_sample_window
+
+    return _resolve_sample_window(max_days, None, None)
+
+
+def _run_tickers(
+    tickers: list[str],
+    provider: str,
+    dry_run: bool,
+    force_refresh: bool,
+    start: Optional[str],
+    end: Optional[str],
+    feedback: CliFeedback | None,
+) -> tuple[list[dict[str, object]], float, str]:
+    """Run ingest+returns for each ticker and return results + run metadata."""
+
+    job_id = str(uuid.uuid4())
+    run_started = time.monotonic()
+
+    results: list[dict[str, object]] = []
+    for tk in tickers:
+        result, _status = _run_one_ticker(
+            ticker=tk,
+            provider=provider,
+            dry_run=dry_run,
+            force_refresh=force_refresh,
+            start=start,
+            end=end,
+            feedback=feedback,
+        )
+        results.append(result)
+
+    duration_sec = time.monotonic() - run_started
+    return results, duration_sec, job_id
+
+
+def _finalize_run_output(
+    summary: dict[str, Any],
+    output_json: bool,
+    feedback: CliFeedback | None,
+    exit_code: int,
+    success_count: int,
+    warning_count: int,
+    failure_count: int,
+) -> None:
+    """Emit output/feedback and exit with the appropriate code."""
+
+    if output_json:
+        (feedback or CliFeedback("executar")).json_output(summary)
+        raise typer.Exit(code=exit_code)
+
+    if feedback is None:
+        # Fallback when feedback is unexpectedly None: print summary to stdout.
+        typer.echo(
+            f"job_id={summary['job_id']} | duration_sec={summary['duration_sec']:.2f} |"
+            f"sucesso={success_count} falhas={failure_count}"
+            + (f" avisos={warning_count}" if warning_count else "")
+        )
+    else:
+        feedback.summary(
+            f"job_id={summary['job_id']} | duration_sec={summary['duration_sec']:.2f} |"
+            f"sucesso={success_count} falhas={failure_count}"
+            + (f" avisos={warning_count}" if warning_count else "")
+        )
+
+    if feedback:
+        for r in summary["tickers"]:
+            snapshot = r.get("snapshot_path") or "-"
+            rows = r.get("rows_ingested") or 0
+            feedback.info(f"ticker={r.get('ticker')} snapshot={snapshot} rows={rows}")
+
+    raise typer.Exit(code=exit_code)
+
+
+def _run_notebook_if_enabled(
+    run_notebook: bool,
+    notebook_path: str,
+    tickers: list[str],
+    job_id: str,
+    summary: dict[str, object],
+    exit_code: int,
+    summary_status: str,
+) -> tuple[int, str, dict[str, object]]:
+    """Run the notebook step when enabled and update the run summary."""
+
+    if not run_notebook:
+        return exit_code, summary_status, summary
+
+    notebook_results = _run_notebook(
+        tickers, job_id, notebook_path=notebook_path
+    )
+
+    summary["notebook"] = notebook_results
+
+    # If notebook execution failed, treat the full run as a failure so
+    # structured JSON output still indicates the error via exit code.
+    if notebook_results.get("status") == "error":
+        summary_status = "failure"
+        exit_code = 2
+
+    # Keep the status updated for downstream output
+    summary["status"] = summary_status
+
+    return exit_code, summary_status, summary
+
+
 @app.command("run")
-def run_cmd(
+def run_cmd(  # noqa: C901
     ticker: str = typer.Option(
         "",
         help=(
@@ -150,6 +690,39 @@ def run_cmd(
         help="Nome do provider/adaptador a ser usado (ex.: yfinance)",
         is_flag=False,
     ),
+    output_format: Literal["text", "json"] = output_format_option(),
+    no_network: bool = typer.Option(
+        False,
+        "--no-network",
+        help="Usa o provider dummy para execução sem acesso à rede (modo de teste/CI).",
+        is_flag=True,
+    ),
+    dry_run: bool = typer.Option(
+        False,
+        "--dry-run",
+        help="Executa o pipeline sem persistir dados no banco de dados.",
+        is_flag=True,
+    ),
+    sample_tickers: str | None = typer.Option(
+        None,
+        "--sample-tickers",
+        help=(
+            "Ticker(s) para usar em vez da lista padrão."
+            " Pode ser arquivo (uma linha por ticker) ou lista separada por vírgulas."
+        ),
+    ),
+    max_days: int | None = typer.Option(
+        None,
+        "--max-days",
+        help="Limita o período de ingestão aos últimos N dias. (ex: --max-days 30)",
+    ),
+    run_notebook: bool = typer.Option(
+        False,
+        "--run-notebook",
+        help="Executa o notebook de análise após o término do pipeline.",
+        is_flag=True,
+    ),
+    notebook_path: str = NOTEBOOK_PATH_OPTION,
     ticker_arg: Optional[str] = typer.Argument(None, hidden=True),
     provider_arg: Optional[str] = typer.Argument(None, hidden=True),
     force_refresh: bool = typer.Option(
@@ -158,83 +731,307 @@ def run_cmd(
         help="Força persistência ignorando decisões de cache do pipeline",
     ),
 ) -> None:
-    """Executa fluxo ETL principal (ingestão + cálculo de retornos)."""
-    from src.ingest.pipeline import ingest
+    """Executa fluxo ETL principal (ingestão + cálculo de retornos).
 
-    # label shown in CLI output; localized to Portuguese
-    feedback = CliFeedback("executar")
+    Saída de código:
+      * 0 - sucesso (todos os tickers processados com status success)
+      * 1 - warning (algum ticker retornou status warning)
+      * 2 - erro (falha em algum ticker ou em steps críticos como notebook)
+    """
 
-    effective_ticker = ticker or ticker_arg or None
-    effective_provider = provider or provider_arg or "yfinance"
+    output_json = output_format == "json"
     effective_force_refresh = as_bool(force_refresh)
 
-    tickers: list[str]
-    if effective_ticker is None:
-        tickers = list(DEFAULT_TICKERS)
-        feedback.start(f"processando tickers padrão com provider={effective_provider}")
-        feedback.info(f"Tickers: {', '.join(tickers)}")
-        feedback.info("Para ticker específico, execute: main run --ticker <ticker>")
+    notebook_path = _normalize_notebook_path(notebook_path)
+    start_date, end_date = _resolve_run_window(max_days)
+
+    tickers, feedback, effective_provider = _prepare_run_context(
+        ticker=ticker,
+        provider=provider,
+        output_json=output_json,
+        no_network=no_network,
+        ticker_arg=ticker_arg,
+        provider_arg=provider_arg,
+        sample_tickers=_parse_sample_tickers(sample_tickers),
+    )
+
+    results, duration_sec, job_id = _run_tickers(
+        tickers=tickers,
+        provider=effective_provider,
+        dry_run=dry_run,
+        force_refresh=effective_force_refresh,
+        start=start_date,
+        end=end_date,
+        feedback=feedback,
+    )
+
+    summary_status, exit_code, success_count, warning_count, failure_count = (
+        _aggregate_run_results(results)
+    )
+
+    summary = {
+        "status": summary_status,
+        "job_id": job_id,
+        "duration_sec": duration_sec,
+        "tickers": results,
+    }
+
+    if run_notebook:
+        exit_code, summary_status, summary = _run_notebook_if_enabled(
+            run_notebook,
+            notebook_path,
+            tickers,
+            job_id,
+            summary,
+            exit_code,
+            summary_status,
+        )
+
+    _finalize_run_output(
+        summary=summary,
+        output_json=output_json,
+        feedback=feedback,
+        exit_code=exit_code,
+        success_count=success_count,
+        warning_count=warning_count,
+        failure_count=failure_count,
+    )
+
+
+@app.command("metrics")
+def metrics_cmd(
+    output_format: Literal["text", "json"] = output_format_option(),
+    ingest_log_path: Optional[str] = typer.Option(
+        None,
+        "--ingest-log-path",
+        help=(
+            "Caminho para o arquivo ingest_logs.jsonl "
+            "(default: metadata/ingest_logs.jsonl)."
+        ),
+    ),
+    threshold: str = typer.Option(
+        os.getenv("INGEST_LAG_THRESHOLD", "86400"),
+        "--threshold",
+        help="Valor em segundos para o limite de ingest lag (default 86400).",
+    ),
+) -> None:
+    """Exibe métricas de health do pipeline."""
+
+    path = resolve_ingest_log_path(ingest_log_path)
+    logs = read_ingest_logs(path)
+
+    try:
+        threshold_seconds = int(threshold)
+    except Exception:
+        logging.getLogger(__name__).warning(
+            "invalid INGEST_LAG_THRESHOLD=%r, using default 86400", threshold
+        )
+        threshold_seconds = 86400
+
+    summary = compute_health_metrics(logs, threshold_seconds)
+
+    feedback = CliFeedback("metrics")
+
+    if output_format == "json":
+        feedback.json_output(summary)
+        raise typer.Exit(code=0)
+
+    feedback.info(f"status: {summary['status']}")
+    feedback.info(f"ingest_lag_seconds: {summary['metrics']['ingest_lag_seconds']}")
+    feedback.info(f"errors_last_24h: {summary['metrics']['errors_last_24h']}")
+    feedback.info(f"jobs_last_24h: {summary['metrics']['jobs_last_24h']}")
+    avg = summary["metrics"].get("avg_latency_seconds")
+    if avg is None:
+        feedback.info("avg_latency_seconds: null")
     else:
-        tickers = [_normalize_cli_ticker(effective_ticker)]
+        feedback.info(f"avg_latency_seconds: {avg:.3f}")
+
+
+@app.command("health")
+def health_cmd(
+    output_format: Literal["text", "json"] = output_format_option(),
+    ingest_log_path: Optional[str] = typer.Option(
+        None,
+        "--ingest-log-path",
+        help=(
+            "Caminho para o arquivo ingest_logs.jsonl "
+            "(default: metadata/ingest_logs.jsonl)."
+        ),
+    ),
+    db_path: Optional[str] = typer.Option(
+        None,
+        "--db-path",
+        help=(
+            "Caminho para o arquivo de banco de dados SQLite (default: dados/data.db)."
+        ),
+    ),
+    data_dir: Optional[str] = typer.Option(
+        None,
+        "--data-dir",
+        help="Diretório de dados (default: dados/).",
+    ),
+    raw_dir: Optional[str] = typer.Option(
+        None,
+        "--raw-dir",
+        help="Diretório de dados brutos (default: raw/).",
+    ),
+    snapshots_dir: Optional[str] = typer.Option(
+        None,
+        "--snapshots-dir",
+        help="Diretório de snapshots (default: snapshots/).",
+    ),
+) -> None:
+    """Exibe um resumo rápido de saúde do sistema local."""
+
+    from src.utils.health import check_paths_health
+
+    paths = {
+        "db": db_path or DEFAULT_DB_PATH,
+        "dados": data_dir or str(DATA_DIR),
+        "raw": raw_dir or str(RAW_DIR),
+        "snapshots": snapshots_dir or str(SNAPSHOTS_DIR),
+    }
+
+    health = check_paths_health(paths)
+
+    # Include ingest health metrics in the response by reusing the metrics command
+    # logic (but avoid circular imports).
+    log_path = resolve_ingest_log_path(ingest_log_path)
+    logs = read_ingest_logs(log_path)
+    # Reuse existing helper to compute metrics (same structure as `metrics`)
+    threshold_str = os.getenv("INGEST_LAG_THRESHOLD", "86400")
+    try:
+        threshold_seconds = int(threshold_str)
+    except ValueError:
+        logging.getLogger(__name__).warning(
+            "invalid INGEST_LAG_THRESHOLD=%r, using default 86400", threshold_str
+        )
+        threshold_seconds = 86400
+
+    metrics_summary = compute_health_metrics(logs, threshold_seconds)
+
+    result = {
+        "status": health["status"],
+        "paths": health,
+        "metrics": metrics_summary,
+    }
+
+    feedback = CliFeedback("health")
+    if output_format == "json":
+        feedback.json_output(result)
+        raise typer.Exit(code=0)
+
+    feedback.info(f"status: {result['status']}")
+    for reason in health.get("reasons", []):
+        feedback.info(f"- {reason}")
+
+    # Emit the same metrics block as `metrics` command
+    metrics_data = metrics_summary["metrics"]
+    feedback.info(f"ingest_lag_seconds: {metrics_data['ingest_lag_seconds']}")
+    feedback.info(f"errors_last_24h: {metrics_data['errors_last_24h']}")
+    feedback.info(f"jobs_last_24h: {metrics_data['jobs_last_24h']}")
+    avg2 = metrics_summary["metrics"].get("avg_latency_seconds")
+    if avg2 is None:
+        feedback.info("avg_latency_seconds: null")
+    else:
+        feedback.info(f"avg_latency_seconds: {avg2:.3f}")
+
+
+@app.command("test-conn")
+def test_conn_cmd(
+    provider: str = typer.Option(
+        "yfinance",
+        help="Nome do provider/adaptador a ser usado (ex.: yfinance)",
+        is_flag=False,
+    ),
+    timeout: float | None = typer.Option(
+        None,
+        "--timeout",
+        help="Timeout em segundos para a verificação de conectividade.",
+    ),
+    output_format: Literal["text", "json"] = output_format_option(),
+) -> None:
+    """Verifica conectividade com um provider/adaptador."""
+
+    result = test_provider_connection(provider, timeout=timeout)
+
+    feedback = CliFeedback("test-conn")
+
+    if output_format == "json":
+        feedback.json_output(result)
+        raise typer.Exit(code=0 if result.get("status") == "success" else 2)
+
+    if result.get("status") == "success":
+        latency = result.get("latency_ms")
+        last = result.get("last_success_at")
+        msg = "OK"
+        if isinstance(latency, (int, float)):
+            msg = f"OK ({latency / 1000:.3f}s)"
+        if last:
+            msg = f"{msg} (last_success_at={last})"
+        feedback.success(msg)
+    else:
+        error_msg = result.get("error") or "erro desconhecido"
+        feedback.error(error_msg)
+        raise typer.Exit(code=2)
+
+
+def _gather_compute_targets(
+    effective_ticker: Optional[str],
+    start: Optional[str],
+    end: Optional[str],
+    effective_dry_run: bool,
+    feedback: CliFeedback,
+) -> Optional[list[str]]:
+    """Resolve os tickers alvo para compute-returns.
+
+    Retorna lista de tickers ou None para indicar que o comando deve
+    encerrar sem processar nada (feedback já terá sido emitido).
+    """
+    if effective_ticker is not None:
+        normalized = _normalize_cli_ticker(effective_ticker)
+        try:
+            resolved = _db.resolve_existing_ticker(normalized)
+        except sqlite3.OperationalError as e:
+            logging.getLogger(__name__).error(
+                "erro ao resolver ticker existente %s: %s", normalized, e
+            )
+            resolved = None
+        targets = [resolved or normalized]
         feedback.start(
-            f"processando ticker={tickers[0]} com provider={effective_provider}"
+            f"ticker={targets[0]} | dry_run={effective_dry_run} | "
+            f"start={start or '-'} | end={end or '-'}"
         )
+        return targets
 
-    ok = 0
-    failed = 0
-    warnings = 0
-    for idx, tk in enumerate(tickers, start=1):
-        feedback.item(tk, idx, len(tickers))
-        ingest_step = feedback.start_step(
-            "ingestão",
-            detail=f"ticker={tk} | force_refresh={effective_force_refresh}",
-        )
-        result = ingest(
-            ticker=tk,
-            source=effective_provider,
-            dry_run=False,
-            force_refresh=effective_force_refresh,
-        )
-        if result.get("status") != "success":
-            failed += 1
-            feedback.finish_step(
-                ingest_step,
-                status="error",
-                detail=result.get("error_message", "erro desconhecido"),
-            )
-            continue
-        ingest_detail = []
-        if result.get("duration"):
-            ingest_detail.append(f"total={result['duration']}")
-        if persist_reason := result.get("persist", {}).get("reason"):
-            ingest_detail.append(f"reason={persist_reason}")
-        feedback.finish_step(
-            ingest_step,
-            detail=" | ".join(ingest_detail) if ingest_detail else None,
-        )
+    try:
+        targets = _db.list_price_tickers()
+    except sqlite3.OperationalError as exc:
+        msg = str(exc).lower()
+        if "no such table" in msg and "prices" in msg:
+            return _no_targets_feedback(feedback, "Nenhuma tabela prices encontrada")
+        raise
 
-        returns_step = feedback.start_step("cálculo de retornos", detail=tk)
-        compute_info = _compute_returns_for_ticker(tk, None, None, False)
-        rows = compute_info.get("rows", 0)
-        if rows == 0:
-            # zero rows is not necessarily an error; could mean no new data
-            warnings += 1
-            feedback.finish_step(
-                returns_step,
-                status="warning",
-                detail="nenhum retorno calculado",
-            )
-            continue
-        ok += 1
-        feedback.finish_step(
-            returns_step,
-            detail=f"{rows} retorno(s) persistidos",
+    if not targets:
+        return _no_targets_feedback(
+            feedback, "Nenhum ticker encontrado na tabela prices"
         )
+    feedback.start(
+        f"processando todos os tickers do banco ({len(targets)}) | "
+        f"dry_run={effective_dry_run}"
+    )
+    return targets
 
-    summary = f"Resumo run: sucesso={ok}, falhas={failed}"
-    if warnings:
-        summary += f", avisos={warnings}"
-    feedback.summary(summary)
+
+def _no_targets_feedback(feedback: CliFeedback, message: str) -> None:
+    """Emit feedback when no targets are found in the database.
+
+    Starts the feedback session and emits a warning message. Returns None to
+    indicate the caller should abort processing.
+    """
+    feedback.start("processando todos os tickers do banco")
+    feedback.warn(message)
+    return None
 
 
 @app.command("compute-returns")
@@ -267,48 +1064,11 @@ def compute_returns_cmd(
     effective_ticker = ticker or ticker_arg or None
     effective_dry_run = as_bool(dry_run)
 
-    # start/end may already be None when not provided
-    # (previous logic converted empty strings, but Optional annotation
-    # lets Typer produce None directly).
-
-    targets: list[str]
-    if effective_ticker is not None:
-        normalized = _normalize_cli_ticker(effective_ticker)
-        # resolve_existing_ticker may hit the DB; guard against missing
-        # schema so the CLI remains usable even if migrations haven't run.
-        try:
-            resolved = _db.resolve_existing_ticker(normalized)
-        except sqlite3.OperationalError as e:
-            # log the error so we can investigate schema issues in CI
-            logging.getLogger(__name__).error(
-                "erro ao resolver ticker existente %s: %s", normalized, e
-            )
-            resolved = None
-        targets = [resolved or normalized]
-        feedback.start(
-            f"ticker={targets[0]} | dry_run={effective_dry_run} | "
-            f"start={start or '-'} | end={end or '-'}"
-        )
-    else:
-        try:
-            targets = _db.list_price_tickers()
-        except sqlite3.OperationalError as exc:
-            msg = str(exc).lower()
-            if "no such table" in msg and "prices" in msg:
-                feedback.start("processando todos os tickers do banco")
-                feedback.warn("Nenhuma tabela prices encontrada")
-                return
-            # unexpected operational error; re-raise so callers/CI see the
-            # real problem rather than silently treating it as empty DB.
-            raise
-        if not targets:
-            feedback.start("processando todos os tickers do banco")
-            feedback.warn("Nenhum ticker encontrado na tabela prices")
-            return
-        feedback.start(
-            f"processando todos os tickers do banco ({len(targets)}) | "
-            f"dry_run={effective_dry_run}"
-        )
+    targets = _gather_compute_targets(
+        effective_ticker, start, end, effective_dry_run, feedback
+    )
+    if not targets:
+        return
 
     total_rows = 0
     processed = 0
@@ -329,13 +1089,11 @@ def compute_returns_cmd(
                 detail="nenhum retorno calculado",
             )
             continue
+
         processed += 1
         total_rows += rows
         mode = "calculados" if effective_dry_run else "persistidos"
-        feedback.finish_step(
-            step,
-            detail=f"{rows} retorno(s) {mode}",
-        )
+        feedback.finish_step(step, detail=f"{rows} retorno(s) {mode}")
 
     if processed == 0:
         feedback.warn("Nenhum retorno calculado para os parâmetros fornecidos")
@@ -410,17 +1168,16 @@ def export_csv_cmd(
         # try the provider-specific variant (e.g. add .SA)
         _, provider_variant = ticker_variants(normalized)
         alt = _db.resolve_existing_ticker(provider_variant)
-        if alt is not None:
-            resolved = alt
-            feedback.warn(
-                "Ticker não encontrado com nome base no banco; "
-                f"usando variante {provider_variant}"
-            )
-        else:
+        if alt is None:
             raise typer.BadParameter(
                 f"Ticker {normalized} não encontrado no banco (base ou variante)"
             )
 
+        resolved = alt
+        feedback.warn(
+            "Ticker não encontrado com nome base no banco; "
+            f"usando variante {provider_variant}"
+        )
     read_step = feedback.start_step("leitura no banco", detail=resolved)
     df = _db.read_prices(resolved, start=start, end=end)
     if df.empty:

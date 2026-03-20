@@ -466,8 +466,6 @@ def mark_snapshots_archived(
             _conn.close()
 
 
-
-
 def _update_archived_status(
     _conn: sqlite3.Connection, snapshot_ids: Sequence[str]
 ) -> int:

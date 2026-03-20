@@ -1,5 +1,7 @@
 import logging
 
+import pandas as pd
+
 from src.adapters.base import Adapter
 from src.adapters.factory import get_adapter, register_adapter
 
@@ -9,11 +11,14 @@ def test_register_adapter_warns_on_replace(caplog, monkeypatch):
     monkeypatch.setattr("src.adapters.factory._ADAPTER_REGISTRY", {})
 
     class Dummy(Adapter):
-        def fetch(self, ticker: str, **kwargs) -> None:
-            return None
+        def fetch(self, ticker: str, **kwargs) -> pd.DataFrame:
+            # Return an empty DataFrame to satisfy the base class contract.
+            return pd.DataFrame()
 
-        def _fetch_once(self, ticker: str, start: str, end: str, **kwargs):
-            return None
+        def _fetch_once(
+            self, ticker: str, start: str, end: str, **kwargs
+        ) -> pd.DataFrame:
+            return pd.DataFrame()
 
     # first registration should succeed quietly
     register_adapter("dummy", Dummy)
@@ -36,16 +41,22 @@ def test_available_providers_reflects_registry(monkeypatch) -> None:
     monkeypatch.setattr("src.adapters.factory._ADAPTER_REGISTRY", {})
 
     class A(Adapter):
-        def fetch(self, ticker: str, **kwargs):
-            pass
-        def _fetch_once(self, ticker: str, start: str, end: str, **kwargs):
-            pass
+        def fetch(self, ticker: str, **kwargs) -> pd.DataFrame:
+            return pd.DataFrame()
+
+        def _fetch_once(
+            self, ticker: str, start: str, end: str, **kwargs
+        ) -> pd.DataFrame:
+            return pd.DataFrame()
 
     class B(Adapter):
-        def fetch(self, ticker: str, **kwargs):
-            pass
-        def _fetch_once(self, ticker: str, start: str, end: str, **kwargs):
-            pass
+        def fetch(self, ticker: str, **kwargs) -> pd.DataFrame:
+            return pd.DataFrame()
+
+        def _fetch_once(
+            self, ticker: str, start: str, end: str, **kwargs
+        ) -> pd.DataFrame:
+            return pd.DataFrame()
 
     from src.adapters.factory import available_providers
 
