@@ -73,8 +73,9 @@ class Adapter(ABC):
         )
         return True
 
-    def check_connection(self,
-                         timeout: Optional[float] = None) -> ConnectionCheckResult:
+    def check_connection(
+        self, timeout: Optional[float] = None
+    ) -> ConnectionCheckResult:
         """Check provider connectivity and return structured status.
 
         This is the canonical method used by CLI health checks.

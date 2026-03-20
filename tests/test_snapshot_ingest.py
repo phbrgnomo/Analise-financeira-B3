@@ -1,4 +1,7 @@
+from datetime import datetime, timezone
 from pathlib import Path
+
+import pandas as pd
 
 from src.ingest.snapshot_ingest import _check_cache_hit
 
@@ -51,12 +54,7 @@ def test_sanitized_filename_and_path(tmp_path, monkeypatch):
     snap_dir.mkdir()
     df = pd.DataFrame({"x": [1, 2]})
 
-    # ticker contains traversal and illegal chars
-    bad = "../foo/bar.TICK?"
-    sha, out_path = si._write_snapshot_file(df, bad, snap_dir)
-    assert sha == "deadbeef"
-    # output path must be inside snapshot directory
-    assert out_path.resolve().is_relative_to(snap_dir.resolve())
+    out_path = _assert_safe_snapshot_path(si, df, "../foo/bar.TICK?", snap_dir)
     # filename should have no path separators and illegal chars replaced
     assert ".." not in out_path.name
     assert "/" not in out_path.name
@@ -65,7 +63,73 @@ def test_sanitized_filename_and_path(tmp_path, monkeypatch):
 
     # even a ticker that looks like a path should be safely mapped
     evil = "..\\evil"  # backslash on windows-like input
-    sha2, out2 = si._write_snapshot_file(df, evil, snap_dir)
-    assert sha2 == "deadbeef"
-    assert out2.resolve().is_relative_to(snap_dir.resolve())
+    out2 = _assert_safe_snapshot_path(si, df, evil, snap_dir)
     assert "evil" in out2.name
+
+
+def test_checksum_based_cache_hit_with_different_snapshot_path(tmp_path):
+    """Unit-level cache hit test for checksum matches with different snapshot paths."""
+    ticker = "PETR4"
+    checksum = "abc123"
+
+    old_snapshot_path = tmp_path / "PETR4_20200101.parquet"
+    old_snapshot_path.write_text("old")
+
+    new_snapshot_path = tmp_path / "PETR4_20200101_v2.parquet"
+    new_snapshot_path.write_text("new")
+
+    cache = {
+        str(old_snapshot_path.resolve()): {
+            "sha256": checksum,
+            "ticker": ticker,
+            "processed_at": datetime.now(timezone.utc)
+            .isoformat()
+            .replace("+00:00", "Z"),
+        }
+    }
+
+    result = _check_cache_hit(
+        cache_file=cache,
+        snapshot_path=new_snapshot_path,
+        checksum=checksum,
+        ttl=0,
+        force=False,
+        ticker=ticker,
+    )
+
+    assert result is not None
+    assert result["cached"] is True
+    assert result["reason"] == "checksum_match"
+    assert result["snapshot_path"] == str(old_snapshot_path.resolve())
+
+
+def _assert_safe_snapshot_path(
+    si,
+    df: pd.DataFrame,
+    ticker: str,
+    snap_dir: Path,
+) -> Path:
+    """Assert snapshot path helper for safe snapshot writing.
+
+    This helper invokes ``si._write_snapshot_file(df, ticker, snap_dir)`` and
+    validates the result.
+
+    Args:
+        si: snapshot interface implementing ``_write_snapshot_file``.
+        df: input pandas DataFrame to be snapshotted.
+        ticker: ticker symbol string (e.g., 'PETR4').
+        snap_dir: target snapshot directory path.
+
+    Returns:
+        Path for the created snapshot file.
+
+    Behavior:
+        - expects SHA to be ``deadbeef`` (deterministic test data fixture)
+        - ensures returned path is inside ``snap_dir``
+        - returns the resolved path object for additional assertions
+    """
+    sha, result = si._write_snapshot_file(df, ticker, snap_dir)
+    assert sha == "deadbeef"
+    # output path must be inside snapshot directory
+    assert result.resolve().is_relative_to(snap_dir.resolve())
+    return result

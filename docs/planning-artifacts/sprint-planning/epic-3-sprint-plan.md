@@ -1,7 +1,7 @@
 ## Priorização
 
 **Prioridade Alta (implantar primeiro)**
-- Story 3.1 Quickstart CLI — peça central para demos/CI smoke; depende de Epic 1/0/2 mínimos. (Priorizar integração com --no-network fixtures para CI).
+- Story 3.1 Quickstart CLI — peça central para demos/CI smoke; depende dos mínimos das Epics 0/1/2. Priorizar integração com fixtures `--no-network` para CI.
 - Story 3.4 Health/metrics CLI — útil para operações e para CI monitoramento.
 - Story 3.5 Examples / reproducible scripts — facilita verificação local/CI; pode acompanhar 3.1.
 **Prioridade Média-Alta**

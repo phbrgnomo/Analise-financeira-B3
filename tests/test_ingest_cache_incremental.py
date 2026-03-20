@@ -330,7 +330,7 @@ def test_cache_file_read_fallback_logs_and_metrics(tmp_path, monkeypatch, caplog
     increment the metric.
     """
     import src.ingest.snapshot_ingest as sis
-    from src import metrics
+    from src.utils import metrics_prometheus as metrics
 
     db_path = tmp_path / "dados" / "data.db"
     db.init_db(str(db_path))

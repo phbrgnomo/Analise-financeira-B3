@@ -85,7 +85,9 @@ def _ensure_schema(
 
     create_prices = (
         "CREATE TABLE IF NOT EXISTS prices ("
-        + ", ".join(col_sql_parts) + pk_sql + ")"
+        + ", ".join(col_sql_parts)
+        + pk_sql
+        + ")"
     )
 
     cur = conn.cursor()

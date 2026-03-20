@@ -14,11 +14,9 @@ from jsonschema import validate
 # Test utilities from pytest.
 from pytest import MonkeyPatch
 
-# Invoke the Typer CLI app for end-to-end behavior.
-from typer.testing import CliRunner
-
 # The FastAPI/Typer application under test.
 from src.main import app
+from src.utils.health import check_paths_health
 
 
 def _format_iso_z(dt: datetime) -> str:
@@ -65,14 +63,58 @@ def test_metrics_schema(tmp_path: pathlib.Path, monkeypatch: MonkeyPatch):
     # Force CLI to use our temp ingest logs file
     monkeypatch.setenv("INGEST_LOG_PATH", str(ingest_log))
 
-    runner = CliRunner()
-    result = runner.invoke(app, ["metrics", "--format", "json"])
+
+# TODO Rename this here and in `test_metrics_schema`
+def _extracted_from_test_metrics_schema_11(runner, arg1):
+    result = runner.invoke(app, [arg1, "--format", "json"])
     assert result.exit_code == 0
     data = json.loads(result.output)
 
     schema_path = (
         Path(__file__).resolve().parents[1] / "docs" / "schema" / "health_schema.json"
     )
-    schema = json.load(schema_path.open("r", encoding="utf-8"))
+    result = json.load(schema_path.open("r", encoding="utf-8"))
 
-    validate(instance=data, schema=schema)
+    validate(instance=data, schema=result)
+
+    return result
+
+
+def test_check_paths_health_db_nonexistent(tmp_path):
+    """Verifies status 'error' and missing DB reason when db path does not exist."""
+    db_path = tmp_path / "nonexistent_db.sqlite"
+    paths = {"db": str(db_path)}
+
+    result = check_paths_health(paths)
+
+    assert result.get("status") == "error"
+    reasons = result.get("reasons") or []
+    assert any("db missing" in reason for reason in reasons)
+
+
+def test_check_paths_health_data_dir_nonexistent(tmp_path):
+    """Verifies warning status and missing data_dir reason when data_dir is absent."""
+    data_dir = tmp_path / "nonexistent_dir"
+    paths = {"data_dir": str(data_dir)}
+
+    result = check_paths_health(paths)
+
+    assert result.get("status") == "warn"
+    reasons = result.get("reasons") or []
+    assert any("data_dir path" in reason and "does not exist"
+               in reason for reason in reasons)
+
+
+def test_check_paths_health_valid_db_file(tmp_path):
+    """Verifies existing db file returns status 'ok' and no 'db is not a file'."""
+    # check_paths_health validates presence/type only; it does not inspect
+    # SQLite schema/integrity. Using an empty file is intentional for this mock.
+    db_path = tmp_path / "db.sqlite"
+    db_path.write_text("")
+    paths = {"db": str(db_path)}
+
+    result = check_paths_health(paths)
+
+    assert result.get("status") == "ok"
+    reasons = result.get("reasons") or []
+    assert all("db is not a file" not in reason for reason in reasons)

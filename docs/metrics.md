@@ -17,18 +17,47 @@ Métricas expostas (resumo observado)
 - `compute_returns_total` — contador de execuções de `compute_returns`
 - `compute_returns_duration_ms` — histograma/observação da duração em ms de `compute_returns`
 
+Observação de descontinuação: o módulo legado `src.metrics` está obsoleto e
+será removido na versão `v2.0.0` (ou posterior). Use `src.utils.metrics_prometheus`
+como substituto.
+
+Migração rápida:
+
+- antes:
+  ```python
+  from src.metrics import start_metrics_server, observe_counter
+  ```
+- depois:
+  ```python
+  from src.utils.metrics_prometheus import start_metrics_server, observe_counter
+  ```
+
+- no `src.main.py` e outros módulos que importavam `src.metrics`, atualize para
+  importar `src.utils.metrics_prometheus`.
+
+- diferenças de API:
+  - `src.utils.metrics_prometheus` foi projetado como wrapper leve; não adiciona
+    labels automaticamente. Adicione `labels` manualmente onde necessário.
+  - ver `src.utils.metrics_prometheus` para funções expostas e convenção de nomes.
+
+Nota: `src.metrics` permanecerá funcional no `v1.x`, mas usuários devem migrar
+antes de `v2.0.0`.
+
 Observação: o código grava `rows_written` e `job_id` como metadados de snapshot
 via `repo.record_snapshot_metadata(...)` (armazenado em `snapshots/` ou na tabela
 `snapshots`), mas esses valores não são expostos automaticamente como métricas
-Prometheus pelo wrapper atual. O wrapper `src.metrics` é intencionalmente
-leve e não adiciona labels automaticamente; se desejar métricas rotuladas
-(`ticker` etc.) ou métricas adicionais (`returns_rows_written`,
-`returns_last_job_id`) é possível estender `src.metrics` para suportar labels
+Prometheus pelo wrapper atual. O wrapper `src.utils.metrics_prometheus` é
+intencionalmente leve e não adiciona labels automaticamente; se desejar métricas
+rotuladas (`ticker` etc.) ou métricas adicionais (`returns_rows_written`,
+`returns_last_job_id`) é possível estender `src.utils.metrics_prometheus` para
+suportar labels
 e incrementar/observar essas métricas no ponto de persistência (`_persist_returns`).
 
 Observações de implementação
 - O código já contém um ponto de inicialização que verifica `PROMETHEUS_METRICS`
-  e chama `metrics.start_metrics_server(port)` (ver `src/main.py`).
+  e chama `src.utils.metrics_prometheus.start_metrics_server(port)`
+  (ou: `from src.utils import metrics_prometheus as metrics` e
+  `metrics.start_metrics_server(port)`; ver `src/main.py`).
 - As métricas são instrumentadas na camada de ingest/retorno e também em
   `src/retorno.py`/`src/db.py` quando snapshots são gravados. Este documento
   descreve apenas como habilitar; adicionar uma stack de coleta/alertas (Prometheus+

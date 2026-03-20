@@ -223,10 +223,14 @@ def _load_snapshot_cache(cache_file_path: Path) -> Dict[str, Any]:
     When the cache file cannot be read, we log a warning and increment a
     metrics counter (if available). This mirrors the behavior of the previous
     metadata-based cache fallback.
+
+    This function also builds an auxiliary index mapping (ticker, sha256)
+    to snapshot path so callers can perform O(1) cache lookups for checksum
+    hits across renamed snapshot paths.
     """
 
     try:
-        return load_cache(cache_file_path)
+        cache_data = load_cache(cache_file_path)
     except Exception as exc:  # pragma: no cover - best effort fallback
         logger.warning(
             "snapshot cache fallback; failed to read cache %s: %s",
@@ -234,12 +238,26 @@ def _load_snapshot_cache(cache_file_path: Path) -> Dict[str, Any]:
             exc,
         )
         try:
-            from src import metrics
+            from src.utils import metrics_prometheus as metrics
 
             metrics.increment_counter("snapshot_cache_fallback")
         except Exception:  # pragma: no cover — metrics optional
             logger.debug("metrics increment failed", exc_info=True)
-        return {}
+        cache_data = {}
+
+    # Build the secondary lookup index (ticker,sha256) -> snapshot path.
+    cache_index: Dict[str, str] = {}
+    for path, entry in cache_data.items():
+        if path == "__meta__":
+            continue
+        if isinstance(entry, dict):
+            ticker = entry.get("ticker")
+            sha = entry.get("sha256")
+            if isinstance(ticker, str) and isinstance(sha, str):
+                cache_index[f"{ticker}|{sha}"] = path
+
+    cache_data.setdefault("__meta__", {})["snapshot_index"] = cache_index
+    return cache_data
 
 
 def _safe_snapshot_path(ticker: str, snapshot_dir: Path, ts: str) -> Path:
@@ -281,6 +299,48 @@ def _snapshot_path_for_ticker(ticker: str, snapshot_dir: Path, ts: str) -> Path:
     return _safe_snapshot_path(ticker, snapshot_dir, ts)
 
 
+def _lookup_cache_by_ticker_and_checksum(
+    cache_file: Dict[str, Any],
+    ticker: str,
+    checksum: str,
+) -> Optional[tuple[str, Dict[str, Any]]]:
+    """Return snapshot path and entry by (ticker, checksum).
+
+    Parameters:
+        cache_file: loaded snapshot cache structure; file paths map to entry dicts.
+        ticker: normalized ticker to match (e.g., "PETR4").
+        checksum: snapshot SHA256 checksum string to match.
+
+    Returns:
+        A tuple (path, entry) when a matching snapshot is found, otherwise None.
+
+    Behavior:
+        Tries meta-based index lookup via cache_file["__meta__"]["snapshot_index"]
+        for O(1) resolution; if not available falls back to scanning all entries.
+    """
+    # Uses index in cache_file["__meta__"]["snapshot_index"] when available,
+    # falling back to full scan as a compatibility path.
+    cache_index = None
+    meta = cache_file.get("__meta__")
+    if isinstance(meta, dict):
+        cache_index = meta.get("snapshot_index")
+
+    if isinstance(cache_index, dict):
+        hit_path = cache_index.get(f"{ticker}|{checksum}")
+        if hit_path:
+            entry = cache_file.get(hit_path)
+            if isinstance(entry, dict) and entry.get("sha256") == checksum:
+                return hit_path, entry
+    for path, data in cache_file.items():
+        if (
+            isinstance(data, dict)
+            and data.get("sha256") == checksum
+            and data.get("ticker") == ticker
+        ):
+            return path, data
+    return None
+
+
 def _check_cache_hit(
     cache_file: Dict[str, Any],
     snapshot_path: Path,
@@ -292,6 +352,11 @@ def _check_cache_hit(
     """Return a cache-hit dict or ``None`` when a refresh is needed.
 
     The cache is stored as a JSON mapping of snapshot path -> metadata.
+
+    The cache key is the snapshot file path, but we also allow hits based on
+    checksum for the same ticker so that new snapshot filenames (e.g. with
+    a refined timestamp) do not prevent cache reuse when the content is
+    unchanged.
     """
 
     # Explicitly bypass cache when forced so callers can see the reason in logs
@@ -301,7 +366,16 @@ def _check_cache_hit(
 
     key = str(snapshot_path.resolve())
     entry = cache_file.get(key)
-    if not entry or entry.get("sha256") != checksum:
+    if entry and entry.get("sha256") == checksum:
+        hit_path = key
+    else:
+        hit = _lookup_cache_by_ticker_and_checksum(cache_file, ticker, checksum)
+        if hit is not None:
+            hit_path, entry = hit
+        else:
+            hit_path = None
+
+    if not entry or entry.get("sha256") != checksum or hit_path is None:
         # no previous snapshot or checksum mismatch -> miss
         return None
 
@@ -310,7 +384,7 @@ def _check_cache_hit(
         "cached": True,
         "rows_processed": 0,
         "reason": "checksum_match",
-        "snapshot_path": str(snapshot_path),
+        "snapshot_path": hit_path,
         "checksum": checksum,
     }
 
@@ -499,7 +573,9 @@ def ingest_from_snapshot(
         # Use a single timestamp for this run to avoid pathological cases where
         # the process crosses midnight between cache lookup and snapshot write.
         now = datetime.now(timezone.utc)
-        ts = now.strftime("%Y%m%d")
+        # Include time-of-day with microseconds to avoid collisions in
+        # snapshot filenames and cache keys when multiple runs occur rapidly.
+        ts = now.strftime("%Y%m%dT%H%M%S%fZ")
 
         # Ensure cache operations are coordinated, since the cache file is shared
         # across tickers and processes. Hold the lock only for the cache lookup
@@ -512,8 +588,12 @@ def ingest_from_snapshot(
 
             snapshot_path = _snapshot_path_for_ticker(ticker, resolved_dir, ts)
             cache_result = _check_cache_hit(
-                cache_file, snapshot_path, checksum, resolved_ttl,
-                resolved_force, ticker
+                cache_file,
+                snapshot_path,
+                checksum,
+                resolved_ttl,
+                resolved_force,
+                ticker,
             )
             if cache_result is not None:
                 # include duration for the quick-cached path
@@ -533,8 +613,14 @@ def ingest_from_snapshot(
             cache_file = _load_snapshot_cache(cache_file_path)
             cache_file[str(out_path.resolve())] = {
                 "sha256": sha,
+                "ticker": ticker,
                 "processed_at": now.isoformat(),
             }
+            # Do not persist transient auxiliary index state.
+            if isinstance(cache_file.get("__meta__"), dict):
+                cache_file["__meta__"].pop("snapshot_index", None)
+                if not cache_file["__meta__"]:
+                    cache_file.pop("__meta__", None)
             save_cache(cache_file_path, cache_file)
 
         elapsed = time.monotonic() - start

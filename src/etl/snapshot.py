@@ -59,7 +59,8 @@ _SNAPSHOT_FILENAME_RE = re.compile(
     r"""
     ^
     (?P<ticker>[A-Z0-9]+(?:\.[A-Z0-9]+)?)   # ticker maiúsculo com opcional ".SA"
-    -(?P<timestamp>\d{8}(?:T\d{6}Z?)?)      # timestamp yyyyMMdd ou yyyyMMddTHHMMSS[Z]
+    -(?P<timestamp>\d{8}(?:T\d{6}(?:\d{6})?Z?)?)      # timestamp yyyyMMdd or
+    # yyyyMMddTHHMMSS[Z] or yyyyMMddTHHMMSSffffff[Z]
     (?:-(?P<suffix>[^.]+))?                  # sufixo opcional antes da extensão
     \.csv$                                   # extensão .csv
     """,
@@ -85,8 +86,13 @@ def _parse_snapshot_timestamp(path: Path) -> tuple[datetime | None, float]:
     if ts_str.endswith("Z"):
         ts_str = ts_str[:-1]
 
-    # Determine timestamp format: date-only (YYYYMMDD) or full UTC timestamp.
-    fmt = "%Y%m%dT%H%M%S" if "T" in ts_str else "%Y%m%d"
+    # Determine timestamp format: date-only (YYYYMMDD), seconds (YYYYMMDDTHHMMSS)
+    # or microseconds (YYYYMMDDTHHMMSSffffff).
+    if "T" in ts_str:
+        fmt = "%Y%m%dT%H%M%S%f" if len(ts_str) > 15 else "%Y%m%dT%H%M%S"
+    else:
+        fmt = "%Y%m%d"
+
     try:
         ts = datetime.strptime(ts_str, fmt)
     except ValueError:

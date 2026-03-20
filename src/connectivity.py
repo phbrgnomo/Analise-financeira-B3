@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, Optional, TypedDict, cast
 
 from src.adapters.factory import get_adapter
-from src.health import append_ingest_log_entry, get_last_success_timestamp
+from src.utils.health import append_ingest_log_entry, get_last_success_timestamp
 
 
 class ConnectionStatus(TypedDict):
@@ -25,8 +25,6 @@ class ConnectionStatus(TypedDict):
     latency_ms: float
     last_success_at: Optional[str]
     error: Optional[str]
-
-
 
 
 def test_provider_connection(
@@ -111,8 +109,10 @@ def test_provider_connection(
                 "provider": provider,
                 "status": status,
                 "error": error,
-                "created_at": datetime.now(timezone.utc).isoformat().replace(
-                    "+00:00", "Z"
+                "created_at": (
+                    datetime.now(timezone.utc)
+                    .isoformat()
+                    .replace("+00:00", "Z")
                 ),
             }
         )

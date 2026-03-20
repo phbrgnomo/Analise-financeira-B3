@@ -7,7 +7,6 @@ It is intended to replace the legacy `src/health.py` module while keeping
 backwards compatibility (via a thin shim in `src/health.py`).
 """
 
-
 from __future__ import annotations
 
 import contextlib
@@ -134,7 +133,11 @@ def get_last_success_timestamp(
     if latest is None:
         return None
 
-    return latest.replace(tzinfo=timezone.utc).isoformat().replace("+00:00", "Z")
+    # Preserve the original timezone when present; if absent, assume UTC.
+    if latest.tzinfo is None:
+        latest = latest.replace(tzinfo=timezone.utc)
+
+    return latest.isoformat().replace("+00:00", "Z")
 
 
 def append_ingest_log_entry(
@@ -150,8 +153,7 @@ def append_ingest_log_entry(
 
     try:
         path = resolve_ingest_log_path(ingest_log_path)
-        dirpath = os.path.dirname(path)
-        if dirpath:
+        if dirpath := os.path.dirname(path):
             os.makedirs(dirpath, exist_ok=True)
         with open(path, "a", encoding="utf-8") as fh:
             fh.write(json.dumps(entry, ensure_ascii=False) + "\n")
@@ -218,9 +220,7 @@ def _build_health_metrics_summary(
             # Support both legacy format (numeric string) and '1.23s' suffix.
             with contextlib.suppress(Exception):
                 duration_val = (
-                    float(duration[:-1])
-                    if duration.endswith("s")
-                    else float(duration)
+                    float(duration[:-1]) if duration.endswith("s") else float(duration)
                 )
                 latency_values.append(duration_val)
     if last_finished is not None:
@@ -271,49 +271,40 @@ def check_paths_health(paths: Dict[str, str]) -> Dict[str, Any]:
 
     for name, path_str in paths.items():
         path = Path(path_str)
+
         if not path.exists():
-            status = "warn" if status == "ok" else status
-            reasons.append(f"{name} missing: {path}")
+            if name == "db":
+                status = "error"
+                reasons.append(f"db missing: {path}")
+            else:
+                status = "warn" if status == "ok" else status
+                reasons.append(f"{name} path {path} does not exist")
             continue
-        if name == "db" and path.is_file():
-            try:
-                # Ensure we can open the file in read-only mode.
-                with open(path, "rb"):
-                    pass
-            except Exception as exc:
+
+        if name == "db":
+            if path.is_file():
+                try:
+                    # Ensure we can open the file in read-only mode.
+                    with open(path, "rb"):
+                        pass
+                except Exception as exc:
+                    status = "error"
+                    reasons.append(f"db unreadable: {exc}")
+                with contextlib.suppress(Exception):
+                    # Best-effort permission check:
+                    # warn only on clearly too-permissive modes.
+                    mode = path.stat().st_mode & 0o777
+                    # World-writable is suspicious; group-writable and
+                    # world-readable is suspicious too.
+                    if (mode & 0o002) or ((mode & 0o004) and (mode & 0o020)):
+                        reasons.append(
+                            f"db permissions are {oct(mode)}; "
+                            "file may be too broadly accessible"
+                        )
+            else:
                 status = "error"
-                reasons.append(f"db unreadable: {exc}")
-            with contextlib.suppress(Exception):
-                # Best-effort permission check:
-                # warn only on clearly too-permissive modes.
-                mode = path.stat().st_mode & 0o777
-                # World-writable or group-writable and world-readable are suspicious.
-                if mode & 0o002 or mode & 0o004 and mode & 0o020:
-                    reasons.append(
-                        f"db permissions are {oct(mode)}; "
-                        "file may be too broadly accessible"
-                    )
-        if name == "db" and path.is_file():
-            try:
-                # Ensure we can open the file in read-only mode.
-                with open(path, "rb"):
-                    pass
-            except Exception as exc:
-                status = "error"
-                reasons.append(f"db unreadable: {exc}")
-            with contextlib.suppress(Exception):
-                # Best-effort permission check: warn only on clearly too-permissive
-                # modes.
-                # On non-Unix platforms (Windows) this may not be meaningful.
-                mode = path.stat().st_mode & 0o777
-                # World-writable is almost always incorrect; also warn if the file is
-                # world-readable and group-writable (more permissive than typical).
-                if mode & 0o002 or (mode & 0o004 and mode & 0o020):
-                    reasons.append(
-                        f"db permissions are {oct(mode)}; "
-                        f"file may be too broadly accessible"
-                    )
-        elif name != "db" and not path.is_dir():
+                reasons.append(f"db is not a file: {path}")
+        elif not path.is_dir():
             status = "warn" if status == "ok" else status
             reasons.append(f"{name} not a directory: {path}")
 

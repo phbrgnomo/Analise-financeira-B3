@@ -44,7 +44,7 @@ Saída esperada (JSON):
 
 ```json
 {
-  "status": "healthy|degraded|unhealthy",
+  "status": "healthy",
   "timestamp": "2026-03-16T12:34:56Z",
   "metrics": {
     "ingest_lag_seconds": 43200,
@@ -60,9 +60,9 @@ Saída esperada (JSON):
 
 ### Campos obrigatórios
 
-- `status` (string): `healthy`, `degraded` ou `unhealthy`
+- `status` (string): `healthy`, `degraded`, `unhealthy` ou `unknown`
 - `timestamp` (string, RFC3339 UTC)
-- `metrics` (object) com: `ingest_lag_seconds` (int), `errors_last_24h` (int), `jobs_last_24h` (int), `avg_latency_seconds` (number)
+- `metrics` (object) com: `ingest_lag_seconds` (int|null), `errors_last_24h` (int), `jobs_last_24h` (int), `avg_latency_seconds` (number)
 - `thresholds` (object) com: `ingest_lag_seconds` (int)
 
 ## 4. Uso em CI / monitoramento
@@ -74,15 +74,17 @@ Saída esperada (JSON):
   - A saída não for JSON válido.
   - O JSON não contiver os campos obrigatórios (`status`, `metrics.ingest_lag_seconds`, `thresholds.ingest_lag_seconds`).
 
-- O campo `status` é calculado a partir de `metrics.ingest_lag_seconds` e `errors_last_24h` conforme a lógica implementada em `src/health.py`:
-  - `healthy`: `ingest_lag_seconds <= threshold_seconds` e `errors_last_24h == 0`
-  - `degraded`: `ingest_lag_seconds > threshold_seconds` **ou** `errors_last_24h > 0`
-  - `unhealthy`: `ingest_lag_seconds > threshold_seconds * 2`
+- O campo `status` é calculado a partir de `metrics.ingest_lag_seconds`, `errors_last_24h` e `thresholds.ingest_lag_seconds` conforme a lógica implementada em `src/utils/health.py`, com precedência explícita:
+  1. `unknown`: quando `metrics.ingest_lag_seconds` ou `errors_last_24h` estiverem ausentes, inválidos, não numéricos, `null` ou não parseáveis.
+  2. `unhealthy`: quando `metrics.ingest_lag_seconds > threshold_seconds * 2`.
+  3. `degraded`: quando `metrics.ingest_lag_seconds > threshold_seconds` **ou** `errors_last_24h > 0`.
+  4. `healthy`: quando `metrics.ingest_lag_seconds <= threshold_seconds` **e** `errors_last_24h == 0`.
 
+  - `threshold_seconds` é lido de `thresholds.ingest_lag_seconds` (ex.: 86400 para 24h).
   > Para o valor padrão de `threshold_seconds = 86400` (24h):
   > - `degraded` quando `ingest_lag_seconds > 86400` (mais de 24h sem ingestão)
   > - `unhealthy` quando `ingest_lag_seconds > 172800` (mais de 48h sem ingestão)
-
+  > - `unknown` quando `metrics` está ausente, contém `null` ou valores inválidos.
 ### Recomendações para ferramentas de monitoramento
 
 - Execute `main --metrics --format json` em um agendador/cron e trate como **falha de conexão** quando:
@@ -95,9 +97,9 @@ Saída esperada (JSON):
   2. Se todas as tentativas falharem, elevar a severidade do alerta (por exemplo, **P1/P0**) pois o sistema pode estar indisponível.
 
 - Ao parsear o JSON:
-  - Valide que `metrics.ingest_lag_seconds` é um número (não nulo).
-  - Valide que `status` está entre `healthy|degraded|unhealthy`.
-  - Compare `metrics.ingest_lag_seconds` com `thresholds.ingest_lag_seconds` para derivar alertas adicionais, se necessário.
+  - Valide que `metrics.ingest_lag_seconds` é um número (ou `null`, que indica ausência de ingestões registradas).
+  - Valide que `status` está entre `healthy|degraded|unhealthy|unknown`.
+  - Compare `metrics.ingest_lag_seconds` (quando não `null`) com `thresholds.ingest_lag_seconds` para derivar alertas adicionais, se necessário.
 
 ### Edge cases e limitações
 

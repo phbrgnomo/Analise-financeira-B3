@@ -8,7 +8,12 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from src.main import app
+from src.main import (
+    _normalize_notebook_path,
+    _resolve_run_window,
+    _run_notebook_if_enabled,
+    app,
+)
 
 
 def _strip_ansi(s: str) -> str:
@@ -141,6 +146,50 @@ def test_run_uses_ingest_pipeline(monkeypatch):
     )
     # e não deve haver chamadas extras
     assert len(calls_to_compute) == len(ingest_tickers)
+
+
+def test_notebook_path_normalization():
+    """Testa normalização de caminho do notebook.
+
+    Casos:
+    - string simples "foo.ipynb"1 : retorna "foo.ipynb".
+    - pathlib.Path('foo.ipynb'): retorna "foo.ipynb".
+    - objeto não suportado (FakeOption): fallback para
+      "examples/notebooks/quickstart.ipynb".
+    """
+    assert _normalize_notebook_path("foo.ipynb") == "foo.ipynb"
+    assert _normalize_notebook_path(Path("foo.ipynb")) == "foo.ipynb"
+
+    class FakeOption:
+        pass
+
+    assert (
+        _normalize_notebook_path(FakeOption())
+        == "examples/notebooks/quickstart.ipynb"
+    )
+
+
+def test_resolve_run_window():
+    """_resolve_run_window(None) deve retornar (None, None) quando não há parâmetros."""
+    assert _resolve_run_window(None) == (None, None)
+
+
+def test_run_notebook_if_enabled_not_run():
+    """_run_notebook_if_enabled(False) preserva exit_code e summary_status
+    sem alterar summary."""
+    original_summary = {"status": "success"}
+    exit_code, summary_status, returned_summary = _run_notebook_if_enabled(
+        run_notebook=False,
+        notebook_path="examples/notebooks/quickstart.ipynb",
+        tickers=["PETR4"],
+        job_id="job",
+        summary=original_summary,
+        exit_code=0,
+        summary_status="success",
+    )
+    assert exit_code == 0
+    assert summary_status == "success"
+    assert returned_summary == original_summary
 
 
 def test_compute_returns_single_ticker(monkeypatch):
@@ -494,10 +543,12 @@ def test_run_notebook_invokes_papermill(monkeypatch):
         def __init__(self):
             self.called = False
             self.args = None
+            self.kwargs = None
 
-        def execute_notebook(self, input_nb, output_nb):
+        def execute_notebook(self, input_nb, output_nb, **kwargs):
             self.called = True
             self.args = (input_nb, output_nb)
+            self.kwargs = kwargs
 
     fake_pm = FakePM()
     import sys
@@ -530,6 +581,7 @@ def test_run_notebook_invokes_papermill(monkeypatch):
 
     assert result.exit_code == 0
     assert fake_pm.called is True
+    assert "parameters" in (fake_pm.kwargs or {})
     assert result.output.strip(), "expected output"  # ensure output was emitted
 
 
@@ -537,10 +589,20 @@ def test_run_notebook_invokes_papermill(monkeypatch):
     importlib.util.find_spec("papermill") is not None,
     reason="papermill installed; cannot test missing dependency path",
 )
-def test_run_notebook_missing_papermill():
+def test_run_notebook_missing_papermill(monkeypatch):
     """`--run-notebook` deve falhar com ImportError quando papermill
     não está instalado."""
     from src.main import app
+
+    # Avoid side effects from ingest+returns when papermill isn't available.
+    monkeypatch.setattr(
+        "src.ingest.pipeline.ingest",
+        lambda *args, **kwargs: {"status": "success", "persist": {"rows_processed": 0}},
+    )
+    monkeypatch.setattr(
+        "src.main._compute_returns_for_ticker",
+        lambda *args, **kwargs: {"rows": 0, "persisted": True, "sample_df": None},
+    )
 
     runner = CliRunner()
     result = runner.invoke(
@@ -564,6 +626,16 @@ def test_run_notebook_missing_papermill():
 def test_run_notebook_runtime_error(monkeypatch):
     """`--run-notebook` deve falhar com código 2 quando papermill lança exceção."""
     from src.main import app
+
+    # Avoid side effects from ingest/returns while exercising notebook error handling.
+    monkeypatch.setattr(
+        "src.ingest.pipeline.ingest",
+        lambda *args, **kwargs: {"status": "success", "persist": {"rows_processed": 0}},
+    )
+    monkeypatch.setattr(
+        "src.main._compute_returns_for_ticker",
+        lambda *args, **kwargs: {"rows": 0, "persisted": True, "sample_df": None},
+    )
 
     class FakePMErroring:
         def execute_notebook(self, *args, **kwargs):
@@ -589,10 +661,7 @@ def test_run_notebook_runtime_error(monkeypatch):
 
     assert result.exit_code == 2
     output = result.output.lower()
-    assert (
-        "dummy notebook failure" in output
-        or "notebook" in output
-    )
+    assert "dummy notebook failure" in output or "notebook" in output
 
 
 def test_export_csv_success(tmp_path, monkeypatch):
