@@ -19,6 +19,7 @@ from typer.testing import CliRunner
 
 # The FastAPI/Typer application under test.
 from src.main import app
+from src.utils.health import check_paths_health
 
 
 def _format_iso_z(dt: datetime) -> str:
@@ -83,11 +84,42 @@ def test_metrics_schema(tmp_path: pathlib.Path, monkeypatch: MonkeyPatch):
     health_data = json.loads(result_health.output)
 
     health_schema_path = (
-        Path(__file__).resolve().parents[1]
-        / "docs"
-        / "schema"
-        / "health_schema.json"
+        Path(__file__).resolve().parents[1] / "docs" / "schema" / "health_schema.json"
     )
     health_schema = json.load(health_schema_path.open("r", encoding="utf-8"))
 
     validate(instance=health_data, schema=health_schema)
+
+
+def test_check_paths_health_db_nonexistent(tmp_path):
+    db_path = tmp_path / "nonexistent_db.sqlite"
+    paths = {"db": str(db_path)}
+
+    result = check_paths_health(paths)
+
+    assert result.get("status") == "error"
+    reasons = result.get("reasons") or []
+    assert any("db missing" in reason for reason in reasons)
+
+
+def test_check_paths_health_data_dir_nonexistent(tmp_path):
+    data_dir = tmp_path / "nonexistent_dir"
+    paths = {"data_dir": str(data_dir)}
+
+    result = check_paths_health(paths)
+
+    assert result.get("status") == "warn"
+    reasons = result.get("reasons") or []
+    assert any("not a directory" in reason for reason in reasons)
+
+
+def test_check_paths_health_valid_db_file(tmp_path):
+    db_path = tmp_path / "db.sqlite"
+    db_path.write_text("")
+    paths = {"db": str(db_path)}
+
+    result = check_paths_health(paths)
+
+    assert result.get("status") == "ok"
+    reasons = result.get("reasons") or []
+    assert all("db is not a file" not in reason for reason in reasons)

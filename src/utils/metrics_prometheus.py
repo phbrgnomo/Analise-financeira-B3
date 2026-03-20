@@ -16,11 +16,10 @@ logger = get_logger(__name__)
 class Metric(Protocol):
     """Interface for Prometheus-style metrics."""
 
-    def inc(self, amount: float = 1.0) -> Any:
-        ...
+    def inc(self, amount: float = 1.0) -> Any: ...
 
-    def observe(self, value: float) -> Any:
-        ...
+    def observe(self, value: float) -> Any: ...
+
 
 _HAS_PROM = False
 try:

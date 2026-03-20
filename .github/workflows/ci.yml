@@ -18,9 +18,9 @@ jobs:
           python -m pip install poetry
           poetry lock
           poetry config virtualenvs.in-project true
-          poetry install --no-interaction
+          poetry install --no-interaction --extras notebook
       - run: poetry run pre-commit run --all-files --show-diff-on-failure
-      - run: poetry run ruff check . --exclude "*.md"
+      - run: poetry run ruff check . --exclude "*.md,examples/notebooks/*,outputs/*,reports/*"
 
   test:
     runs-on: ubuntu-latest
@@ -37,7 +37,10 @@ jobs:
           python -m pip install poetry
           poetry lock
           poetry config virtualenvs.in-project true
-          poetry install --no-interaction
+          poetry install --no-interaction --extras notebook
+          # Install kernel for papermill notebook execution in CI
+          poetry run python -m pip install --upgrade ipykernel
+          poetry run python -m ipykernel install --user --name python3 --display-name "Python 3"
       - name: Ensure dados directory exists
         run: mkdir -p dados
 
@@ -49,7 +52,7 @@ jobs:
 
       - run: |
           mkdir -p reports
-          NETWORK_MODE=playback poetry run pytest -q --maxfail=1 --junitxml=reports/junit.xml
+          PAPERMILL=1 NETWORK_MODE=playback poetry run pytest -q --maxfail=1 --junitxml=reports/junit.xml
       - name: CLI smoke test
         run: |
           echo "# smoke test using built-in dummy provider"
@@ -96,7 +99,7 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install poetry
           poetry config virtualenvs.in-project true
-          poetry install --no-interaction
+          poetry install --no-interaction --extras notebook
       - name: Ensure dados directory exists
         run: mkdir -p dados
 

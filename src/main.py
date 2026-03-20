@@ -39,7 +39,11 @@ from src.utils.health import (
 )
 
 # Default notebook path used by the --run-notebook flow.
-DEFAULT_NOTEBOOK_PATH = "examples/notebooks/returns-consumer.ipynb"
+# The quickstart notebook is the primary end-to-end example for new users / CI.
+# Value can be overridden via environment var DEFAULT_NOTEBOOK_PATH.
+DEFAULT_NOTEBOOK_PATH = os.getenv(
+    "DEFAULT_NOTEBOOK_PATH", "examples/notebooks/quickstart.ipynb"
+)
 
 # Default Typer option object for notebook execution.
 NOTEBOOK_PATH_OPTION = typer.Option(
@@ -270,7 +274,7 @@ def _make_ticker_result(
 def _run_notebook(
     tickers: list[str],
     job_id: str,
-    notebook_path: str | Path = "examples/notebooks/returns-consumer.ipynb",
+    notebook_path: str | Path = DEFAULT_NOTEBOOK_PATH,
 ) -> dict[str, object]:
     """Execute notebook em batch via papermill.
 
@@ -285,14 +289,24 @@ def _run_notebook(
         feedback.error(f"Notebook não encontrado: {input_nb}")
         raise typer.Exit(code=2)
 
-    output_dir = Path("reports")
+    # The notebook will write its own artifacts (CSV/plots) under this directory.
+    output_dir = Path("outputs") / "notebooks" / "quickstart"
     output_dir.mkdir(parents=True, exist_ok=True)
-    output_nb = output_dir / f"quickstart-{job_id}.ipynb"
+
+    # Ensure report directory exists to avoid FileNotFoundError for output notebook.
+    output_nb = Path("reports") / f"quickstart-{job_id}.ipynb"
+    output_nb.parent.mkdir(parents=True, exist_ok=True)
 
     try:
         import papermill as pm  # type: ignore
 
-        pm.execute_notebook(str(input_nb), str(output_nb))
+        params = {
+            "tickers": tickers,
+            "output_dir": str(output_dir),
+            # Default dataset for quickstart/CI runs. Can be overridden by papermill.
+            "csv_path": "dados/ticker_example.csv",
+        }
+        pm.execute_notebook(str(input_nb), str(output_nb), parameters=params)
         feedback.success(f"notebook concluído: {output_nb}")
         return {"status": "success", "output_notebook": str(output_nb)}
     except ImportError as exc:
@@ -465,13 +479,14 @@ def _prepare_run_context(
     """Prepara tickers, provider efetivo e objeto de feedback para o comando run."""
 
     effective_ticker = (
-        _ensure_str_or_none(ticker)
-        or _ensure_str_or_none(ticker_arg)
-        or None
+        _ensure_str_or_none(ticker) or _ensure_str_or_none(ticker_arg) or None
     )
 
     effective_provider = provider or provider_arg or "yfinance"
-    if no_network:
+    # `--no-network` should use the dummy provider by default to avoid making
+    # network calls. However, if the user explicitly requested a different
+    # provider (e.g. `--provider csv`), respect that choice.
+    if no_network and effective_provider == "yfinance":
         effective_provider = "dummy"
 
     feedback = None if output_json else CliFeedback("executar")
@@ -637,9 +652,7 @@ def _run_notebook_if_enabled(
     if Path(notebook_path) == Path(DEFAULT_NOTEBOOK_PATH):
         notebook_results = _run_notebook(tickers, job_id)
     else:
-        notebook_results = _run_notebook(
-            tickers, job_id, notebook_path=notebook_path
-        )
+        notebook_results = _run_notebook(tickers, job_id, notebook_path=notebook_path)
 
     summary["notebook"] = notebook_results
 
@@ -842,8 +855,7 @@ def health_cmd(
         None,
         "--db-path",
         help=(
-            "Caminho para o arquivo de banco de dados SQLite "
-            "(default: dados/data.db)."
+            "Caminho para o arquivo de banco de dados SQLite (default: dados/data.db)."
         ),
     ),
     data_dir: Optional[str] = typer.Option(

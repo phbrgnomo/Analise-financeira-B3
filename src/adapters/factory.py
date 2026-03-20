@@ -14,12 +14,14 @@ from src.adapters.base import Adapter
 # keeps tests and the CI smoke test simple: the provider ``dummy`` is always
 # available without requiring an explicit registration step in the same
 # Python process.
+from src.adapters.csv import CSVAdapter
 from src.adapters.dummy import DummyAdapter
 from src.adapters.yfinance_adapter import YFinanceAdapter
 
 # dictionary of provider name (lowercase) -> Adapter class
 _ADAPTER_REGISTRY: Dict[str, Type[Adapter]] = {
     "yfinance": YFinanceAdapter,
+    "csv": CSVAdapter,
     # alias "yahoo" removido – use apenas "yfinance". Esta é uma mudança
     # incompatível (breaking change); quaisquer scripts ou integrações que
     # referenciavam "yahoo" anteriormente devem migrar.

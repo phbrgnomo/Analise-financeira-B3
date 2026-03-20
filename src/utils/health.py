@@ -7,7 +7,6 @@ It is intended to replace the legacy `src/health.py` module while keeping
 backwards compatibility (via a thin shim in `src/health.py`).
 """
 
-
 from __future__ import annotations
 
 import contextlib
@@ -221,9 +220,7 @@ def _build_health_metrics_summary(
             # Support both legacy format (numeric string) and '1.23s' suffix.
             with contextlib.suppress(Exception):
                 duration_val = (
-                    float(duration[:-1])
-                    if duration.endswith("s")
-                    else float(duration)
+                    float(duration[:-1]) if duration.endswith("s") else float(duration)
                 )
                 latency_values.append(duration_val)
     if last_finished is not None:
@@ -293,9 +290,12 @@ def check_paths_health(paths: Dict[str, str]) -> Dict[str, Any]:
                         "file may be too broadly accessible"
                     )
         elif name == "db":
-            # If we were asked to check a database path, it must be a file.
+            # If we were asked to check a database path, it must exist and be a file.
             status = "error"
-            reasons.append(f"db is not a file: {path}")
+            if not path.exists():
+                reasons.append(f"db missing: {path}")
+            elif not path.is_file():
+                reasons.append(f"db is not a file: {path}")
         elif name != "db" and not path.is_dir():
             status = "warn" if status == "ok" else status
             reasons.append(f"{name} not a directory: {path}")

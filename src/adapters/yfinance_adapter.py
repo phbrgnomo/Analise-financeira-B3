@@ -285,8 +285,9 @@ class YFinanceAdapter(Adapter):
             logger.exception("error during yfinance test_connection")
             return False
 
-    def check_connection(self,
-                         timeout: Optional[float] = None) -> ConnectionCheckResult:
+    def check_connection(
+        self, timeout: Optional[float] = None
+    ) -> ConnectionCheckResult:
         """Perform a minimal connectivity check against Yahoo Finance.
 
         This method does a small data request to validate that the network and

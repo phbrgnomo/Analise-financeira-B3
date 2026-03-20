@@ -27,8 +27,6 @@ class ConnectionStatus(TypedDict):
     error: Optional[str]
 
 
-
-
 def test_provider_connection(
     provider: str,
     timeout: Optional[float] = None,
@@ -111,9 +109,9 @@ def test_provider_connection(
                 "provider": provider,
                 "status": status,
                 "error": error,
-                "created_at": datetime.now(timezone.utc).isoformat().replace(
-                    "+00:00", "Z"
-                ),
+                "created_at": datetime.now(timezone.utc)
+                .isoformat()
+                .replace("+00:00", "Z"),
             }
         )
 

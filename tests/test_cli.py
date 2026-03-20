@@ -8,7 +8,12 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from src.main import app
+from src.main import (
+    _normalize_notebook_path,
+    _resolve_run_window,
+    _run_notebook_if_enabled,
+    app,
+)
 
 
 def _strip_ansi(s: str) -> str:
@@ -141,6 +146,37 @@ def test_run_uses_ingest_pipeline(monkeypatch):
     )
     # e não deve haver chamadas extras
     assert len(calls_to_compute) == len(ingest_tickers)
+
+
+def test_notebook_path_normalization():
+    assert _normalize_notebook_path("foo.ipynb") == "foo.ipynb"
+    assert _normalize_notebook_path(Path("foo.ipynb")) == "foo.ipynb"
+    class FakeOption:
+        pass
+
+    assert (
+        _normalize_notebook_path(FakeOption())
+        == "examples/notebooks/quickstart.ipynb"
+    )
+
+
+def test_resolve_run_window():
+    assert _resolve_run_window(None) == (None, None)
+
+
+def test_run_notebook_if_enabled_not_run():
+    summary = {"status": "success"}
+    exit_code, summary_status, summary = _run_notebook_if_enabled(
+        run_notebook=False,
+        notebook_path="examples/notebooks/quickstart.ipynb",
+        tickers=["PETR4"],
+        job_id="job",
+        summary=summary,
+        exit_code=0,
+        summary_status="success",
+    )
+    assert exit_code == 0
+    assert summary_status == "success"
 
 
 def test_compute_returns_single_ticker(monkeypatch):
@@ -494,10 +530,12 @@ def test_run_notebook_invokes_papermill(monkeypatch):
         def __init__(self):
             self.called = False
             self.args = None
+            self.kwargs = None
 
-        def execute_notebook(self, input_nb, output_nb):
+        def execute_notebook(self, input_nb, output_nb, **kwargs):
             self.called = True
             self.args = (input_nb, output_nb)
+            self.kwargs = kwargs
 
     fake_pm = FakePM()
     import sys
@@ -530,6 +568,7 @@ def test_run_notebook_invokes_papermill(monkeypatch):
 
     assert result.exit_code == 0
     assert fake_pm.called is True
+    assert "parameters" in (fake_pm.kwargs or {})
     assert result.output.strip(), "expected output"  # ensure output was emitted
 
 
@@ -609,10 +648,7 @@ def test_run_notebook_runtime_error(monkeypatch):
 
     assert result.exit_code == 2
     output = result.output.lower()
-    assert (
-        "dummy notebook failure" in output
-        or "notebook" in output
-    )
+    assert "dummy notebook failure" in output or "notebook" in output
 
 
 def test_export_csv_success(tmp_path, monkeypatch):

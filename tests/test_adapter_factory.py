@@ -16,12 +16,8 @@ def test_register_adapter_warns_on_replace(caplog, monkeypatch):
             return pd.DataFrame()
 
         def _fetch_once(
-            self,
-            ticker: str,
-            start: str,
-            end: str,
-            **kwargs
-            ) -> pd.DataFrame:
+            self, ticker: str, start: str, end: str, **kwargs
+        ) -> pd.DataFrame:
             return pd.DataFrame()
 
     # first registration should succeed quietly
@@ -49,12 +45,8 @@ def test_available_providers_reflects_registry(monkeypatch) -> None:
             return pd.DataFrame()
 
         def _fetch_once(
-            self,
-            ticker: str,
-            start: str,
-            end: str,
-            **kwargs
-            ) -> pd.DataFrame:
+            self, ticker: str, start: str, end: str, **kwargs
+        ) -> pd.DataFrame:
             return pd.DataFrame()
 
     class B(Adapter):
@@ -62,12 +54,8 @@ def test_available_providers_reflects_registry(monkeypatch) -> None:
             return pd.DataFrame()
 
         def _fetch_once(
-            self,
-            ticker: str,
-            start: str,
-            end: str,
-            **kwargs
-            ) -> pd.DataFrame:
+            self, ticker: str, start: str, end: str, **kwargs
+        ) -> pd.DataFrame:
             return pd.DataFrame()
 
     from src.adapters.factory import available_providers

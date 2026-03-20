@@ -535,8 +535,12 @@ def ingest_from_snapshot(
 
             snapshot_path = _snapshot_path_for_ticker(ticker, resolved_dir, ts)
             cache_result = _check_cache_hit(
-                cache_file, snapshot_path, checksum, resolved_ttl,
-                resolved_force, ticker
+                cache_file,
+                snapshot_path,
+                checksum,
+                resolved_ttl,
+                resolved_force,
+                ticker,
             )
             if cache_result is not None:
                 # include duration for the quick-cached path

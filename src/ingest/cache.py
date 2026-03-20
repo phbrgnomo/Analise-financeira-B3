@@ -64,10 +64,16 @@ def cache_file_lock(path: Path) -> Iterator[None]:
         with portalocker.Lock(str(lock_path), "a", timeout=30):
             yield
         return
-    except ImportError:
+    except ImportError as e:
         # Portalocker is the preferred solution; if it's not available, fall
-        # back to a Unix-only fcntl lock.
-        pass
+        # back to a Unix-only fcntl lock. Only swallow the error when the
+        # missing module is actually `portalocker` to avoid hiding other bugs.
+        if getattr(e, "name", None) != "portalocker":
+            raise
+        logger.debug(
+            "portalocker not available; falling back to fcntl-based cache lock",
+            exc_info=True,
+        )
     except Exception as e:
         # If locking fails for any reason, proceed anyway (best-effort).
         logger.debug(

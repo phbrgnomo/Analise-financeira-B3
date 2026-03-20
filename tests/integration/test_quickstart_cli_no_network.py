@@ -133,9 +133,7 @@ def _extracted_from_test_quickstart_no_network_cache_hit_json_34(runner):
     return data1["tickers"][0]
 
 
-def test_quickstart_no_network_run_notebook_json(
-    isolated_cli_env, monkeypatch
-):
+def test_quickstart_no_network_run_notebook_json(isolated_cli_env, monkeypatch):
     """Execute quickstart with --run-notebook and validate notebook summary."""
 
     tmp_path = isolated_cli_env

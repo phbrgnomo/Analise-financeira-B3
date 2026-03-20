@@ -37,6 +37,9 @@ necessário.
 - **DEFAULT_TICKERS**: tickers padrão usados no `main run` quando `--ticker`
   não é informado. Exemplo: `PETR4,ITUB3,BBDC4`.
 
+- **DEFAULT_NOTEBOOK_PATH**: caminho para o notebook usado pelo
+  `--run-notebook` (padrão `examples/notebooks/quickstart.ipynb`).
+
 - **VALIDATION_INVALID_PERCENT_THRESHOLD**: limite percentual usado pelo
   processo de validação para considerar uma operação como inválida. Valor
   padrão: `0.1` (10%). Deve ser um número decimal entre `0` e `1` (por
@@ -119,6 +122,25 @@ poetry run main --ticker PETR4 --format json --no-network
 poetry run pytest -q
 # Exemplo rápido (modo offline, saída JSON, grava snapshot em snapshots/ e log em logs/)
 ./examples/run_quickstart_example.sh --no-network --format json
+```
+
+### Notebooks Quickstart
+
+Para executar o notebook de exemplo (recomenda-se instalar o extra `notebook`):
+
+```bash
+poetry install --extras notebook
+poetry run main --ticker PETR4 --run-notebook
+```
+
+Isso executa o notebook `examples/notebooks/quickstart.ipynb` via `papermill` e grava artefatos em `outputs/notebooks/quickstart` (CSV + imagem).
+
+Para rodar o notebook diretamente via papermill (útil em CI):
+
+```bash
+papermill examples/notebooks/quickstart.ipynb outputs/quickstart-output.ipynb \
+  -p tickers '["PETR4"]' \
+  -p output_dir outputs/notebooks/quickstart
 ```
 
 ### Métricas / health check (CI)
