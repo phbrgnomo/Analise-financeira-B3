@@ -20,6 +20,7 @@ portalocker = "^3.1.0"
 sqlparse = "^0.5.5"
 papermill = { version = "^2.7.0", optional = true }
 matplotlib = "^3.10.0"
+ipykernel = { version = "^7.2.0", optional = true }
 
 [tool.poetry.extras]
 notebook = ["papermill", "ipykernel"]
