@@ -347,6 +347,14 @@ def _record_error_and_return(
 
 
 class FetchResult(NamedTuple):
+    """Result returned by _fetch_and_canonical.
+
+    Attributes:
+        raw: original provider DataFrame (or None on fetch error).
+        canonical: normalized canonical DataFrame (or None on mapping error).
+        error: error message text (or None on success).
+    """
+
     raw: pd.DataFrame | None
     canonical: pd.DataFrame | None
     error: str | None

@@ -313,10 +313,20 @@ def _run_notebook(
         feedback.error(
             "papermill não está instalado. Instale com `pip install papermill`."
         )
-        return {"status": "error", "error": str(exc), "output_notebook": None}
+        return {
+            "status": "error",
+            "error_type": "import",
+            "error": str(exc),
+            "output_notebook": None,
+        }
     except Exception as exc:
         feedback.error(f"falha ao executar notebook: {exc}")
-        return {"status": "error", "error": str(exc), "output_notebook": None}
+        return {
+            "status": "error",
+            "error_type": "runtime",
+            "error": str(exc),
+            "output_notebook": None,
+        }
 
 
 def _finish_ingest_step(
@@ -607,7 +617,7 @@ def _finalize_run_output(
     """Emit output/feedback and exit with the appropriate code."""
 
     if output_json:
-        CliFeedback("executar").json_output(summary)
+        (feedback or CliFeedback("executar")).json_output(summary)
         raise typer.Exit(code=exit_code)
 
     if feedback is None:

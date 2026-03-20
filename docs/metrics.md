@@ -17,7 +17,7 @@ Métricas expostas (resumo observado)
 - `compute_returns_total` — contador de execuções de `compute_returns`
 - `compute_returns_duration_ms` — histograma/observação da duração em ms de `compute_returns`
 
-Observação de depreciação: o módulo legado `src.metrics` está depreciado e
+Observação de descontinuação: o módulo legado `src.metrics` está obsoleto e
 será removido na versão `v2.0.0` (ou posterior). Use `src.utils.metrics_prometheus`
 como substituto.
 

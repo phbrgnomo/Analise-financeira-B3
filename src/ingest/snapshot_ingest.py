@@ -246,15 +246,17 @@ def _load_snapshot_cache(cache_file_path: Path) -> Dict[str, Any]:
         cache_data = {}
 
     # Build the secondary lookup index (ticker,sha256) -> snapshot path.
-    cache_index: Dict[tuple[str, str], str] = {}
+    cache_index: Dict[str, str] = {}
     for path, entry in cache_data.items():
+        if path == "__meta__":
+            continue
         if isinstance(entry, dict):
             ticker = entry.get("ticker")
             sha = entry.get("sha256")
             if isinstance(ticker, str) and isinstance(sha, str):
-                cache_index[(ticker, sha)] = path
+                cache_index[f"{ticker}|{sha}"] = path
 
-    cache_data["_snapshot_index"] = cache_index
+    cache_data.setdefault("__meta__", {})["snapshot_index"] = cache_index
     return cache_data
 
 
@@ -302,12 +304,29 @@ def _lookup_cache_by_ticker_and_checksum(
     ticker: str,
     checksum: str,
 ) -> Optional[tuple[str, Dict[str, Any]]]:
-    """Return snapshot path and entry by (ticker, checksum)."""
-    # Uses index in cache_file["_snapshot_index"] when available, falling
-    # back to full scan as a compatibility path.
-    cache_index = cache_file.get("_snapshot_index")
+    """Return snapshot path and entry by (ticker, checksum).
+
+    Parameters:
+        cache_file: loaded snapshot cache structure; file paths map to entry dicts.
+        ticker: normalized ticker to match (e.g., "PETR4").
+        checksum: snapshot SHA256 checksum string to match.
+
+    Returns:
+        A tuple (path, entry) when a matching snapshot is found, otherwise None.
+
+    Behavior:
+        Tries meta-based index lookup via cache_file["__meta__"]["snapshot_index"]
+        for O(1) resolution; if not available falls back to scanning all entries.
+    """
+    # Uses index in cache_file["__meta__"]["snapshot_index"] when available,
+    # falling back to full scan as a compatibility path.
+    cache_index = None
+    meta = cache_file.get("__meta__")
+    if isinstance(meta, dict):
+        cache_index = meta.get("snapshot_index")
+
     if isinstance(cache_index, dict):
-        hit_path = cache_index.get((ticker, checksum))
+        hit_path = cache_index.get(f"{ticker}|{checksum}")
         if hit_path:
             entry = cache_file.get(hit_path)
             if isinstance(entry, dict) and entry.get("sha256") == checksum:
@@ -554,9 +573,9 @@ def ingest_from_snapshot(
         # Use a single timestamp for this run to avoid pathological cases where
         # the process crosses midnight between cache lookup and snapshot write.
         now = datetime.now(timezone.utc)
-        # Include time-of-day to avoid same-day collisions in snapshot filenames
-        # and cache keys when multiple runs occur on the same date.
-        ts = now.strftime("%Y%m%dT%H%M%S")
+        # Include time-of-day with microseconds to avoid collisions in
+        # snapshot filenames and cache keys when multiple runs occur rapidly.
+        ts = now.strftime("%Y%m%dT%H%M%S%fZ")
 
         # Ensure cache operations are coordinated, since the cache file is shared
         # across tickers and processes. Hold the lock only for the cache lookup
@@ -597,6 +616,11 @@ def ingest_from_snapshot(
                 "ticker": ticker,
                 "processed_at": now.isoformat(),
             }
+            # Do not persist transient auxiliary index state.
+            if isinstance(cache_file.get("__meta__"), dict):
+                cache_file["__meta__"].pop("snapshot_index", None)
+                if not cache_file["__meta__"]:
+                    cache_file.pop("__meta__", None)
             save_cache(cache_file_path, cache_file)
 
         elapsed = time.monotonic() - start

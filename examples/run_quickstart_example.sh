@@ -108,37 +108,41 @@ echo "Running quickstart example for $TICKER (no_network=$NO_NETWORK)..." >> "$L
 if command -v poetry >/dev/null 2>&1; then
   CMD=(poetry run main)
 else
-  # Attempt to run the package entrypoint directly via python.
-  # This checks whether either `main` or `src.main` is importable.
-  if python -c "import importlib,sys
-try:
-    importlib.import_module('main')
-except Exception:
+  # Resolve qual módulo Python usar como entrypoint.
+  resolve_entrypoint() {
+    python - "$@" <<'PY' 2>/dev/null
+import importlib
+import sys
+for candidate in ("main", "src.main"):
     try:
-        importlib.import_module('src.main')
+        importlib.import_module(candidate)
     except Exception:
-        sys.exit(2)
-" >/dev/null 2>&1; then
-    # Use `python -m main` or `python -m src.main` depending on availability.
-    if python -c "import importlib,sys
-try:
-    importlib.import_module('main')
-    print('main')
-except Exception:
-    try:
-        importlib.import_module('src.main')
-        print('src.main')
-    except Exception:
-        sys.exit(2)
-" | grep -q src.main; then
-      CMD=(python -m src.main)
-    else
-      CMD=(python -m main)
-    fi
-  else
-    echo "ERROR: neither 'poetry' nor the python module 'main'/'src.main' is available." >&2
-    exit 2
-  fi
+        continue
+    else:
+        print(candidate)
+        sys.exit(0)
+sys.exit(1)
+PY
+  }
+
+  # Fallback JSON escaping for when neither jq nem python estão disponíveis.
+  json_escape() {
+    local escaped="${1//\\/\\\\}"
+    escaped="${escaped//\"/\\\"}"
+    escaped="${escaped//$'\n'/\\n}"
+    escaped="${escaped//$'\r'/\\r}"
+    escaped="${escaped//$'\t'/\\t}"
+    escaped="${escaped//$'\b'/\\b}"
+    escaped="${escaped//$'\f'/\\f}"
+    printf '%s' "$escaped"
+  }
+
+  entrypoint_module="$(resolve_entrypoint)" || {
+    echo "Error: could not find a Python entrypoint module (tried 'main' and 'src.main')." >&2
+    exit 1
+  }
+
+  CMD=(python -m "$entrypoint_module")
 fi
 CMD+=(--ticker "$TICKER")
 CMD+=(--format "$FORMAT")
@@ -234,10 +238,15 @@ PY
     # if SUMMARY lacks snapshot path, inject it into fallback JSON
     if ! echo "$SUMMARY" | grep -q '"snapshot"' || echo "$SUMMARY" | grep -q '"snapshot":null'; then
       # produce minimal JSON summary including snapshot path
-      SUMMARY=$(
-        jq -n --arg j "$JOB_ID" --arg s "$LATEST_CSV" '{job_id:$j,status:"success",snapshot:$s}' 2>/dev/null ||
-          python -c "import json,sys; print(json.dumps({'job_id':sys.argv[1],'status':'success','snapshot':sys.argv[2]}))" "$JOB_ID" "$LATEST_CSV"
-      )
+      if command -v jq >/dev/null 2>&1; then
+        SUMMARY=$(jq -n --arg j "$JOB_ID" --arg s "$LATEST_CSV" '{job_id:$j,status:"success",snapshot:$s}' 2>/dev/null)
+      elif command -v python >/dev/null 2>&1; then
+        SUMMARY=$(python -c "import json,sys; print(json.dumps({'job_id':sys.argv[1],'status':'success','snapshot':sys.argv[2]}))" "$JOB_ID" "$LATEST_CSV")
+      else
+        job_id_escaped=$(json_escape "$JOB_ID")
+        latest_csv_escaped=$(json_escape "$LATEST_CSV")
+        SUMMARY="{\"job_id\":\"$job_id_escaped\",\"status\":\"success\",\"snapshot\":\"$latest_csv_escaped\"}"
+      fi
     fi
   fi
 fi
