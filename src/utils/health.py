@@ -271,32 +271,40 @@ def check_paths_health(paths: Dict[str, str]) -> Dict[str, Any]:
 
     for name, path_str in paths.items():
         path = Path(path_str)
-        if name == "db" and path.is_file():
-            try:
-                # Ensure we can open the file in read-only mode.
-                with open(path, "rb"):
-                    pass
-            except Exception as exc:
+
+        if not path.exists():
+            if name == "db":
                 status = "error"
-                reasons.append(f"db unreadable: {exc}")
-            with contextlib.suppress(Exception):
-                # Best-effort permission check:
-                # warn only on clearly too-permissive modes.
-                mode = path.stat().st_mode & 0o777
-                # World-writable or group-writable and world-readable are suspicious.
-                if mode & 0o002 or mode & 0o004 and mode & 0o020:
-                    reasons.append(
-                        f"db permissions are {oct(mode)}; "
-                        "file may be too broadly accessible"
-                    )
-        elif name == "db":
-            # If we were asked to check a database path, it must exist and be a file.
-            status = "error"
-            if not path.exists():
                 reasons.append(f"db missing: {path}")
-            elif not path.is_file():
+            else:
+                status = "warn" if status == "ok" else status
+                reasons.append(f"{name} path {path} does not exist")
+            continue
+
+        if name == "db":
+            if path.is_file():
+                try:
+                    # Ensure we can open the file in read-only mode.
+                    with open(path, "rb"):
+                        pass
+                except Exception as exc:
+                    status = "error"
+                    reasons.append(f"db unreadable: {exc}")
+                with contextlib.suppress(Exception):
+                    # Best-effort permission check:
+                    # warn only on clearly too-permissive modes.
+                    mode = path.stat().st_mode & 0o777
+                    # World-writable is suspicious; group-writable and
+                    # world-readable is suspicious too.
+                    if (mode & 0o002) or ((mode & 0o004) and (mode & 0o020)):
+                        reasons.append(
+                            f"db permissions are {oct(mode)}; "
+                            "file may be too broadly accessible"
+                        )
+            else:
+                status = "error"
                 reasons.append(f"db is not a file: {path}")
-        elif name != "db" and not path.is_dir():
+        elif not path.is_dir():
             status = "warn" if status == "ok" else status
             reasons.append(f"{name} not a directory: {path}")
 

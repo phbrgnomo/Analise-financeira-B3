@@ -1,6 +1,8 @@
 from datetime import datetime, timezone
 from pathlib import Path
 
+import pandas as pd
+
 from src.ingest.snapshot_ingest import _check_cache_hit
 
 
@@ -90,18 +92,42 @@ def test_checksum_based_cache_hit_with_different_snapshot_path(tmp_path):
         cache_file=cache,
         snapshot_path=new_snapshot_path,
         checksum=checksum,
-        ttl=100,
+        ttl=0,
         force=False,
         ticker=ticker,
     )
 
     assert result is not None
     assert result["cached"] is True
-    assert result["reason"] in {"checksum_match", "within_ttl"}
+    assert result["reason"] == "checksum_match"
     assert result["snapshot_path"] == str(old_snapshot_path.resolve())
 
 
-def _assert_safe_snapshot_path(si, df, ticker, snap_dir):
+def _assert_safe_snapshot_path(
+    si,
+    df: pd.DataFrame,
+    ticker: str,
+    snap_dir: Path,
+) -> Path:
+    """Assert snapshot path helper for safe snapshot writing.
+
+    This helper invokes ``si._write_snapshot_file(df, ticker, snap_dir)`` and
+    validates the result.
+
+    Args:
+        si: snapshot interface implementing ``_write_snapshot_file``.
+        df: input pandas DataFrame to be snapshotted.
+        ticker: ticker symbol string (e.g., 'PETR4').
+        snap_dir: target snapshot directory path.
+
+    Returns:
+        Path for the created snapshot file.
+
+    Behavior:
+        - expects SHA to be ``deadbeef`` (deterministic test data fixture)
+        - ensures returned path is inside ``snap_dir``
+        - returns the resolved path object for additional assertions
+    """
     sha, result = si._write_snapshot_file(df, ticker, snap_dir)
     assert sha == "deadbeef"
     # output path must be inside snapshot directory

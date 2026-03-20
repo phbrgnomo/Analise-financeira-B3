@@ -223,10 +223,14 @@ def _load_snapshot_cache(cache_file_path: Path) -> Dict[str, Any]:
     When the cache file cannot be read, we log a warning and increment a
     metrics counter (if available). This mirrors the behavior of the previous
     metadata-based cache fallback.
+
+    This function also builds an auxiliary index mapping (ticker, sha256)
+    to snapshot path so callers can perform O(1) cache lookups for checksum
+    hits across renamed snapshot paths.
     """
 
     try:
-        return load_cache(cache_file_path)
+        cache_data = load_cache(cache_file_path)
     except Exception as exc:  # pragma: no cover - best effort fallback
         logger.warning(
             "snapshot cache fallback; failed to read cache %s: %s",
@@ -239,7 +243,19 @@ def _load_snapshot_cache(cache_file_path: Path) -> Dict[str, Any]:
             metrics.increment_counter("snapshot_cache_fallback")
         except Exception:  # pragma: no cover — metrics optional
             logger.debug("metrics increment failed", exc_info=True)
-        return {}
+        cache_data = {}
+
+    # Build the secondary lookup index (ticker,sha256) -> snapshot path.
+    cache_index: Dict[tuple[str, str], str] = {}
+    for path, entry in cache_data.items():
+        if isinstance(entry, dict):
+            ticker = entry.get("ticker")
+            sha = entry.get("sha256")
+            if isinstance(ticker, str) and isinstance(sha, str):
+                cache_index[(ticker, sha)] = path
+
+    cache_data["_snapshot_index"] = cache_index
+    return cache_data
 
 
 def _safe_snapshot_path(ticker: str, snapshot_dir: Path, ts: str) -> Path:
@@ -281,6 +297,31 @@ def _snapshot_path_for_ticker(ticker: str, snapshot_dir: Path, ts: str) -> Path:
     return _safe_snapshot_path(ticker, snapshot_dir, ts)
 
 
+def _lookup_cache_by_ticker_and_checksum(
+    cache_file: Dict[str, Any],
+    ticker: str,
+    checksum: str,
+) -> Optional[tuple[str, Dict[str, Any]]]:
+    """Return snapshot path and entry by (ticker, checksum)."""
+    # Uses index in cache_file["_snapshot_index"] when available, falling
+    # back to full scan as a compatibility path.
+    cache_index = cache_file.get("_snapshot_index")
+    if isinstance(cache_index, dict):
+        hit_path = cache_index.get((ticker, checksum))
+        if hit_path:
+            entry = cache_file.get(hit_path)
+            if isinstance(entry, dict) and entry.get("sha256") == checksum:
+                return hit_path, entry
+    for path, data in cache_file.items():
+        if (
+            isinstance(data, dict)
+            and data.get("sha256") == checksum
+            and data.get("ticker") == ticker
+        ):
+            return path, data
+    return None
+
+
 def _check_cache_hit(
     cache_file: Dict[str, Any],
     snapshot_path: Path,
@@ -309,18 +350,11 @@ def _check_cache_hit(
     if entry and entry.get("sha256") == checksum:
         hit_path = key
     else:
-        # Try to find a matching checksum for the same ticker (cache key may
-        # differ due to timestamped filenames).
-        hit_path = None
-        for path, data in cache_file.items():
-            if (
-                isinstance(data, dict)
-                and data.get("sha256") == checksum
-                and data.get("ticker") == ticker
-            ):
-                hit_path = path
-                entry = data
-                break
+        hit = _lookup_cache_by_ticker_and_checksum(cache_file, ticker, checksum)
+        if hit is not None:
+            hit_path, entry = hit
+        else:
+            hit_path = None
 
     if not entry or entry.get("sha256") != checksum or hit_path is None:
         # no previous snapshot or checksum mismatch -> miss

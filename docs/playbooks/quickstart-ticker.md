@@ -66,8 +66,8 @@ ls -l snapshots/PETR4-*.csv
 
 ```bash
 sha256sum snapshots/PETR4-20260215.csv
-# Exemplo de saída:
-# e3b0c44298fc1c149afbf4c8996fb924...  snapshots/PETR4-20260215.csv
+# Exemplo de saída (valor fictício para demonstração):
+# 5f2a3d09b88b34f284d0c2da5e8b6aa9c0e4e5309af25b0f90e9f8157f2089fa  snapshots/PETR4-20260215.csv
 
 # Verificar que o checksum bate com o arquivo sidecar:
 cat snapshots/PETR4-20260215.csv.checksum

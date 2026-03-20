@@ -33,7 +33,7 @@ def test_quickstart_notebook_runs_and_produces_returns(tmp_path, monkeypatch):
         parameters={
             "tickers": ["PETR4"],
             "output_dir": str(output_dir),
-            "csv_path": "dados/ticker_example.csv",
+            "csv_path": str(csv_adapter_file),
         },
     )
 

@@ -1,11 +1,38 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Health / Metrics Schema",
+  "$defs": {
+    "metricsData": {
+      "type": "object",
+      "required": [
+        "ingest_lag_seconds",
+        "errors_last_24h",
+        "jobs_last_24h",
+        "avg_latency_seconds"
+      ],
+      "properties": {
+        "ingest_lag_seconds": { "anyOf": [ { "type": "number", "minimum": 0 }, { "type": "null" } ] },
+        "errors_last_24h": { "type": "integer", "minimum": 0 },
+        "jobs_last_24h": { "type": "integer", "minimum": 0 },
+        "avg_latency_seconds": { "anyOf": [ { "type": "number", "minimum": 0 }, { "type": "null" } ] }
+      },
+      "additionalProperties": false
+    },
+    "thresholdsData": {
+      "type": "object",
+      "required": ["ingest_lag_seconds"],
+      "properties": {
+        "ingest_lag_seconds": { "type": "number", "minimum": 0 }
+      },
+      "additionalProperties": false
+    }
+  },
   "oneOf": [
     {
       "type": "object",
-      "required": ["status", "timestamp", "metrics", "thresholds"],
+      "required": ["type", "status", "timestamp", "metrics", "thresholds"],
       "properties": {
+        "type": { "const": "metrics_health" },
         "status": {
           "type": "string",
           "enum": ["healthy", "degraded", "unhealthy", "unknown"]
@@ -14,32 +41,16 @@
           "type": "string",
           "format": "date-time"
         },
-        "metrics": {
-          "type": "object",
-          "required": ["ingest_lag_seconds", "errors_last_24h", "jobs_last_24h", "avg_latency_seconds"],
-          "properties": {
-            "ingest_lag_seconds": { "type": ["number", "null"], "minimum": 0 },
-            "errors_last_24h": { "type": "integer", "minimum": 0 },
-            "jobs_last_24h": { "type": "integer", "minimum": 0 },
-            "avg_latency_seconds": { "anyOf": [ { "type": "number", "minimum": 0 }, { "type": "null" } ] }
-          },
-          "additionalProperties": false
-        },
-        "thresholds": {
-          "type": "object",
-          "required": ["ingest_lag_seconds"],
-          "properties": {
-            "ingest_lag_seconds": { "type": "number", "minimum": 0 }
-          },
-          "additionalProperties": false
-        }
+        "metrics": { "$ref": "#/$defs/metricsData" },
+        "thresholds": { "$ref": "#/$defs/thresholdsData" }
       },
       "additionalProperties": false
     },
     {
       "type": "object",
-      "required": ["status", "paths", "metrics"],
+      "required": ["type", "status", "paths", "metrics"],
       "properties": {
+        "type": { "const": "paths_health" },
         "status": {
           "type": "string",
           "enum": ["ok", "warn", "error"]
@@ -62,25 +73,8 @@
               "enum": ["healthy", "degraded", "unhealthy", "unknown"]
             },
             "timestamp": { "type": "string", "format": "date-time" },
-            "metrics": {
-              "type": "object",
-              "required": ["ingest_lag_seconds", "errors_last_24h", "jobs_last_24h", "avg_latency_seconds"],
-              "properties": {
-                "ingest_lag_seconds": { "type": ["number", "null"], "minimum": 0 },
-                "errors_last_24h": { "type": "integer", "minimum": 0 },
-                "jobs_last_24h": { "type": "integer", "minimum": 0 },
-                "avg_latency_seconds": { "anyOf": [ { "type": "number", "minimum": 0 }, { "type": "null" } ] }
-              },
-              "additionalProperties": false
-            },
-            "thresholds": {
-              "type": "object",
-              "required": ["ingest_lag_seconds"],
-              "properties": {
-                "ingest_lag_seconds": { "type": "number", "minimum": 0 }
-              },
-              "additionalProperties": false
-            }
+            "metrics": { "$ref": "#/$defs/metricsData" },
+            "thresholds": { "$ref": "#/$defs/thresholdsData" }
           },
           "additionalProperties": false
         }

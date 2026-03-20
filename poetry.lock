@@ -3665,4 +3665,4 @@ notebook = ["papermill"]
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.12"
-content-hash = "8afb3254dd2d2a76f0fcc3c57a72c83898b09ec8cb61348e5075e2287a193148"
+content-hash = "bc7035fd3536041c8d6c22863654748628d78da631e94c1ac1c942299f758a27"

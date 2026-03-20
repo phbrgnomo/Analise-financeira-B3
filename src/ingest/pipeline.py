@@ -19,7 +19,7 @@ import time
 import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Dict, cast
+from typing import Any, Dict, NamedTuple, cast
 
 import pandas as pd
 import typer
@@ -346,12 +346,18 @@ def _record_error_and_return(
     return {"job_id": job_id, "status": "error", "error_message": msg}
 
 
+class FetchResult(NamedTuple):
+    raw: pd.DataFrame | None
+    canonical: pd.DataFrame | None
+    error: str | None
+
+
 def _fetch_and_canonical(
     ticker: str,
     source: str,
     start: str | None,
     end: str | None,
-) -> tuple[pd.DataFrame | None, pd.DataFrame | None, str | None]:
+) -> FetchResult:
     """Fetch provider data and map to the canonical schema.
 
     Returns a tuple (raw_df, canonical_df, error_message).
@@ -371,14 +377,22 @@ def _fetch_and_canonical(
             fetch_kwargs["end_date"] = end
         df = adapter.fetch(ticker, **fetch_kwargs)
     except Exception as exc:
-        return None, None, f"adapter.fetch failed: {exc}"
+        return FetchResult(
+            raw=None,
+            canonical=None,
+            error=f"adapter.fetch failed: {exc}",
+        )
 
     try:
         from src.etl.mapper import to_canonical
 
-        return df, to_canonical(df, provider_name=source, ticker=ticker), None
+        return FetchResult(
+            raw=df,
+            canonical=to_canonical(df, provider_name=source, ticker=ticker),
+            error=None,
+        )
     except Exception as exc:
-        return df, None, f"mapper failed: {exc}"
+        return FetchResult(raw=df, canonical=None, error=f"mapper failed: {exc}")
 
 
 def _save_raw_csv_or_error(
@@ -467,17 +481,30 @@ def ingest(  # noqa: C901 - function is intentionally orchestrator-style
         ) as lock_meta:
             log = logging.LoggerAdapter(logger, extra={**lock_meta})
 
-            raw, canonical, err = _fetch_and_canonical(
+            fetch_result = _fetch_and_canonical(
                 ticker=canonical_ticker, source=source, start=start, end=end
             )
-            if err is not None:
+            if fetch_result.error is not None:
                 return _record_error_and_return(
-                    job_id, canonical_ticker, source, started_at, err, lock_meta
+                    job_id,
+                    canonical_ticker,
+                    source,
+                    started_at,
+                    fetch_result.error,
+                    lock_meta,
                 )
+            raw = fetch_result.raw
+            canonical = fetch_result.canonical
 
             # At this point, both ``raw`` and ``canonical`` should be DataFrames.
-            assert raw is not None
-            assert canonical is not None
+            if raw is None:
+                raise RuntimeError(
+                    "ingest pipeline expected raw DataFrame but got None"
+                )
+            if canonical is None:
+                raise RuntimeError(
+                    "ingest pipeline expected canonical DataFrame but got None"
+                )
 
             if dry_run:
                 log.info(

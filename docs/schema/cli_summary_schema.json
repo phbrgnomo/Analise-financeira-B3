@@ -31,7 +31,7 @@
           "snapshot_path": { "type": ["string", "null"] },
           "snapshot_checksum": { "type": ["string", "null"], "pattern": "^[0-9a-fA-F]{64}$" },
           "error_message": { "type": ["string", "null"] },
-          "cached": { "type": "boolean" },
+          "cached": { "type": ["boolean", "null"] },
           "cache_reason": { "type": ["string", "null"] }
         }
       }

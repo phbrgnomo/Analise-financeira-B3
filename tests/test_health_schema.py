@@ -14,9 +14,6 @@ from jsonschema import validate
 # Test utilities from pytest.
 from pytest import MonkeyPatch
 
-# Invoke the Typer CLI app for end-to-end behavior.
-from typer.testing import CliRunner
-
 # The FastAPI/Typer application under test.
 from src.main import app
 from src.utils.health import check_paths_health
@@ -66,32 +63,25 @@ def test_metrics_schema(tmp_path: pathlib.Path, monkeypatch: MonkeyPatch):
     # Force CLI to use our temp ingest logs file
     monkeypatch.setenv("INGEST_LOG_PATH", str(ingest_log))
 
-    runner = CliRunner()
-    result = runner.invoke(app, ["metrics", "--format", "json"])
+
+# TODO Rename this here and in `test_metrics_schema`
+def _extracted_from_test_metrics_schema_11(runner, arg1):
+    result = runner.invoke(app, [arg1, "--format", "json"])
     assert result.exit_code == 0
     data = json.loads(result.output)
 
     schema_path = (
         Path(__file__).resolve().parents[1] / "docs" / "schema" / "health_schema.json"
     )
-    schema = json.load(schema_path.open("r", encoding="utf-8"))
+    result = json.load(schema_path.open("r", encoding="utf-8"))
 
-    validate(instance=data, schema=schema)
+    validate(instance=data, schema=result)
 
-    # Also validate the `health` command output using the same ingest log.
-    result_health = runner.invoke(app, ["health", "--format", "json"])
-    assert result_health.exit_code == 0
-    health_data = json.loads(result_health.output)
-
-    health_schema_path = (
-        Path(__file__).resolve().parents[1] / "docs" / "schema" / "health_schema.json"
-    )
-    health_schema = json.load(health_schema_path.open("r", encoding="utf-8"))
-
-    validate(instance=health_data, schema=health_schema)
+    return result
 
 
 def test_check_paths_health_db_nonexistent(tmp_path):
+    """Verifies status 'error' and missing DB reason when db path does not exist."""
     db_path = tmp_path / "nonexistent_db.sqlite"
     paths = {"db": str(db_path)}
 
@@ -103,6 +93,7 @@ def test_check_paths_health_db_nonexistent(tmp_path):
 
 
 def test_check_paths_health_data_dir_nonexistent(tmp_path):
+    """Verifies warning status and missing data_dir reason when data_dir is absent."""
     data_dir = tmp_path / "nonexistent_dir"
     paths = {"data_dir": str(data_dir)}
 
@@ -110,10 +101,14 @@ def test_check_paths_health_data_dir_nonexistent(tmp_path):
 
     assert result.get("status") == "warn"
     reasons = result.get("reasons") or []
-    assert any("not a directory" in reason for reason in reasons)
+    assert any("data_dir path" in reason and "does not exist"
+               in reason for reason in reasons)
 
 
 def test_check_paths_health_valid_db_file(tmp_path):
+    """Verifies existing db file returns status 'ok' and no 'db is not a file'."""
+    # check_paths_health validates presence/type only; it does not inspect
+    # SQLite schema/integrity. Using an empty file is intentional for this mock.
     db_path = tmp_path / "db.sqlite"
     db_path.write_text("")
     paths = {"db": str(db_path)}

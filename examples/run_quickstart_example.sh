@@ -236,7 +236,7 @@ PY
       # produce minimal JSON summary including snapshot path
       SUMMARY=$(
         jq -n --arg j "$JOB_ID" --arg s "$LATEST_CSV" '{job_id:$j,status:"success",snapshot:$s}' 2>/dev/null ||
-          echo "{\"job_id\":\"$JOB_ID\",\"status\":\"success\",\"snapshot\":\"$LATEST_CSV\"}"
+          python -c "import json,sys; print(json.dumps({'job_id':sys.argv[1],'status':'success','snapshot':sys.argv[2]}))" "$JOB_ID" "$LATEST_CSV"
       )
     fi
   fi

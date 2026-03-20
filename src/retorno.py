@@ -23,7 +23,7 @@ import src.db as _db
 from src.db_client import DatabaseClient, DefaultDatabaseClient
 from src.paths import DATA_DIR
 from src.time_utils import now_utc_iso
-from src.utils import metrics_prometheus as metrics  # noqa: E402
+from src.utils import metrics_prometheus as metrics
 
 logger = logging.getLogger(__name__)
 

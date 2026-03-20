@@ -44,7 +44,7 @@ Saída esperada (JSON):
 
 ```json
 {
-  "status": "healthy|degraded|unhealthy|unknown",
+  "status": "healthy",
   "timestamp": "2026-03-16T12:34:56Z",
   "metrics": {
     "ingest_lag_seconds": 43200,
@@ -78,11 +78,12 @@ Saída esperada (JSON):
   - `healthy`: `ingest_lag_seconds <= threshold_seconds` e `errors_last_24h == 0`
   - `degraded`: `ingest_lag_seconds > threshold_seconds` **ou** `errors_last_24h > 0`
   - `unhealthy`: `ingest_lag_seconds > threshold_seconds * 2`
+  - `unknown`: valores ausentes ou inválidos em `metrics.ingest_lag_seconds` ou `errors_last_24h`, ou valores não parseáveis (ex.: `null` ou indefinido)
 
   > Para o valor padrão de `threshold_seconds = 86400` (24h):
   > - `degraded` quando `ingest_lag_seconds > 86400` (mais de 24h sem ingestão)
   > - `unhealthy` quando `ingest_lag_seconds > 172800` (mais de 48h sem ingestão)
-
+  > - `unknown` quando `metrics` está ausente, contém `null` ou valores inválidos.
 ### Recomendações para ferramentas de monitoramento
 
 - Execute `main --metrics --format json` em um agendador/cron e trate como **falha de conexão** quando:

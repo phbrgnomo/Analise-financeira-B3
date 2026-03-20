@@ -58,7 +58,7 @@ sequenceDiagram
   participant SI as Snapshot Ingest (src/ingest/snapshot_ingest.py)
   participant DB as SQLite (dados/data.db)
   participant RT as Retorno (src/retorno.py)
-participant MT as Métricas/Logs (src/utils/metrics_prometheus.py)
+  participant MT as Métricas/Logs (src/utils/metrics_prometheus.py)
 
   CLI->>PL: ingest_command()/ingest()
   PL->>AF: get_adapter(source)

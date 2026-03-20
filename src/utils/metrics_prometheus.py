@@ -14,11 +14,50 @@ logger = get_logger(__name__)
 
 @runtime_checkable
 class Metric(Protocol):
-    """Interface for Prometheus-style metrics."""
+    """Protocol for a Prometheus-compatible metric.
 
-    def inc(self, amount: float = 1.0) -> Any: ...
+    This lightweight interface abstracts `prometheus_client` metric objects so
+    that the code can run even when the dependency is unavailable.
 
-    def observe(self, value: float) -> Any: ...
+    Implementations should behave like Prometheus counters/histograms:
+    - `inc(amount)` increments counters by a non-negative amount (default 1.0).
+    - `observe(value)` records a value for histogram-like metrics.
+
+    Both methods are expected to be idempotent and always safe to call from
+    client code. Return values are not used (typically `None`).
+
+    Usage examples:
+
+        counter = get_counter("requests_total")
+        counter.inc()           # increment by 1.0
+        counter.inc(2.5)        # increment by 2.5
+
+        hist = get_histogram("request_latency_seconds")
+        hist.observe(0.67)      # observe 0.67 seconds
+    """
+
+    def inc(self, amount: float = 1.0) -> Any:
+        """Increment the metric by `amount`.
+
+        Args:
+            amount: Positive float to add to the current counter value. Default
+                is 1.0, matching Prometheus counter semantics.
+
+        Returns:
+            Typically None. Callable for compatibility with real and no-op
+            implementations.
+        """
+
+    def observe(self, value: float) -> Any:
+        """Record an observation for a histogram-like metric.
+
+        Args:
+            value: Numeric observation to record (e.g., latency in seconds).
+
+        Returns:
+            Typically None. Callable for compatibility with real and no-op
+            implementations.
+        """
 
 
 _HAS_PROM = False

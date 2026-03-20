@@ -647,12 +647,9 @@ def _run_notebook_if_enabled(
     if not run_notebook:
         return exit_code, summary_status, summary
 
-    # Use the default notebook path in the typical case so tests that patch
-    # `_run_notebook` (expecting a 2-arg signature) continue to work.
-    if Path(notebook_path) == Path(DEFAULT_NOTEBOOK_PATH):
-        notebook_results = _run_notebook(tickers, job_id)
-    else:
-        notebook_results = _run_notebook(tickers, job_id, notebook_path=notebook_path)
+    notebook_results = _run_notebook(
+        tickers, job_id, notebook_path=notebook_path
+    )
 
     summary["notebook"] = notebook_results
 

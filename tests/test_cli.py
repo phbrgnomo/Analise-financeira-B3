@@ -149,8 +149,17 @@ def test_run_uses_ingest_pipeline(monkeypatch):
 
 
 def test_notebook_path_normalization():
+    """Testa normalização de caminho do notebook.
+
+    Casos:
+    - string simples "foo.ipynb"1 : retorna "foo.ipynb".
+    - pathlib.Path('foo.ipynb'): retorna "foo.ipynb".
+    - objeto não suportado (FakeOption): fallback para
+      "examples/notebooks/quickstart.ipynb".
+    """
     assert _normalize_notebook_path("foo.ipynb") == "foo.ipynb"
     assert _normalize_notebook_path(Path("foo.ipynb")) == "foo.ipynb"
+
     class FakeOption:
         pass
 
@@ -161,22 +170,26 @@ def test_notebook_path_normalization():
 
 
 def test_resolve_run_window():
+    """_resolve_run_window(None) deve retornar (None, None) quando não há parâmetros."""
     assert _resolve_run_window(None) == (None, None)
 
 
 def test_run_notebook_if_enabled_not_run():
-    summary = {"status": "success"}
-    exit_code, summary_status, summary = _run_notebook_if_enabled(
+    """_run_notebook_if_enabled(False) preserva exit_code e summary_status
+    sem alterar summary."""
+    original_summary = {"status": "success"}
+    exit_code, summary_status, returned_summary = _run_notebook_if_enabled(
         run_notebook=False,
         notebook_path="examples/notebooks/quickstart.ipynb",
         tickers=["PETR4"],
         job_id="job",
-        summary=summary,
+        summary=original_summary,
         exit_code=0,
         summary_status="success",
     )
     assert exit_code == 0
     assert summary_status == "success"
+    assert returned_summary == original_summary
 
 
 def test_compute_returns_single_ticker(monkeypatch):

@@ -105,24 +105,30 @@ def test_quickstart_no_network_cache_hit_json(isolated_cli_env, monkeypatch):
     )
 
     runner = CliRunner()
-    ticker1 = _extracted_from_test_quickstart_no_network_cache_hit_json_34(runner)
+    ticker1 = _invoke_quickstart_and_get_ticker_info(runner)
     path1 = ticker1["snapshot_path"]
     checksum1 = ticker1["snapshot_checksum"]
 
     assert path1
     assert checksum1
 
-    ticker2 = _extracted_from_test_quickstart_no_network_cache_hit_json_34(runner)
+    ticker2 = _invoke_quickstart_and_get_ticker_info(runner)
     assert ticker2["snapshot_path"] == path1
     assert ticker2["snapshot_checksum"] == checksum1
 
-    # Cache hit should be reflected in the output metadata.
+    # cache hit should be reflected in the output metadata.
     assert ticker2.get("cached") is True
     assert ticker2.get("cache_reason") == "checksum_match"
 
+    # ensure adapter fetch was called exactly twice (two quickstart runs).
+    # We currently expect a cache hit in persistence layer, not feed-through
+    # avoidance at the adapter layer, so both workflow calls still invoke
+    # `fetch` once each.
+    assert fetch_calls["count"] == 2
 
-# TODO Rename this here and in `test_quickstart_no_network_cache_hit_json`
-def _extracted_from_test_quickstart_no_network_cache_hit_json_34(runner):
+
+def _invoke_quickstart_and_get_ticker_info(runner):
+    """Run quickstart no-network JSON endpoint and return first ticker info."""
     result1 = runner.invoke(
         app,
         ["--ticker", "PETR4", "--format", "json", "--no-network"],
@@ -138,7 +144,8 @@ def test_quickstart_no_network_run_notebook_json(isolated_cli_env, monkeypatch):
 
     tmp_path = isolated_cli_env
 
-    def fake_run_notebook(tickers, job_id):
+    def fake_run_notebook(tickers, job_id, notebook_path=None):
+        assert notebook_path is not None
         return {
             "status": "success",
             "output_notebook": str(tmp_path / "reports" / f"quickstart-{job_id}.ipynb"),

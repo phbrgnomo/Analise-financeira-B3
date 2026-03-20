@@ -22,7 +22,7 @@ papermill = { version = "^2.7.0", optional = true }
 matplotlib = "^3.10.0"
 
 [tool.poetry.extras]
-notebook = ["papermill"]
+notebook = ["papermill", "ipykernel"]
 
 
 [build-system]
