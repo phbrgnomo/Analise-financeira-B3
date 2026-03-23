@@ -361,6 +361,37 @@ def main() -> None:
     if abort:
         return
 
+    # Ensure we have a fetching flag in session state. This flag
+    # indicates an ongoing long-running fetch and is used to
+    # render a stop/cancel button and to allow early exit between
+    # phased steps of the workflow.
+    if "fetching" not in st.session_state:
+        st.session_state.fetching = False
+
+    # Controls: when not fetching, show a "Buscar" button to start
+    # the operation. When fetching, show a "Parar" button that lets
+    # the user cancel the operation (sets the flag to False).
+    if not st.session_state.fetching:
+        # Start fetch button — user must explicitly request the fetch
+        # so we can render the stop button during the long-running job.
+        if st.button("🔍 Buscar", type="primary"):
+            st.session_state.fetching = True
+            # Rerun so the UI shows the stop button before the heavy
+            # processing starts (fetch will run on the subsequent
+            # rerun/execution path below).
+            st.rerun()
+
+        # Not fetching and user didn't request start: don't proceed to
+        # the heavy workflow. This preserves the original import-safe
+        # behavior and prevents automatic fetch on every rerun.
+        return
+    else:
+        # Show stop button while fetching
+        if st.button("⏹ Parar", type="primary"):
+            st.session_state.fetching = False
+            st.warning("Operação cancelada pelo usuário")
+            st.rerun()
+
     try:
         # Show phased feedback during the fetch/process/save workflow.
         # Keep imports local so the module remains import-safe for tests.
@@ -382,6 +413,11 @@ def main() -> None:
 
         # Phase 1: fetching
         phase1.info(f"🔍 Buscando dados de {provider}...")
+        # Check cancellation before starting the phase
+        if not st.session_state.get("fetching", True):
+            st.warning("Operação cancelada pelo usuário")
+            st.session_state.fetching = False
+            return
         # Ensure start/end are present (should be validated by sidebar)
         assert start is not None and end is not None
         if ensure_prices is None:
@@ -396,6 +432,12 @@ def main() -> None:
                 db_path=str(DEFAULT_DB),
             )
         phase1.empty()
+
+        # Check cancellation after phase 1 and before processing
+        if not st.session_state.get("fetching", True):
+            st.warning("Operação cancelada pelo usuário")
+            st.session_state.fetching = False
+            return
 
         # If ensure_prices reported errors, surface them and stop.
         if not res.get("ok", False):
@@ -417,6 +459,12 @@ def main() -> None:
         df = load_prices(ticker, start=start, end=end)
         phase2.empty()
 
+        # Check cancellation after phase 2 and before saving
+        if not st.session_state.get("fetching", True):
+            st.warning("Operação cancelada pelo usuário")
+            st.session_state.fetching = False
+            return
+
         # Phase 3: saving (persistence already performed by ensure_prices)
         phase3.info("💾 Salvando no banco...")
         phase3.empty()
@@ -424,6 +472,8 @@ def main() -> None:
         elapsed = time.time() - start_t
         rows = res.get("rows_added") or len(df)
         st.success(f"✅ Concluído em {elapsed:.1f}s: {rows} linhas processadas")
+        # Reset fetching flag now that the workflow finished
+        st.session_state.fetching = False
     except Exception as exc:
         st.error(f"❌ Erro: {exc}")
         return
@@ -445,6 +495,13 @@ def main() -> None:
     else:
         returns_pct = returns * 100
         _safe_line_chart(returns_pct.to_frame("retornos_pct"))
+        # Cumulative returns (computed from daily returns in percent).
+        # returns_pct is percent (e.g. 1.0 == 1%), so divide by 100
+        # to get fractional returns before computing cumulative product.
+        if not returns_pct.empty:
+            cum_return = (1 + returns_pct / 100).cumprod() - 1
+            st.subheader("Retorno Cumulativo (%)")
+            _safe_line_chart(cum_return.to_frame("retorno_cumulativo"))
 
 
 if __name__ == "__main__":
