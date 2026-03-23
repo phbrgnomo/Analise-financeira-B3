@@ -14,7 +14,8 @@ from typing import Optional, Union
 
 import pandas as pd
 
-from src.db.prices import list_price_tickers, read_prices
+from src.db.prices import delete_ticker_prices, list_price_tickers, read_prices
+from src.search.ticker_search import suggest_tickers
 
 DataLike = Union[pd.Series, pd.DataFrame]
 
@@ -160,6 +161,106 @@ def compute_summary_stats(df: pd.DataFrame):
     return rows, start_date, end_date, checksum
 
 
+def _sidebar_ticker_widget(st, tickers: list[str]) -> str:  # noqa: C901
+    """Render a single text input with fuzzy suggestion buttons in sidebar.
+
+    Returns the normalized/uppercased ticker string from the widget
+    (possibly empty).
+    """
+    # Ensure session state keys
+    if "ticker_input" not in st.session_state:
+        st.session_state["ticker_input"] = ""
+
+    def _ticker_on_change() -> None:  # callback when text input changes
+        import time
+
+        st.session_state["_ticker_last_changed"] = time.time()
+
+    # Create the text input (value stored in st.session_state)
+    st.sidebar.text_input("Ticker", key="ticker_input", on_change=_ticker_on_change)
+
+    query = (st.session_state.get("ticker_input") or "").strip().upper()
+
+    # Debounce logic: wait 300ms before running fuzzy suggestions
+    import time
+
+    debounce_seconds = 0.3
+    last_changed = st.session_state.get("_ticker_last_changed")
+
+    suggestions: list[tuple[str, int | None]] = []
+    if query:
+        if last_changed is not None and (time.time() - last_changed) < debounce_seconds:
+            st.sidebar.info("Aguardando digitação...")
+        else:
+            try:
+                candidates = suggest_tickers(query, limit=6)
+            except Exception:
+                candidates = []
+            from difflib import SequenceMatcher
+
+            for c in candidates:
+                score = int(SequenceMatcher(a=query, b=c).ratio() * 100)
+                suggestions.append((c, score))
+    else:
+        recent = []
+        try:
+            recent = (tickers[-6:][::-1]) if tickers else []
+        except Exception:
+            recent = []
+        suggestions = [(c, None) for c in recent]
+
+    if suggestions:
+        container = st.sidebar.container()
+        cols = container.columns(len(suggestions))
+        for idx, (tck, score) in enumerate(suggestions):
+            label = f"{tck} ({score}%)" if score is not None else tck
+            key = f"suggest_{tck}_{idx}"
+            if cols[idx].button(label, key=key):
+                st.session_state["ticker_input"] = tck
+                st.session_state["_ticker_last_changed"] = time.time()
+                st.rerun()
+
+    return query
+
+
+def _sidebar_delete_controls(st, ticker: str) -> bool:
+    """Handle delete-confirm UI in the sidebar for a given ticker.
+
+    Returns True when deletion occurred and the caller should abort the
+    main rendering (clears selection). Returns False otherwise.
+    """
+    if not ticker:
+        return False
+
+    if "delete_confirm" not in st.session_state:
+        st.session_state.delete_confirm = False
+
+    # Primeiro clique: ativar confirmação
+    if not st.session_state.delete_confirm:
+        if st.sidebar.button("Excluir dados", type="secondary"):
+            st.session_state.delete_confirm = True
+            st.rerun()
+    else:
+        st.sidebar.warning(f"Confirmar exclusão de dados do ticker {ticker}?")
+        col1, col2 = st.sidebar.columns(2)
+        if col1.button("Confirmar exclusão", type="primary"):
+            try:
+                rows = delete_ticker_prices(ticker)
+            except Exception as exc:  # pragma: no cover - DB error
+                st.sidebar.error(f"Erro ao deletar dados: {exc}")
+                st.session_state.delete_confirm = False
+                st.rerun()
+                return False
+            st.session_state.delete_confirm = False
+            st.sidebar.success(f"{rows} linhas deletadas.")
+            return True
+        if col2.button("Cancelar"):
+            st.session_state.delete_confirm = False
+            st.rerun()
+
+    return False
+
+
 def _sidebar_and_inputs(st) -> tuple[str, Optional[date], Optional[date], bool]:
     """Handle sidebar controls and return (ticker, start, end, abort).
 
@@ -179,12 +280,9 @@ def _sidebar_and_inputs(st) -> tuple[str, Optional[date], Optional[date], bool]:
         tickers = list_price_tickers()
     except Exception:
         tickers = []
-    options = tickers if tickers else [""]
 
-    selected = st.sidebar.selectbox("Selecione um ticker", options=options)
-    typed = st.sidebar.text_input("Ou digite um ticker livre (ex: PETR4)", "")
-
-    ticker = typed.strip().upper() if typed and typed.strip() else (selected or "")
+    # Render ticker input + fuzzy suggestions using helper
+    ticker = _sidebar_ticker_widget(st, tickers)
 
     today = date.today()
     default_start = today - timedelta(days=365)
@@ -204,6 +302,10 @@ def _sidebar_and_inputs(st) -> tuple[str, Optional[date], Optional[date], bool]:
 
     if not ticker:
         st.warning("Nenhum dado: selecione ou informe um ticker.")
+        return "", None, None, True
+
+    # Deletion controls handled in helper to reduce cyclomatic complexity
+    if _sidebar_delete_controls(st, ticker):
         return "", None, None, True
 
     return ticker, start, end, False
@@ -230,18 +332,90 @@ def main() -> None:
     """
     import streamlit as st
 
-    st.set_page_config(page_title="POC Streamlit - Dados Financeiros (SQLite)")
-    st.title("POC Streamlit — Dados Financeiros (SQLite)")
+    # Persist and show currently selected ticker in the page title.
+    # Use session_state so the selection survives reruns and the title can
+    # be updated dynamically when the user changes the ticker.
+    current_ticker = st.session_state.get("current_ticker", "")
+    st.set_page_config(
+        page_title=(
+            f"POC Streamlit - {current_ticker}" if current_ticker else "POC Streamlit"
+        ),
+        page_icon="📈",
+    )
+    st.title(
+        f"📈 POC Streamlit - {current_ticker}" if current_ticker else "📈 POC Streamlit"
+    )
 
     # Delegate sidebar and input handling to keep main complexity low
     ticker, start, end, abort = _sidebar_and_inputs(st)
+
+    # Persist selection in session_state so the title updates across runs.
+    # If the ticker changed, update session_state and trigger a rerun so
+    # the page title (and page config) at the top reflect the new value.
+    if st.session_state.get("current_ticker") != ticker:
+        st.session_state["current_ticker"] = ticker
+        # Rerun immediately so set_page_config and st.title at the top
+        # are re-executed with the updated session_state value.
+        st.experimental_rerun()
+
     if abort:
         return
 
     try:
+        # Show phased feedback during the fetch/process/save workflow.
+        # Keep imports local so the module remains import-safe for tests.
+        import time
+
+        from src.ingest.raw_storage import DEFAULT_DB
+        from src.services.ingest_service import ensure_prices
+
+        start_t = time.time()
+        provider = "yfinance"
+
+        phase1 = st.empty()
+        phase2 = st.empty()
+        phase3 = st.empty()
+
+        # Phase 1: fetching
+        phase1.info(f"🔍 Buscando dados de {provider}...")
+        res = ensure_prices(
+            ticker,
+            start=start.isoformat(),
+            end=end.isoformat(),
+            provider=provider,
+            db_path=str(DEFAULT_DB),
+        )
+        phase1.empty()
+
+        # If ensure_prices reported errors, surface them and stop.
+        if not res.get("ok", False):
+            err_msg = "; ".join(res.get("errors") or []) or "unknown error"
+            phase2.info("⚙️ Processando dados...")
+            # attempt to load any existing data for best-effort display
+            df = load_prices(ticker, start=start, end=end)
+            phase2.empty()
+            phase3.info("💾 Salvando no banco...")
+            phase3.empty()
+
+            elapsed = time.time() - start_t
+            st.error(f"❌ Erro: {err_msg}")
+            st.info(f"Tempo decorrido: {elapsed:.1f}s")
+            return
+
+        # Phase 2: processing (read latest data and compute summaries)
+        phase2.info("⚙️ Processando dados...")
         df = load_prices(ticker, start=start, end=end)
+        phase2.empty()
+
+        # Phase 3: saving (persistence already performed by ensure_prices)
+        phase3.info("💾 Salvando no banco...")
+        phase3.empty()
+
+        elapsed = time.time() - start_t
+        rows = res.get("rows_added") or len(df)
+        st.success(f"✅ Concluído em {elapsed:.1f}s: {rows} linhas processadas")
     except Exception as exc:
-        st.error(f"Erro ao carregar dados: {exc}")
+        st.error(f"❌ Erro: {exc}")
         return
 
     if df.empty:
