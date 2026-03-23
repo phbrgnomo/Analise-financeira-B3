@@ -1,130 +1,137 @@
-"""Minimal Streamlit POC that reads prices from src.db and renders charts.
+"""POC Streamlit app: mostra preços e retornos via camada src.db.prices.
 
-This module provides a lightweight UI used by manual QA and a smoke test
-that imports the module to ensure no import-time errors. It intentionally
-keeps logic simple and delegates data access to src.db.prices functions.
+Este módulo foi desenhado para ser "import-safe" em testes: a UI só é
+construída quando o arquivo é executado como script (``__main__``). Funções
+úteis expostas (ex.: ``load_prices``) delegam à camada de banco
+(``src.db.prices.read_prices``) e podem ser importadas em testes sem
+instalar/rodar o Streamlit.
 """
 
 from __future__ import annotations
 
 from datetime import date, timedelta
+from typing import Optional, Union
 
 import pandas as pd
-import streamlit as st
 
-from src.db import list_price_tickers, read_prices
+from src.db.prices import list_price_tickers, read_prices
+
+DataLike = Union[pd.Series, pd.DataFrame]
 
 
-def load_prices(ticker: str, start: date | None, end: date | None) -> pd.DataFrame:
-    """Load prices for ticker between start and end using DB layer.
+def load_prices(
+    ticker: str, start: Optional[date] = None, end: Optional[date] = None
+) -> pd.DataFrame:
+    """Carrega preços delegando para src.db.prices.read_prices.
 
-    Parameters
-    ----------
-    ticker:
-        Ticker string accepted by the DB layer (e.g. 'PETR4' or 'PETR4.SA').
-    start, end:
-        date objects or None. If provided they are formatted as YYYY-MM-DD
-        strings before being forwarded to the DB helper.
-
-    Returns
-    -------
-    pandas.DataFrame
-        DataFrame indexed by date as returned by src.db.prices.read_prices.
+    Parâmetros ``start`` e ``end`` podem ser objetos ``datetime.date``
+    (conversão para ISO "YYYY-MM-DD" é feita internamente).
     """
+    if not ticker or not ticker.strip():
+        return pd.DataFrame()
+
     start_s = start.isoformat() if start else None
     end_s = end.isoformat() if end else None
-    # Delegate to DB layer — keep this function thin to ease testing.
     return read_prices(ticker, start=start_s, end=end_s)
 
 
-def _safe_line_chart(data: pd.DataFrame | pd.Series, label: str) -> None:
-    """Render a line chart given a DataFrame or Series using st.line_chart.
-
-    Accept both pandas.DataFrame and pandas.Series. If a Series is passed we
-    convert it to a one-column DataFrame using the provided label as
-    column name so Streamlit renders a consistent chart. Falls back to
-    printing a small table if the data is empty or plotting fails.
+def _safe_line_chart(data: DataLike) -> None:
+    """Renderiza um gráfico de linhas com Streamlit, importando-o
+    de forma preguiçosa para manter o módulo importável em ambientes
+    sem Streamlit.
     """
-    if data is None:
-        st.warning(f"Nenhum dado disponível para {label}.")
+    try:  # import local para não exigir streamlit em tempo de import
+        import streamlit as st
+    except Exception:  # pragma: no cover - visual helper
         return
 
-    # normalize Series -> DataFrame for predictable plotting
+    if data is None:
+        return
     if isinstance(data, pd.Series):
-        df = data.to_frame(name=label)
+        df = data.to_frame()
     else:
         df = data
-
     if df.empty:
-        st.warning(f"Nenhum dado disponível para {label}.")
         return
+    st.line_chart(df)
 
-    try:
-        st.line_chart(df)
-    except Exception:
-        # Fallback: render the first few rows so the user can inspect data
-        st.write(df.head())
+
+def _choose_price_series(df: pd.DataFrame) -> pd.Series:
+    """Escolhe a série de preço mais adequada do DataFrame.
+
+    Prefere a coluna ``close``, depois a primeira coluna numérica e, por
+    fim, a primeira coluna disponível.
+    """
+    if "close" in df.columns:
+        return df["close"]
+    numeric_cols = df.select_dtypes(include="number").columns
+    if len(numeric_cols) > 0:
+        return df[numeric_cols[0]]
+    return df.iloc[:, 0]
 
 
 def main() -> None:
-    """Main entrypoint for Streamlit app.
-
-    Designed to be safe on import (no heavy work at import-time) so tests can
-    import the module for smoke without starting Streamlit server.
+    """Constrói a interface Streamlit. Executada apenas quando este arquivo
+    for invocado como script (ex.: ``streamlit run src/apps/streamlit_poc.py``).
     """
-    st.set_page_config(page_title="POC Streamlit - Dados Financeiros (SQLite)")
+    import streamlit as st
 
-    st.sidebar.title("Controles")
-    # Populate ticker selectbox via DB helper. If DB has no tickers this will
-    # be an empty list and the user can type a free-form ticker below.
-    tickers = list_price_tickers() or []
-    selected = st.sidebar.selectbox("Ticker (da base)", [""] + tickers)
-    free_ticker = st.sidebar.text_input("Ou digite um ticker")
+    st.set_page_config(page_title="POC Streamlit - Dados Financeiros (SQLite)")
+    st.title("POC Streamlit — Dados Financeiros (SQLite)")
+
+    st.sidebar.header("Controles")
+
+    try:
+        tickers = list_price_tickers()
+    except Exception:
+        tickers = []
+    options = tickers if tickers else [""]
+
+    selected = st.sidebar.selectbox("Selecione um ticker", options=options)
+    typed = st.sidebar.text_input("Ou digite um ticker livre (ex: PETR4)", "")
+
+    ticker = typed.strip().upper() if typed and typed.strip() else (selected or "")
 
     today = date.today()
     default_start = today - timedelta(days=365)
-    start_date = st.sidebar.date_input("Start date", value=default_start)
-    end_date = st.sidebar.date_input("End date", value=today)
+    start = st.sidebar.date_input("Data inicial", value=default_start)
+    end = st.sidebar.date_input("Data final", value=today)
 
-    # choose ticker: prefer free text if provided, else selected from list
-    ticker = free_ticker.strip() or selected
+    # date_input can return a list/tuple when multiple values are provided
+    if isinstance(start, (list, tuple)):
+        start = start[0]
+    if isinstance(end, (list, tuple)):
+        end = end[0]
+
+    if start > end:
+        st.sidebar.error("Data inicial maior que a data final. Ajuste o intervalo.")
+        return
+
     if not ticker:
-        st.info("Escolha um ticker no seletor ou digite um ticker livre.")
+        st.warning("Nenhum dado: selecione ou informe um ticker.")
         return
 
-    # Load data and render charts when user interacts with controls
-    df = load_prices(ticker, start_date, end_date)
-
-    if df is None or df.empty:
-        # Acceptance criteria: show warning with Portuguese "Nenhum dado"
-        st.warning("Nenhum dado disponível para o período selecionado.")
+    try:
+        df = load_prices(ticker, start=start, end=end)
+    except Exception as exc:
+        st.error(f"Erro ao carregar dados: {exc}")
         return
 
-    # Prefer column named close/Close/adjclose — try common variants
-    close_col = None
-    for candidate in ("close", "Close", "adjclose", "Adj Close", "close_adj"):
-        if candidate in df.columns:
-            close_col = candidate
-            break
+    if df.empty:
+        st.warning("Nenhum dado encontrado para o período selecionado.")
+        return
 
-    if close_col:
-        price_series = df[close_col]
+    st.subheader(f"Preço — {ticker}")
+    price = _choose_price_series(df)
+    _safe_line_chart(price)
+
+    st.subheader("Retornos Diários (%)")
+    returns = price.pct_change().dropna()
+    if returns.empty:
+        st.warning("Nenhum dado de retorno disponível para o período selecionado.")
     else:
-        # If there's no obvious close column, try numeric columns
-        numeric = df.select_dtypes("number")
-        if not numeric.empty:
-            price_series = numeric.iloc[:, 0]
-        else:
-            st.warning("Nenhum dado numérico disponível para plotagem.")
-            return
-
-    st.header(f"Preços: {ticker}")
-    _safe_line_chart(price_series, label="preços")
-
-    # Daily returns: pct_change on the price series
-    returns = price_series.pct_change().dropna()
-    st.header("Retornos diários")
-    _safe_line_chart(returns, label="retornos")
+        returns_pct = returns * 100
+        _safe_line_chart(returns_pct.to_frame("retornos_pct"))
 
 
 if __name__ == "__main__":
