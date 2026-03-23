@@ -657,9 +657,7 @@ def _run_notebook_if_enabled(
     if not run_notebook:
         return exit_code, summary_status, summary
 
-    notebook_results = _run_notebook(
-        tickers, job_id, notebook_path=notebook_path
-    )
+    notebook_results = _run_notebook(tickers, job_id, notebook_path=notebook_path)
 
     summary["notebook"] = notebook_results
 
@@ -777,12 +775,15 @@ def run_cmd(  # noqa: C901
     }
 
     if run_notebook:
+        # summary may have a more specific value-type; cast to the looser
+        # dict[str, object] expected by the helper to satisfy static typing
+        # checkers without changing the runtime shape.
         exit_code, summary_status, summary = _run_notebook_if_enabled(
             run_notebook,
             notebook_path,
             tickers,
             job_id,
-            summary,
+            cast(dict[str, object], summary),
             exit_code,
             summary_status,
         )
@@ -1228,3 +1229,39 @@ if __name__ == "__main__":
                 )
 
     app()
+
+
+@app.command("streamlit")
+def streamlit_cmd(
+    host: str = typer.Option(
+        "127.0.0.1", "--host", help="Host onde o Streamlit deve escutar"
+    ),
+    port: int = typer.Option(8501, "--port", help="Porta onde o Streamlit deve rodar"),
+) -> None:
+    """Inicia a aplicação Streamlit POC usando o interpretador atual.
+
+    O comando invoca: ``sys.executable -m streamlit run src/apps/streamlit_poc.py``
+    passando host e porta como argumentos de servidor. O processo é executado
+    via subprocess.run e o código de saída é repassado ao Typer.
+    """
+
+    # Importar localmente para evitar dependência/import pesado no topo do
+    # módulo quando a CLI é apenas carregada para introspecção/tests.
+    import subprocess
+    import sys
+
+    cmd = [
+        sys.executable,
+        "-m",
+        "streamlit",
+        "run",
+        "src/apps/streamlit_poc.py",
+        "--server.port",
+        str(port),
+        "--server.address",
+        host,
+    ]
+
+    completed = subprocess.run(cmd, check=False)
+    rc = getattr(completed, "returncode", 0) or 0
+    raise typer.Exit(code=rc)
