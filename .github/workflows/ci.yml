@@ -16,10 +16,11 @@ jobs:
       - run: |
           python -m pip install --upgrade pip
           python -m pip install poetry
+          poetry lock
           poetry config virtualenvs.in-project true
-          poetry install --no-interaction
+          poetry install --no-interaction --extras notebook
       - run: poetry run pre-commit run --all-files --show-diff-on-failure
-      - run: poetry run ruff check . --exclude "*.md"
+      - run: poetry run ruff check .
 
   test:
     runs-on: ubuntu-latest
@@ -34,8 +35,11 @@ jobs:
       - run: |
           python -m pip install --upgrade pip
           python -m pip install poetry
+          poetry lock
           poetry config virtualenvs.in-project true
-          poetry install --no-interaction
+          poetry install --no-interaction --extras notebook
+          # Install kernel for papermill notebook execution in CI (provided by Poetry extras)
+          poetry run python -m ipykernel install --user --name python3 --display-name "Python 3"
       - name: Ensure dados directory exists
         run: mkdir -p dados
 
@@ -47,20 +51,38 @@ jobs:
 
       - run: |
           mkdir -p reports
-          NETWORK_MODE=playback poetry run pytest -q --maxfail=1 --junitxml=reports/junit.xml
+          PAPERMILL=1 NETWORK_MODE=playback poetry run pytest -q --maxfail=1 --junitxml=reports/junit.xml
       - name: CLI smoke test
         run: |
           echo "# smoke test using built-in dummy provider"
           # the dummy adapter is now registered automatically by the factory,
           # so we can call the ingest command directly.  the helper script is
           # kept for manual experimentation but is not required here.
+          poetry run python -m ipykernel install --user --name python3 --display-name "Python 3"
           poetry run python -c "import sys; from src.ingest.pipeline import ingest_command; sys.exit(ingest_command('TEST', 'dummy', dry_run=True))"
+
+      - name: Quickstart example smoke test
+        run: |
+          echo "# smoke test running examples/run_quickstart_example.sh"
+          mkdir -p outputs logs snapshots
+          ./examples/run_quickstart_example.sh --no-network --format json
+
       - name: Upload artifacts on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: reports
           path: reports/**
+
+      - name: Upload quickstart artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: quickstart-artifacts
+          path: |
+            outputs/**
+            logs/**
+            snapshots/**
 
   integration:
     runs-on: ubuntu-latest
@@ -77,7 +99,7 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install poetry
           poetry config virtualenvs.in-project true
-          poetry install --no-interaction
+          poetry install --no-interaction --extras notebook
       - name: Ensure dados directory exists
         run: mkdir -p dados
 

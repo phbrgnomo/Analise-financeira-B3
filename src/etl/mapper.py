@@ -31,6 +31,58 @@ from pandera.errors import SchemaError
 from pandera.pandas import Column, DataFrameSchema
 
 logger = logging.getLogger(__name__)
+# Metric counter for detected outliers (simple module-level integer)
+outliers_detected = 0
+
+
+def parse_date_strict(date_str: str) -> datetime:
+    """Parse an ISO date string (YYYY-MM-DD) strictly and return a UTC-aware
+    datetime at midnight UTC.
+
+    Rules:
+    - Accepts only the exact format '%Y-%m-%d' when given a string.
+    - Accepts datetime or pandas.Timestamp values as well and normalizes
+      them to UTC.
+    - Rejects dates in the future (strictly greater than now UTC).
+    - Rejects dates before 2000-01-01.
+
+    Raises ValueError on any violation.
+    """
+    if isinstance(date_str, pd.Timestamp):
+        dt = date_str.to_pydatetime()
+    elif isinstance(date_str, datetime):
+        dt = date_str
+    elif isinstance(date_str, str):
+        try:
+            dt = datetime.strptime(date_str, "%Y-%m-%d")
+        except Exception as e:  # ValueError from strptime
+            raise ValueError(
+                f"Invalid date format, expected YYYY-MM-DD: {date_str}"
+            ) from e
+    else:
+        raise ValueError(f"Unsupported date type: {type(date_str)!r}")
+
+    # Normalize to timezone-aware UTC using pandas.Timestamp helpers to avoid
+    # edge-case differences between naive and aware datetimes.
+    ts = pd.Timestamp(dt)
+    if ts.tzinfo is None:
+        ts = ts.tz_localize(timezone.utc)
+    else:
+        ts = ts.tz_convert(timezone.utc)
+
+    # Normalize to midnight UTC (date affinity)
+    ts = ts.normalize()
+    dt = ts.to_pydatetime()
+
+    now = datetime.now(timezone.utc)
+    if dt > now:
+        raise ValueError(f"Date is in the future: {dt.isoformat()}")
+
+    min_allowed = datetime(2000, 1, 1, tzinfo=timezone.utc)
+    if dt < min_allowed:
+        raise ValueError(f"Date before allowed minimum (2000-01-01): {dt.date()}")
+
+    return dt
 
 
 class MappingError(Exception):
@@ -184,9 +236,20 @@ def _fill_special_values(df: pd.DataFrame, name: str, meta: dict, nrows: int):
     """
     if name == "date":
         date_col = next((c for c in df.columns if str(c).lower() == "date"), None)
-        if date_col is not None:
-            return pd.to_datetime(df[date_col])
-        return pd.to_datetime(df.index)
+        # Validate and normalize each date value strictly. Invalid dates are
+        # logged and replaced with pandas.NaT so downstream validation can
+        # decide on rejecting rows while keeping mapping deterministic.
+        values = df[date_col] if date_col is not None else df.index
+        normalized = []
+        for v in values:
+            try:
+                dt = parse_date_strict(v)
+                normalized.append(pd.Timestamp(dt))
+            except ValueError as exc:
+                logger.warning("Rejected date value during mapping: %s (%s)", v, exc)
+                normalized.append(pd.NaT)
+
+        return pd.to_datetime(pd.Series(normalized))
     if name == "ticker":
         return [meta["ticker"]] * nrows
     if name == "source":
@@ -194,6 +257,47 @@ def _fill_special_values(df: pd.DataFrame, name: str, meta: dict, nrows: int):
     if name == "fetched_at":
         return [meta["fetched_at"]] * nrows
     return [meta["raw_checksum"]] * nrows if name == "raw_checksum" else None
+
+
+def detect_outlier(
+    open_val, close_val, ticker: str | None = None, date_val=None
+) -> bool:
+    """Detect intraday outliers: |close - open|/open > 1.0.
+
+    Returns True when the absolute relative change is greater than 1.0
+    (strictly more than 100%). Logs a warning using the project's
+    logger.warning pattern and increments the module-level
+    `outliers_detected` counter. The function is defensive and returns
+    False when `open_val` is missing or <= 0 to avoid division by zero.
+    """
+    global outliers_detected
+
+    try:
+        o = float(open_val)
+        c = float(close_val)
+    except Exception:
+        return False
+
+    if o <= 0:
+        return False
+
+    pct = abs(c - o) / o
+    if pct > 1.0:
+        outliers_detected += 1
+        # format date for log
+        date_str = str(date_val) if date_val is not None else "date"
+        # Use existing logging pattern
+        logger.warning(
+            "Outlier detected for %s on %s: open=%s, close=%s, change=%.1f%%",
+            ticker or "ticker",
+            date_str,
+            o,
+            c,
+            pct * 100,
+        )
+        return True
+
+    return False
 
 
 def to_canonical(
@@ -276,6 +380,65 @@ def to_canonical(
         data = _build_canonical_data(df, meta, nrows, columns_map)
 
         canonical_df = pd.DataFrame(data)
+
+        # Enforce schema invariant: high >= low. Some providers occasionally
+        # return corrupted rows where high < low — swap values and log a
+        # warning per-row when this occurs so downstream consumers get
+        # consistent data instead of failing validation.
+        if "high" in canonical_df.columns and "low" in canonical_df.columns:
+            mask = (
+                canonical_df["high"].notna()
+                & canonical_df["low"].notna()
+                & (canonical_df["high"] < canonical_df["low"])
+            )
+            if mask.any():
+                for idx in canonical_df[mask].index:
+                    old_high = canonical_df.at[idx, "high"]
+                    old_low = canonical_df.at[idx, "low"]
+                    # swap
+                    canonical_df.at[idx, "high"] = old_low
+                    canonical_df.at[idx, "low"] = old_high
+                    date_val = (
+                        canonical_df.at[idx, "date"]
+                        if "date" in canonical_df.columns
+                        else None
+                    )
+                    # format date for log (keep original object string if None)
+                    date_str = str(date_val) if date_val is not None else "None"
+                    logger.warning(
+                        "High/low swap for ticker %s on %s: high=%s low=%s -> high=%s low=%s",
+                        ticker,
+                        date_str,
+                        old_high,
+                        old_low,
+                        canonical_df.at[idx, "high"],
+                        canonical_df.at[idx, "low"],
+                    )
+
+        # After ensuring high/low invariants, detect large open/close
+        # intraday moves (outliers). Preserve rows; we only log and count.
+        if "open" in canonical_df.columns and "close" in canonical_df.columns:
+            for idx in canonical_df.index:
+                try:
+                    o = canonical_df.at[idx, "open"]
+                    c = canonical_df.at[idx, "close"]
+                    date_val = (
+                        canonical_df.at[idx, "date"]
+                        if "date" in canonical_df.columns
+                        else None
+                    )
+                except Exception:
+                    continue
+                # Call detect_outlier which logs and increments counter when
+                # appropriate. We intentionally ignore the return value here
+                # because the pipeline should not reject rows.
+                try:
+                    detect_outlier(o, c, ticker=ticker, date_val=date_val)
+                except Exception:
+                    # Detection should never raise; protect mapping pipeline
+                    logger.warning(
+                        "Outlier detection failed for %s on %s", ticker, date_val
+                    )
     except (KeyError, ValueError, TypeError) as e:
         raise MappingError(
             f"Failed to construct canonical DataFrame for {ticker}: {e}"

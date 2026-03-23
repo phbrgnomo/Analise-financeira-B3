@@ -18,6 +18,13 @@ yfinance = "^1.2.0"
 pandera = "^0.29.0"
 portalocker = "^3.1.0"
 sqlparse = "^0.5.5"
+papermill = { version = "^2.7.0", optional = true }
+matplotlib = "^3.10.0"
+ipykernel = { version = "^7.2.0", optional = true }
+streamlit = "^1.40.0"
+
+[tool.poetry.extras]
+notebook = ["papermill", "ipykernel"]
 
 
 [build-system]
@@ -51,4 +58,4 @@ filterwarnings = [
 line-length = 88
 lint.select = ["E", "F", "W", "C", "B", "I"]
 lint.ignore = ["E203"]
-exclude = ["docs/examples/notebooks/*", "*.md"]
+exclude = ["docs/examples/notebooks/*", "examples/notebooks/*", "outputs/*", "reports/*", "*.md"]

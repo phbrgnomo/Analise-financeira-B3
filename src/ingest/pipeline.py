@@ -19,8 +19,9 @@ import time
 import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, NamedTuple, cast
 
+import pandas as pd
 import typer
 
 from src.cli_feedback import CliFeedback, format_duration
@@ -61,12 +62,12 @@ def _safe_filename_token(value: str) -> str:
     return re.sub(r"[^A-Za-z0-9._-]", "_", value)
 
 
-def _resolve_sample_window(
+def resolve_sample_window(
     days: int,
     start: str | None,
     end: str | None,
 ) -> tuple[str, str]:
-    """Resolve date window for sample pulls using UTC calendar dates."""
+    """Resolve a date window for sample pulls using UTC calendar dates."""
     now = datetime.now(timezone.utc).date()
 
     end_date = now.strftime("%Y-%m-%d") if end is None else end
@@ -77,6 +78,10 @@ def _resolve_sample_window(
     safe_days = max(1, days)
     start_date = (now - timedelta(days=safe_days)).strftime("%Y-%m-%d")
     return start_date, end_date
+
+
+# Backwards compatibility: some callers (and tests) patch this private helper.
+_resolve_sample_window = resolve_sample_window
 
 
 def pull_sample(
@@ -107,7 +112,7 @@ def pull_sample(
         from src.etl.mapper import to_canonical
 
         adapter = get_adapter(source)
-        start_date, end_date = _resolve_sample_window(days, start, end)
+        start_date, end_date = resolve_sample_window(days, start, end)
         raw_df = adapter.fetch(
             canonical_ticker,
             start_date=start_date,
@@ -225,20 +230,29 @@ def pull_sample_command(
 
     job_id = result.get("job_id")
     if result.get("status") == "success":
-        if job_id:
-            print(f"job_id={job_id}")
-        feedback.info(f"raw: {result.get('raw_output')}")
-        feedback.info(f"canonical: {result.get('canonical_output')}")
-        feedback.info(f"rows: {result.get('rows')}")
-        elapsed = time.monotonic() - t0
-        feedback.summary(f"completed in {format_duration(elapsed)}")
-        return 0
-
+        return _format_pull_sample_result(job_id, feedback, result, t0)
     err = result.get("error_message", "unknown error")
     feedback.error(err)
     if job_id:
         typer.secho(f"job_id={job_id}", err=True)
     return 1
+
+
+def _format_pull_sample_result(job_id, feedback, result, t0):
+    """Format and emit feedback for a completed `pull_sample` run.
+
+    This helper keeps the CLI command implementation focused on control flow,
+    while applying consistent output formatting for successful runs.
+    """
+
+    if job_id:
+        print(f"job_id={job_id}")
+    feedback.info(f"raw: {result.get('raw_output')}")
+    feedback.info(f"canonical: {result.get('canonical_output')}")
+    feedback.info(f"rows: {result.get('rows')}")
+    elapsed = time.monotonic() - t0
+    feedback.summary(f"completed in {format_duration(elapsed)}")
+    return 0
 
 
 # ---------------------------------------------------------------------------
@@ -291,10 +305,112 @@ def _make_metadata(
         "source": source,
         "status": status,
         "started_at": started_at,
-    }
-    out["finished_at"] = finished_at or _now_iso()
-    out.update(extras)
+        "finished_at": finished_at or _now_iso(),
+    } | extras
     return out
+
+
+def _normalize_ticker(ticker: str) -> str:
+    """Return a normalized ticker or uppercase fallback on parse errors."""
+    try:
+        return normalize_b3_ticker(ticker)
+    except ValueError:
+        return ticker.strip().upper()
+
+
+def _record_error_and_return(
+    job_id: str,
+    ticker: str,
+    source: str,
+    started_at: str,
+    msg: str,
+    lock_meta: dict[str, object] | None = None,
+) -> dict[str, object]:
+    """Record error metadata and return a standard error result."""
+    # Use error() rather than exception() because callers already surface
+    # a preformatted message; exception() would append a spurious traceback
+    # when no exception context is active.
+    logger.error(msg)
+    extra: dict[str, Any] = cast(dict[str, Any], lock_meta or {})
+
+    metadata = _make_metadata(
+        job_id,
+        ticker,
+        source,
+        "error",
+        started_at,
+        error_message=msg,
+        **extra,
+    )
+    _record_ingest_metadata(metadata)
+    return {"job_id": job_id, "status": "error", "error_message": msg}
+
+
+class FetchResult(NamedTuple):
+    """Result returned by _fetch_and_canonical.
+
+    Attributes:
+        raw: original provider DataFrame (or None on fetch error).
+        canonical: normalized canonical DataFrame (or None on mapping error).
+        error: error message text (or None on success).
+    """
+
+    raw: pd.DataFrame | None
+    canonical: pd.DataFrame | None
+    error: str | None
+
+
+def _fetch_and_canonical(
+    ticker: str,
+    source: str,
+    start: str | None,
+    end: str | None,
+) -> FetchResult:
+    """Fetch provider data and map to the canonical schema.
+
+    Returns a tuple (raw_df, canonical_df, error_message).
+
+    The raw provider DataFrame is preserved so it can be saved as the raw
+    artifact (CSV) while the canonical DataFrame is used for persistence and
+    downstream processing.
+    """
+    try:
+        from src.adapters.factory import get_adapter
+
+        adapter = get_adapter(source)
+        fetch_kwargs: dict[str, str] = {}
+        if start is not None:
+            fetch_kwargs["start_date"] = start
+        if end is not None:
+            fetch_kwargs["end_date"] = end
+        df = adapter.fetch(ticker, **fetch_kwargs)
+    except Exception as exc:
+        return FetchResult(
+            raw=None,
+            canonical=None,
+            error=f"adapter.fetch failed: {exc}",
+        )
+
+    try:
+        from src.etl.mapper import to_canonical
+
+        return FetchResult(
+            raw=df,
+            canonical=to_canonical(df, provider_name=source, ticker=ticker),
+            error=None,
+        )
+    except Exception as exc:
+        return FetchResult(raw=df, canonical=None, error=f"mapper failed: {exc}")
+
+
+def _save_raw_csv_or_error(
+    df: pd.DataFrame, source: str, ticker: str, ts: str, job_id: str
+) -> tuple[dict[str, object] | None, str | None]:
+    """Persist raw CSV and return save metadata or an error message."""
+    try:
+        return save_raw_csv(df, source, ticker, ts, orchestrator_job_id=job_id), None
+    except Exception as exc:
+        return None, f"failed to save raw CSV: {exc}"
 
 
 def ingest(  # noqa: C901 - function is intentionally orchestrator-style
@@ -303,6 +419,8 @@ def ingest(  # noqa: C901 - function is intentionally orchestrator-style
     *,
     dry_run: bool = False,
     force_refresh: bool = False,
+    start: str | None = None,
+    end: str | None = None,
 ) -> Dict[str, Any]:
     """Minimal pipeline orchestration used by CLI and tests.
 
@@ -325,10 +443,8 @@ def ingest(  # noqa: C901 - function is intentionally orchestrator-style
     logic easy to drive from tests or scripting environments while still
     recording useful metadata.
     """
-    try:
-        canonical_ticker = normalize_b3_ticker(ticker)
-    except ValueError:
-        canonical_ticker = ticker.strip().upper()
+
+    canonical_ticker = _normalize_ticker(ticker)
 
     job_id = str(uuid.uuid4())
     started_at = _now_iso()
@@ -369,72 +485,57 @@ def ingest(  # noqa: C901 - function is intentionally orchestrator-style
 
     try:
         with locks.acquire_lock(
-            ticker, timeout_seconds=lock_timeout, wait=wait_for_lock
+            canonical_ticker, timeout_seconds=lock_timeout, wait=wait_for_lock
         ) as lock_meta:
-            # merge any lock metadata into our logging context so downstream
-            # steps can include it if they wish (useful for debugging at scale).
-            # By creating a new LoggerAdapter we avoid rebinding the global
-            # ``logger`` name which would conflict with earlier references.
             log = logging.LoggerAdapter(logger, extra={**lock_meta})
 
-            # fetch
-            try:
-                from src.adapters.factory import get_adapter
-
-                adapter = get_adapter(source)
-                df = adapter.fetch(ticker)
-            except Exception as exc:  # fetch failure
-                msg = f"adapter.fetch failed: {exc}"
-                logger.exception(msg)
-                metadata = _make_metadata(
+            fetch_result = _fetch_and_canonical(
+                ticker=canonical_ticker, source=source, start=start, end=end
+            )
+            if fetch_result.error is not None:
+                return _record_error_and_return(
                     job_id,
-                    ticker,
+                    canonical_ticker,
                     source,
-                    "error",
                     started_at,
-                    error_message=msg,
+                    fetch_result.error,
+                    lock_meta,
                 )
-                _record_ingest_metadata(metadata)
-                return {"job_id": job_id, "status": "error", "error_message": msg}
+            raw = fetch_result.raw
+            canonical = fetch_result.canonical
 
-            # map to canonical
-            try:
-                from src.etl.mapper import to_canonical
-
-                canonical = to_canonical(df, provider_name=source, ticker=ticker)
-            except Exception as exc:  # mapper failure
-                msg = f"mapper failed: {exc}"
-                logger.exception(msg)
-                metadata = _make_metadata(
-                    job_id,
-                    ticker,
-                    source,
-                    "error",
-                    started_at,
-                    error_message=msg,
+            # At this point, both ``raw`` and ``canonical`` should be DataFrames.
+            if raw is None:
+                raise RuntimeError(
+                    "ingest pipeline expected raw DataFrame but got None"
                 )
-                _record_ingest_metadata(metadata)
-                return {"job_id": job_id, "status": "error", "error_message": msg}
+            if canonical is None:
+                raise RuntimeError(
+                    "ingest pipeline expected canonical DataFrame but got None"
+                )
 
-            # if the caller only wanted a dry run, return now
             if dry_run:
                 log.info(
                     "dry run completed",
                     extra={"job_id": job_id, "rows": len(canonical)},
                 )
+                persist_info = {
+                    "rows_processed": len(canonical),
+                    "reason": "dry_run",
+                }
                 result = {
                     "job_id": job_id,
-                    "ticker": ticker,
+                    "ticker": canonical_ticker,
                     "source": source,
                     "status": "success",
                     "dry_run": True,
                     "rows": len(canonical),
+                    "persist": persist_info,
                     **lock_meta,
                 }
-                # record metadata even for dry runs to make lock activity visible
                 metadata = _make_metadata(
                     job_id,
-                    ticker,
+                    canonical_ticker,
                     source,
                     "success",
                     started_at,
@@ -446,53 +547,31 @@ def ingest(  # noqa: C901 - function is intentionally orchestrator-style
                 _record_ingest_metadata(metadata)
                 return result
 
-            # persist raw CSV (Story 1.4)
             ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-            try:
-                save_meta = save_raw_csv(
-                    df, source, ticker, ts, orchestrator_job_id=job_id
+            save_meta, err = _save_raw_csv_or_error(
+                raw, source, canonical_ticker, ts, job_id
+            )
+            if err is not None:
+                return _record_error_and_return(
+                    job_id, canonical_ticker, source, started_at, err, lock_meta
                 )
-            except Exception as exc:
-                msg = f"failed to save raw CSV: {exc}"
-                logger.exception(msg)
-                metadata = _make_metadata(
-                    job_id,
-                    ticker,
-                    source,
-                    "error",
-                    started_at,
-                    error_message=msg,
-                )
-                _record_ingest_metadata(metadata)
-                return {"job_id": job_id, "status": "error", "error_message": msg}
 
-            # attempt DB persistence with snapshot helper; the helper already logs its
-            # own metadata.  ``ingest_from_snapshot`` is defined later in this module
-            # so we can call it directly instead of importing ourselves at runtime.
             persist_result: Dict[str, Any] = {}
             try:
                 persist_result = ingest_from_snapshot(
-                    canonical, ticker, force=force_refresh
+                    canonical, canonical_ticker, force=force_refresh
                 )
             except Exception as exc:  # pragma: no cover - just in case
                 logger.exception("persistence step failed: %s", exc)
                 persist_result = {"status": "error", "error_message": str(exc)}
 
-            # derive overall status from persistence outcome; if the helper reports
-            # "error" we propagate that.  Future extensions could use
-            # "partial_success" or similar.
-            # treat absence of an explicit status as success (legacy behavior)
             pers_status = persist_result.get("status")
-            if pers_status is None:
-                top_status = "success"
-            else:
-                top_status = "success" if pers_status == "success" else "error"
+            top_status = "success" if pers_status in (None, "success") else "error"
 
-            # final metadata entry for the orchestrator run
             duration_str = f"{(time.monotonic() - t0):.2f}s"
             metadata = {
                 "job_id": job_id,
-                "ticker": ticker,
+                "ticker": canonical_ticker,
                 "source": source,
                 "status": top_status,
                 "rows": len(canonical),
@@ -522,15 +601,10 @@ def ingest(  # noqa: C901 - function is intentionally orchestrator-style
                 **lock_meta,
             }
     except locks.LockTimeout as exc:
-        # record a metadata entry indicating the lock failure and bail out
         action = "timeout" if wait_for_lock else "exit"
         if not wait_for_lock:
-            # non-blocking/exit mode should never incur a wait
             waited = 0.0
         else:
-            # compute actual waited time if we recorded a start timestamp;
-            # fall back to configured timeout if somehow ``lock_acquire_start``
-            # isn't available (should never happen).
             try:
                 waited = time.monotonic() - lock_acquire_start
             except NameError:

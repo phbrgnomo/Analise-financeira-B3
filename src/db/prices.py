@@ -335,3 +335,19 @@ def _query_existing_tickers(
         if candidates[1] in existing:
             return candidates[1]
     return existing[0]
+
+
+def delete_ticker_prices(ticker: str, db_path: Optional[str] = None) -> int:
+    """Delete all price rows for a ticker. Returns number of rows deleted.
+
+    The ticker is used as-is; callers should pass the normalized B3
+    ticker (e.g. "PETR4"). The function opens a new connection using
+    :func:`src.db.connection.connect` unless a connection is supplied.
+    """
+    conn = connect(db_path)
+    try:
+        cur = conn.execute("DELETE FROM prices WHERE ticker = ?", (ticker,))
+        conn.commit()
+        return cur.rowcount
+    finally:
+        conn.close()

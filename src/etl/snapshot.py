@@ -59,7 +59,8 @@ _SNAPSHOT_FILENAME_RE = re.compile(
     r"""
     ^
     (?P<ticker>[A-Z0-9]+(?:\.[A-Z0-9]+)?)   # ticker maiúsculo com opcional ".SA"
-    -(?P<timestamp>\d{8}T\d{6}Z?)          # timestamp yyyyMMddTHHMMSS, Z suffix allowed
+    -(?P<timestamp>\d{8}(?:T\d{6}(?:\d{6})?Z?)?)      # timestamp yyyyMMdd or
+    # yyyyMMddTHHMMSS[Z] or yyyyMMddTHHMMSSffffff[Z]
     (?:-(?P<suffix>[^.]+))?                  # sufixo opcional antes da extensão
     \.csv$                                   # extensão .csv
     """,
@@ -81,14 +82,19 @@ def _parse_snapshot_timestamp(path: Path) -> tuple[datetime | None, float]:
 
     ts_str = match.group("timestamp")
     # strip trailing Z if present; the formatter used by
-    # :func:`write_snapshot` appends a Z suffix to indicate UTC, but the
-    # original parsing logic expected plain digits.  keeping both in sync
-    # avoids mis-detecting otherwise valid filenames.
+    # :func:`write_snapshot` may append a Z suffix to indicate UTC.
     if ts_str.endswith("Z"):
         ts_str = ts_str[:-1]
-    # Ajuste o formato caso o padrão de timestamp mude.
+
+    # Determine timestamp format: date-only (YYYYMMDD), seconds (YYYYMMDDTHHMMSS)
+    # or microseconds (YYYYMMDDTHHMMSSffffff).
+    if "T" in ts_str:
+        fmt = "%Y%m%dT%H%M%S%f" if len(ts_str) > 15 else "%Y%m%dT%H%M%S"
+    else:
+        fmt = "%Y%m%d"
+
     try:
-        ts = datetime.strptime(ts_str, "%Y%m%dT%H%M%S")
+        ts = datetime.strptime(ts_str, fmt)
     except ValueError:
         return None, mtime
     return ts, mtime

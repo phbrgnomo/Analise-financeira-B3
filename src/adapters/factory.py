@@ -10,16 +10,19 @@ from typing import Dict, Type
 
 from src.adapters.base import Adapter
 
-# import dummy adapter so it can be registered by default.  doing this here
-# keeps tests and the CI smoke test simple: the provider ``dummy`` is always
-# available without requiring an explicit registration step in the same
-# Python process.
+# Import built-in adapters so they register by default.
+# Doing this here keeps tests and CI smoke tests simple: providers such as
+# ``csv`` and ``dummy`` are available without explicit registration in the
+# same process. Add any additional built-in adapters to this import list
+# so they are always present at runtime.
+from src.adapters.csv import CSVAdapter
 from src.adapters.dummy import DummyAdapter
 from src.adapters.yfinance_adapter import YFinanceAdapter
 
 # dictionary of provider name (lowercase) -> Adapter class
 _ADAPTER_REGISTRY: Dict[str, Type[Adapter]] = {
     "yfinance": YFinanceAdapter,
+    "csv": CSVAdapter,
     # alias "yahoo" removido – use apenas "yfinance". Esta é uma mudança
     # incompatível (breaking change); quaisquer scripts ou integrações que
     # referenciavam "yahoo" anteriormente devem migrar.

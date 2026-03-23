@@ -24,9 +24,7 @@ def normalize_b3_ticker(ticker: str) -> str:
     if not candidate:
         raise ValueError("ticker cannot be empty")
 
-    if candidate.endswith(".SA"):
-        candidate = candidate[:-3]
-
+    candidate = candidate.removesuffix(".SA")
     if not _B3_TICKER_PATTERN.match(candidate):
         raise ValueError("ticker inválido; use padrão B3 (ex.: PETR4, ITUB4, BOVA11)")
 

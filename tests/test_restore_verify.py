@@ -277,7 +277,6 @@ def test_restore_verify_missing_metadata(mock_metadata_db, patch_db_connect, tmp
     metadata_conn, metadata_db_path = mock_metadata_db
     metadata_conn.close()
 
-
     # Create snapshot CSV without metadata
     snapshot_dir = tmp_path / "snapshots"
     snapshot_dir.mkdir()
@@ -325,7 +324,6 @@ def test_restore_verify_json_report_structure(
         "PETR4", tmp_path, metadata_conn
     )
     metadata_conn.close()
-
 
     # Run restore-verify
     runner = CliRunner()

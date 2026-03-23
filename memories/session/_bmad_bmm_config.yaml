@@ -1,0 +1,12 @@
+# Copia de sessão do _bmad/bmm/config.yaml
+project_name: Analise-financeira-B3
+user_skill_level: intermediate
+planning_artifacts: "{project-root}/docs/planning-artifacts"
+implementation_artifacts: "{project-root}/docs/implementation-artifacts"
+project_knowledge: "{project-root}/docs"
+
+# Core Configuration Values
+user_name: Phbr
+communication_language: PT-BR
+document_output_language: PT-BR
+output_folder: "{project-root}/docs"

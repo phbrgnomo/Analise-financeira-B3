@@ -93,3 +93,4 @@ locks/
 
 # Agents files
 .sisyphus/
+.opencode/

@@ -13,6 +13,8 @@ Uma ferramenta leve para coletar dados de mercados (B3), calcular retornos e mé
 - Cálculo de retornos diários e métricas de risco (volatilidade, conversões anuais).
 - Estrutura para persistir séries em CSV em `dados/` e snapshots em `snapshots/`.
 - Scripts de exemplo e fixtures para testes em `tests/`.
+- Comando `metrics`: gera métricas/health check do pipeline (via `poetry run main metrics --format json`).
+- Comando `test-conn`: valida conectividade com um provider (ex.: `poetry run main test-conn --provider dummy --format json`).
 
 ## Pré-requisitos
 - Python 3.12+ (recomendado)
@@ -34,6 +36,9 @@ necessário.
   manter no diretório de snapshots. Padrão `1`.
 - **DEFAULT_TICKERS**: tickers padrão usados no `main run` quando `--ticker`
   não é informado. Exemplo: `PETR4,ITUB3,BBDC4`.
+
+- **DEFAULT_NOTEBOOK_PATH**: caminho para o notebook usado pelo
+  `--run-notebook` (padrão `examples/notebooks/quickstart.ipynb`).
 
 - **VALIDATION_INVALID_PERCENT_THRESHOLD**: limite percentual usado pelo
   processo de validação para considerar uma operação como inválida. Valor
@@ -105,13 +110,51 @@ poetry install
 poetry run main run
 # ticker específico (padrão B3)
 poetry run main run --ticker PETR4
+# saída JSON (útil para CI / automação)
+poetry run main --ticker PETR4 --format json
+# modo offline (sem chamadas de rede) para testes/CI
+poetry run main --ticker PETR4 --format json --no-network
 ```
 
 3. Exemplos e testes rápidos:
 
 ```bash
 poetry run pytest -q
-./examples/run_quickstart_example.sh
+# Exemplo rápido (modo offline, saída JSON, grava snapshot em snapshots/ e log em logs/)
+./examples/run_quickstart_example.sh --no-network --format json
+```
+
+### Notebooks Quickstart
+
+Para executar o notebook de exemplo (recomenda-se instalar o extra `notebook`):
+
+```bash
+poetry install --extras notebook
+poetry run main --ticker PETR4 --run-notebook
+```
+
+Isso executa o notebook `examples/notebooks/quickstart.ipynb` via `papermill` e grava artefatos em `outputs/notebooks/quickstart` (CSV + imagem).
+
+Para rodar o notebook diretamente via papermill (útil em CI):
+
+```bash
+papermill examples/notebooks/quickstart.ipynb outputs/quickstart-output.ipynb \
+  -p tickers '["PETR4"]' \
+  -p output_dir outputs/notebooks/quickstart
+```
+
+### Métricas / health check (CI)
+
+Você pode conferir a saúde do pipeline com:
+
+```bash
+poetry run main metrics --format json
+```
+
+E testar conexão com um provider (ex.: dummy):
+
+```bash
+poetry run main test-conn --provider dummy --format json
 ```
 
 ### Modo de testes de rede (NETWORK_MODE)

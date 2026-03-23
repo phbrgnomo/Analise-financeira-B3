@@ -1,100 +1,112 @@
 ---
 project_name: 'Analise-financeira-B3'
 user_name: 'Phbr'
-date: '2026-02-22'
-sections_completed: ['technology_stack','language_rules','framework_rules','testing','code_quality','workflow_rules','critical_rules']
-existing_patterns_found: 7
+date: '2026-03-20'
+sections_completed: ['technology_stack','language_rules','framework_rules','testing','code_quality','workflow_rules','critical_rules','ux']
+existing_patterns_found: 8
 status: 'complete'
-rule_count: 29
+rule_count: 38
 optimized_for_llm: true
-last_updated: '2026-03-05'
+last_updated: '2026-03-20'
+updated_by_workflow: 'generate-project-context'
 ---
 
-# Project Context for AI Agents
+# Contexto do Projeto para Agentes de IA
 
 _Documento enxuto com regras críticas e padrões que agentes de IA devem seguir ao implementar código neste projeto. Conteúdo otimizado para consumo por LLMs._
 
 ---
 
-## Technology Stack & Versions
+## Tecnologias e Versões
 
-- Python: ^3.12 (Poetry) — seguir `pyproject.toml`
-- sqlite3 (standard library) — persistência principal
-- SQLAlchemy: ^2.0.x (dependência declarada, mas não usada diretamente no core; pode ser removida em sprint futuro)
-- pandas: ^2.x
-- numpy: ^2.x
-- typer: ^0.9.x (entrypoint: `src.main:app`)
-- python-dotenv: ^1.x
-- Dev: pytest (>=7.x), ruff (config via `pyproject.toml`), pre-commit
+### Resumo conciso (fonte: `pyproject.toml`)
 
-Nota: documente e justifique qualquer mudança de versão em `pyproject.toml`; confirme compatibilidade antes de alterar a versão mínima do Python (atualmente `^3.12`).
+- Python: ^3.12
+- CLI: `typer` ^0.24
+- Persistência: `sqlite3` (stdlib); SQLAlchemy ^2.0.18
+- Dados: `pandas` ^2.3.2, `numpy` ^2.3.2
+- Adapter financeiro: `yfinance` ^1.2.0
+- Validação: `pandera` ^0.29.0
+- I/O / locking: `portalocker` ^3.1.0
+- Utilitários SQL: `sqlparse` ^0.5.5
+- Notebooks (opcional): `papermill` ^2.7.0, `ipykernel` ^7.2.0
 
-## Critical Implementation Rules
+**Dev / CI**
 
-### Language-Specific (Python)
+- Testes: `pytest` ^7.4.0
+- Lint: `ruff` ^0.14.14 (line-length = 88)
+- Hooks: `pre-commit` ^3.3.0
 
-- Use `poetry` para ambiente e execução (`poetry install`, `poetry run main`).
-- Evite imports pesados no startup; importe dentro de funções quando necessário.
-- Siga `ruff`/`pyproject.toml` (line-length 88) e execute `pre-commit` antes de commitar.
-- Nunca commitar segredos; use `.env` com `python-dotenv` para desenvolvimento local.
-- Quando for implementar alguma variável de configuração, utilize `python-dotenv` e adicione a variável ao `.env.example` para referência. Nunca adicione variáveis de configuração diretamente no código ou em arquivos versionados.
+Observações:
 
-### Framework-Specific Rules
+- Preferir as versões declaradas em `pyproject.toml` como fonte da verdade.
+- Extras opcionais (`notebook`) gerenciados via `poetry extras`.
+- O CI assume paridade de runtime com Python 3.12.
 
-- CLI: o projeto usa `typer` para a CLI (`src/main.py`). Mantenha comandos leves; evite imports pesados no topo do módulo da CLI — importe dentro da função do comando quando necessário.
-- Adapter Factory: siga a fábrica de adapters em `src/adapters/factory.py`. Sempre obter instâncias via `get_adapter()` ou `register_adapter()`; não introduza caminhos alternativos de criação de adapters sem atualizar `docs/modules/adapter-guidelines.md`.
+## UX
 
-  ```python
-  # exemplo mínimo de uso
-  from src.adapters.factory import get_adapter, register_adapter
+- CLI: flags mínimas e mensagens esperadas estão documentadas em `docs/planning-artifacts/ux.md`. Principais flags esperadas:
+  - `--ticker <TICKER>`
+  - `--start_date <YYYY-MM-DD>` / `--end_date <YYYY-MM-DD>`
+  - `--force-refresh`
+  - `--format <text|json>` (padrão `text`)
+  - `--no-network` (modo offline para testes/CI)
+  - `--output <path>` (export CSV)
 
-  # pegar um adapter já registrado (yfinance é um adapter builtin)
-  yf = get_adapter("yfinance")
-  df = yf.fetch("PETR4.SA", start="2020-01-01")
+- Mensagens: mensagens concisas voltadas a troubleshooting (ex.: `Executando tickers ...`, `Resumo run: sucesso=<n>, falhas=<n>`, `WARN: ...`, `ERROR: ...`). Use logging estruturado para saída em CI.
 
-  # registrar um adapter customizado (veja docs/modules/adapter-guidelines.md
-  # para a assinatura de BaseAdapter e requisitos de retorno)
-  class MyAdapter(BaseAdapter):
-      def fetch(self, ticker: str, **kwargs) -> pandas.DataFrame:
-          ...
+- Notebooks: células de preparação devem carregar snapshots de `snapshots/` e parametrização via `ticker`, `start_date`, `end_date` — os notebooks devem gerar ao menos um plot de preços ajustados e um plot de retornos.
 
-  register_adapter("mykey", MyAdapter)  # disponibiliza get_adapter("mykey")
-  ```
+- Streamlit (opcional/minimal): telas para selecionar ticker/período, executar e visualizar gráfico + resumo numérico; botão `Run` deve mostrar `Processing...` e desabilitar inputs enquanto processa.
 
+- Observação de compatibilidade: regras UX documentadas em `docs/planning-artifacts/ux.md` devem ser consideradas na implementação do CLI (`src/main.py`) e ao adicionar `--run-notebook`.
 
-- **Testes de exemplo**: aqui está um padrão de fixtures que você pode copiar
-  para `tests/conftest.py` e reutilizar nos seus `test_*.py`.
+**Nota:** há uma pequena divergência de versão do `typer` entre `pyproject.toml` (0.24) e referências em `docs/project-context.md` (0.9.x). Preferir a versão declarada em `pyproject.toml` como fonte da verdade e atualizar a documentação se necessário.
 
-  ```python
-  # tests/conftest.py
-  import pytest
-  import sqlite3
-  from unittest.mock import patch
-  import pandas as pd
+## UX — Rascunho enxuto
 
-  @pytest.fixture
-  def yf_mock():
-      """Simula a chamada a yfinance.download usada por adapters builtin."""
-      with patch("yfinance.download") as mock:
-          # configure um DataFrame de exemplo retornado pelo mock
-          mock.return_value = pd.DataFrame({"date": ["2020-01-01"], "close": [100]})
-          yield mock
+- CLI: mantenha `src/main.py` simples; flags principais: `--ticker`, `--start_date`, `--end_date`, `--force-refresh`, `--format <text|json>`, `--no-network`, `--output <path>`.
+- Mensagens: prefira mensagens concisas e acionáveis; use logging estruturado para saídas de CI e `--format json` para saídas estruturadas em automação.
+- Startup: evite carregamento pesado no startup da CLI; carregue dados/recursos apenas quando necessários.
+- Notebooks: usar snapshots de `snapshots/`, parametrização por `ticker`/`start_date`/`end_date`, produzir pelo menos um gráfico de preços ajustados e um gráfico de retornos; inclua célula de preparação que valida checksums.
+- Streamlit (opcional): componentes mínimos — seleção de ticker/período, botão `Run`, estado `Processing...`, visualização de gráfico e resumo numérico; evite lógica pesada no UI, delegue ao backend/ETL.
+- Acessibilidade/UX leve: mensagens de erro e estados intermediários claros; botões desabilitados durante processamento; tempos limite configuráveis para chamadas de rede.
+- Compatibilidade: preferir versões em `pyproject.toml` como fonte da verdade; documentar divergências em `docs/sprint-reports/`.
 
-  @pytest.fixture
-  def tmp_db():
-      """Conexão SQLite in-memory que pode ser injetada nos helpers."""
-      conn = sqlite3.connect(":memory:")
-      yield conn
-      conn.close()
-  ```
+## Regras Críticas de Implementação
+### Regras Específicas da Linguagem (Python) — Rascunho enxuto
 
-  Um teste concreto usando essas fixtures poderia ser:
+- Ambiente: use `poetry` para instalar e executar (`poetry install`, `poetry run main`).
+- Imports: evite imports pesados no nível de módulo (CLI/entrypoint); importe localmente dentro de funções para reduzir tempo de startup e dependências carregadas em testes.
+- Lint/format: respeite `ruff` (line-length = 88) e execute `pre-commit` antes de PRs.
+- Segredos/config: não commitar `.env`; use `python-dotenv` para dev e mantenha `.env.example` atualizado.
+- Tipagem: adicione `type hints` em APIs públicas e para funções que serão reusadas por agentes/consumers.
+- Erros: não usar `bare except:`; capture exceções específicas e use `raise from` para preservar contexto.
+- Recursos: use `with`/context managers para arquivos, transações e conexões; funções que manipulam DB devem aceitar `conn` injetado.
+- Idempotência: calcule e persista `raw_checksum` antes de upserts; preserve algoritmo de checksum ou documente migração.
+- Logging: use `src.logging_config.get_logger` para logs estruturados; evite `print()` em produção.
+- Segurança: sanitize nomes de arquivos/paths fornecidos pelo usuário para evitar path traversal/injeção.
+- Testes: unit tests não devem acessar rede; mocke `yfinance`/IO e prefira `sqlite3.connect(":memory:")` ou `tmp_path` para isolamento.
+- Adapter contract: obtenha adapters via `src.adapters.factory.get_adapter()`; não introduza rotas alternativas de criação sem atualizar `docs/modules/adapter-guidelines.md`.
+
+### Regras Específicas de Framework — Rascunho enxuto
+
+- Adapter Factory: sempre usar `src.adapters.factory.get_adapter()` / `register_adapter()`; adapters devem implementar a interface documentada em `docs/modules/adapter-guidelines.md` e ser testáveis via fixtures.
+- ETL: funções em `src/etl/` aceitam `conn` injetado, retornam DataFrame(s) padronizados e não fazem efeitos colaterais fora de transação controlada.
+- CLI: `src/main.py` (typer) deve manter comandos leves; imports pesados apenas dentro da função do comando; exposing `--no-network` para execuções de teste/CI.
+- DB: evitar singletons globais; usar `with conn:` para transações; preferir injeção explícita de engine/sessão e documentar usos de SQLAlchemy.
+- Migrations: alterações de schema devem incluir script em `migrations/` e testes de compatibilidade; atualizar `docs/sprint-reports/`.
+- Adapters de rede: aplicar retry/backoff e timeouts configuráveis; mockar em testes e não depender de rede em unit tests.
+- Caching / snapshots: gravar snapshots em `snapshots/` com checksum; leituras validadas em CI; não sobrescrever sem atualização de checksum.
+- Streams/Batch: evitar carregar grandes snapshots em memória sem chunking; oferecer modo streaming para ETL pesado.
+- Testes de framework: ter fixtures para adapters, `tmp_db` e `tmp_path`; marcar integração com `@pytest.mark.integration`.
+- Proibições: não adicionar servidor web (Flask/FastAPI) sem justificativa documentada; não criar caminhos alternativos de inicialização que burlem `get_adapter`.
+- Observabilidade: usar `src.logging_config` e emitir eventos estruturados em pontos críticos do ETL/adapter/persistência.
 
   ```python
   # tests/test_etl.py
   def test_process_etl_with_mock(yf_mock, tmp_db):
       from src.adapters.factory import get_adapter
-      from src.db import write_prices, compute_raw_checksum
 
       adapter = get_adapter("yfinance")
       df = adapter.fetch("PETR4")  # yfinance.download interceptado pelo yf_mock
@@ -148,46 +160,42 @@ Nota: documente e justifique qualquer mudança de versão em `pyproject.toml`; c
   e registrar a justificativa no PR.
 - Scripts utilitários vivem em `scripts/` e servem como helpers de linha de comando (ex.: `validate_snapshots.py`, `init_ingest_db.py`). Leia o cabeçalho antes de alterar ou reutilizar.
 
-### Testing
+### Testes — Rascunho enxuto
 
-- Cobertura: adicionar testes para novas features; siga as fixtures em `tests/conftest.py`.
-- Organização: coloque testes unitários em `tests/` com nomes `test_*.py`; use subpastas para agrupamento por módulo.
-- Separe unit/integration: marque testes de integração com `@pytest.mark.integration` e execute-os separadamente no CI.
-- Mocks: isole chamadas de rede (ex.: `yfinance`) usando fixtures, `responses`, `requests-mock` ou `pytest` monkeypatch; nunca depender de rede em testes unitários.
-- DB em testes: prefira `sqlite3` in-memory ou um `tmp_path` DB; injete `conn` para permitir isolamento e rollback entre testes.
-- Snapshots: valide checksums de snapshots em fixtures; testes que usam `snapshots/` devem carregar via helpers existentes e impedir escrita acidental.
-- Recursos temporários: use `tmp_path`/`tmp_path_factory` para arquivos temporários e garanta cleanup automático.
-- Testes lentos: marque testes lentos com `@pytest.mark.slow` e exclua-os do pipeline padrão, exceto quando necessário.
-- CI: Pipeline deve executar linters e `poetry run pytest -q` (unit + smoke); integração e testes lentos podem ser jobs separados.
-- Executar localmente: use `poetry run pytest -q` e `poetry run pre-commit --all-files` antes de abrir PR.
+- Execução: rode testes com `poetry run pytest -q`; CI mínimo: `pre-commit --all-files` + `poetry run pytest -q`.
+- Separação: mantenha testes unitários (fast) separados de integração (marcados com `@pytest.mark.integration`) e execute integração em job separado.
+- Rede: testes unitários NÃO devem acessar rede; use `monkeypatch`/`unittest.mock` ou fixtures para mockar `yfinance` e outras chamadas externas. Use `NETWORK_MODE` (playback/record) para fixtures que fazem playback.
+- DB/isolamento: use `sqlite3.connect(":memory:")` ou DB temporário (`tmp_path`) e injete `conn` nas funções; use fixtures autouse para isolar `db.connect`/metadata quando necessário.
+- Snapshots: leia snapshots de `snapshots/` via fixtures; valide checksums SHA-256 com `scripts/validate_snapshots.py` em CI; não sobrescrever snapshots sem atualizar `<file>.checksum` e justificar no PR.
+- Fixtures padrão: forneça `yf_mock`, `tmp_db`/`sample_db`, `snapshot_dir`, `mock_metadata_db` e outros helpers em `tests/conftest.py` para reduzir duplicação.
+- Determinismo: controle tempo/aleatoriedade via `monkeypatch`; prefira dados de fixtures (`tests/fixtures`) para playback.
+- Marcações: marque testes lentos com `@pytest.mark.slow` e testes de integração com `@pytest.mark.integration`.
+- Cobertura focalizada: priorize cobertura nas camadas de ETL/adapters/persistência; mantenha testes rápidos e confiáveis.
+- CI extras: falhar pipeline em divergência de checksums, lint ou testes; permitir `--no-network` em jobs de smoke.
 
-### Code Quality & Style
 
-- Lint & Formatting: siga `pyproject.toml` (ruff) e mantenha `line-length: 88`. Execute `pre-commit --all-files` localmente antes de PR; falhas de lint devem bloquear merge.
-- Tipagem: use `type hints` em APIs públicas e novos módulos; adicione docstrings concisas para módulos e funções públicas.
-- Pequenas funções: prefira funções pequenas e puras quando possível; evite aninhamento profundo e efeitos colaterais.
-- Exceções: capture exceções específicas e evite `bare except`. Use `raise from` para manter contexto de erros.
-- Logging: utilize `src/logging_config.py` para logging estruturado; não use `print()` em produção e não logue dados sensíveis.
+### Qualidade de Código e Estilo — Rascunho enxuto
 
-  Exemplo rápido de uso:
+- Lint & format: siga `pyproject.toml` (`ruff`, `line-length=88`) e execute `pre-commit --all-files` antes de PRs.
+- Tipagem & docs: use `type hints` em APIs públicas e docstrings concisas para funções/módulos exportados.
+- Funções: prefira funções pequenas e puras; evite efeitos colaterais e aninhamento profundo.
+- Exceções: capture exceções específicas; evite `bare except:` e use `raise from`.
+- Logging: use `src.logging_config.get_logger` para logs estruturados; não usar `print()` em produção.
 
-  ```python
-  from src.logging_config import get_logger
+Exemplo mínimo:
 
-  logger = get_logger(__name__)
-  logger.info("iniciando processamento", extra={"ticker": "PETR4", "period": "1y"})
-  ```
+```python
+from src.logging_config import get_logger
+logger = get_logger(__name__)
+logger.info("iniciando processamento", extra={"ticker": "PETR4"})
+```
 
-  o factory `get_logger` retorna um logger configurado com o formatter
-  JSON do projeto; o parâmetro `extra` permite anexar campos estruturados
-  que aparecem no log final.
-- Gerenciamento de recursos: sempre usar context managers (`with`) para arquivos, conexões e transações; injete `conn`/engine para facilitar testes.
-- Dependências: registre novas dependências em `pyproject.toml` e justifique mudanças em `docs/sprint-reports/`.
-- Revisões: faça PRs pequenos, com descrição clara e checklist; execute `poetry run pytest -q` e linters antes de pedir revisão.
-- Estilo: preserve convenções de nomes e estrutura de módulos; evite mudanças de estilo massivas em arquivos não relacionados.
-- Documentação: documente decisões de design importantes e mudanças de dependência em `docs/sprint-reports/`.
+- Recursos: use context managers (`with`) para arquivos/conexões; injete `conn`/engine para testes.
+- Dependências: registre novas dependências em `pyproject.toml`, atualize `poetry.lock` e justifique em `docs/sprint-reports/`.
+- PRs: mantenha PRs pequenos, execute linters/tests localmente antes de pedir revisão.
+- Documentação: documente decisões de design importantes em `docs/modules/` ou `docs/sprint-reports/`.
 
-### Imports & Dependencies
+### Importações e Dependências
 
 - Evitar imports globais de libs pesadas em módulos executados no startup da CLI; prefira imports locais dentro de funções quando apropriado.
 - Organização: siga a ordem `stdlib` → `third-party` → `local` e use `isort`/config compatível com `pyproject.toml`.
@@ -200,21 +208,20 @@ Nota: documente e justifique qualquer mudança de versão em `pyproject.toml`; c
 - Dependências opcionais: para funcionalidades opt-in, documente um extra em `pyproject.toml` (`extras`) ou faça import condicional com fallback claro.
 - Segurança: nunca aceitar pacotes de fontes não verificadas; prefira versões com checksum e verifique CVEs para atualizações críticas.
 
-### Development Workflow
+### Fluxo de Trabalho de Desenvolvimento — Rascunho enxuto
 
-- Branches & PRs: nomear branches como `tipo/ticket-descrição` (ex.: `feat/123-add-ingest`). Faça PRs pequenos e focados; inclua descrição, checklist e links para tarefas relacionadas.
-- Pre-commit & CI: execute `pre-commit --all-files` e `poetry run pytest -q` localmente antes de abrir PR. Falhas de linter/test devem bloquear merge no CI.
-- Commits: mensagens concisas com tipo/escopo (ex.: `feat(ingest): add checksum validation`); siga o padrão do time.
-- Reviews: peça pelo menos uma revisão antes do merge; inclua capturas de tela ou trechos de logs para mudanças comportamentais relevantes.
-- Documentação: atualize `docs/modules/` para mudanças de API ou design; adicione notas de migração quando necessário.
-- Releases & Versioning: controle de versões por tag; documente mudanças breaking em release notes e `docs/sprint-reports/`.
-- Migrations: qualquer alteração de schema (DB/CSV) deve incluir script de migração (`migrations/`) e testes que validem compatibilidade retroativa.
-- Secrets & Config: use `.env` para dev; não commite segredos; adicione variáveis novas em `.env.example`.
-- Experimental: features experimentais devem ficar em branches `exp/` e exigir validação/cleanup antes do merge em `master`.
-- CI Jobs: separar jobs curtos (linters, unit tests) de jobs pesados (integration/slow); falhas críticas devem bloquear pipeline principal.
-- Hotfixes: criar branches `hotfix/*` e seguir processo de revisão acelerada; documentar a razão do hotfix no PR.
+- Branches: nomeie branches `tipo/ticket-descrição` (ex.: `feat/123-add-ingest`) e mantenha PRs pequenos e focados.
+- Commits: mensagens concisas com `tipo(escopo): descrição` (ex.: `fix(ingest): handle empty snapshots`).
+- PRs e reviews: executar `pre-commit --all-files` + linters/tests localmente; peça pelo menos uma revisão antes de merge.
+- Migrations: mudanças de schema exigem script em `migrations/`, testes e notas de migração em `docs/sprint-reports/`.
+- Dependências: adicione/justifique dependências em `pyproject.toml` e atualize `poetry.lock` em PRs.
+- Feature flags/experimental: coloque experimentos em `exp/*` e documente cleanup antes do merge em `master`.
+- Hotfixes: use branches `hotfix/*` com revisão acelerada e descrição clara do problema resolvido.
+- CI: separar jobs rápidos (lint/unit) de jobs pesados (integration/slow); falhas críticas bloqueiam merge.
+- Secrets: não commitar segredos; use `.env.example` e variáveis de ambiente; adicione scanners em pre-commit/CI.
+- Checklist padrão: inclua itens mínimos no PR (linters pass, testes locais, changelog/justificativa, atualizações de docs quando aplicável).
 
-### CI
+### Integração Contínua (CI)
 
 - Pipeline mínimo: `poetry install` + `poetry run pytest -q` + linters.
 - Pre-commit: `poetry run pre-commit run --all-files`.
@@ -222,41 +229,37 @@ Nota: documente e justifique qualquer mudança de versão em `pyproject.toml`; c
 - Manter paridade de runtime entre CI e `pyproject.toml`; hoje o baseline
   esperado é Python 3.12.
 
-### Critical Don't-Miss Rules
+### Regras Críticas — Não Ignorar
 
-- Anti-patterns a evitar:
-	- Alterar formato de CSV/snapshot sem coordenação, testes e atualização de checksums.
-	- Usar singletons globais para `conn`/engine; prefira injeção de dependências.
-	- `bare except:` ou silenciar exceções; sempre capture específicas e use `raise from`.
-	- Fazer imports pesados no topo de módulos executáveis (CLI); importe dentro de funções.
-	- Gravar em `snapshots/` ou em DB durante testes sem isolamento/rollback.
+**Resumo crítico (Rascunho enxuto)**
 
-- Edge cases de dados:
-	- Falta da coluna `Return`, duplicatas de data, e dados com timezone inconsistentes.
-	- Dias de mercado sem negociação (zero volume) e divisões por zero em cálculos de retorno.
-	- Arquivos CSV parcialmente corrompidos ou com encodings diferentes; validar parsing.
+- Anti-patterns a evitar: alterar formato de CSV/snapshot sem coordenação; usar singletons globais para `conn`/engine; `bare except:`; imports pesados no startup; gravar em `snapshots/` ou DB durante testes sem isolamento.
+- Dados: trate ausência da coluna `Return`, duplicatas de datas e timezones inconsistentes; prevenir divisões por zero e validar encodings/parsings de CSV.
+- Segurança: nunca commitar `.env`/segredos; use `.env.example`; sanitize paths; verifique CVEs antes de upgrades críticos.
+- Performance: evite carregar snapshots enormes em memória (use chunking/streaming); evite N+1 writes (batch + transações).
+- Integridade: calcule e persista `raw_checksum` antes de upserts; atualize `<file>.checksum` e justifique PRs que mudem snapshots.
+- CI & Migrations: mudanças de schema requerem `migrations/`, testes de compatibilidade e notas em `docs/sprint-reports/`; CI deve falhar em divergência de checksum/lint/testes.
+- Testes: não depender de rede em unit tests; marcar e isolar testes que alterem dados reais; forneça fixtures de playback/seed (`yf_mock`, `sample_db`, `snapshot_dir`).
 
-- Segurança e segredos:
-	- Nunca commitar `.env` ou credenciais; use `.env.example` e variáveis de ambiente.
-	- Sanitize nomes de arquivos/paths provenientes do usuário; evite injeção de shell.
-	- Verificar origens de dependências e checar CVEs para upgrades críticos.
+---
 
-- Performance & escalabilidade:
-	- Evitar carregar snapshots enormes na memória sem chunking/streaming.
-	- Evitar N+1 writes ao DB — use batch inserts e transações.
-	- Medir e documentar operações custosas (ETL) e fornecer versões simplificadas para testes.
+## Diretrizes de Uso
 
-- Integridade de dados:
-	- Calcular e persistir `raw_checksum` antes de upserts; não mudar algoritmo de checksum sem migração/nota.
-	- Validar checksums de `snapshots/` no CI; PRs que atualizam snapshots devem incluir `<file>.checksum` e justificativa.
+**Para Agentes de IA:**
 
-- CI / Migrations:
-	- Mudanças de schema (DB/CSV) requerem script em `migrations/`, testes de compatibilidade e notas em `docs/sprint-reports/`.
-	- Pipeline deve falhar se checksums divergirem ou linters/tests falharem.
+- Leia este arquivo antes de implementar qualquer código.
+- Siga todas as regras conforme documentado; em caso de dúvida, prefira a opção mais restritiva.
+- Se uma mudança afetar múltiplas regras (por exemplo, atualização de dependência), atualize este arquivo e adicione uma justificativa curta em `docs/sprint-reports/`.
+- Mantenha saídas determinísticas: faça mock das chamadas de rede nos testes e utilize o modo `--no-network` para execuções de smoke em CI.
 
-- Testes & mocks:
-	- Não depender de rede em unit tests; sempre mockar `yfinance`/APIs externas.
-	- Testes que alteram dados reais devem rodar somente em jobs isolados com dados de teste.
+**Para Humanos / Mantenedores:**
+
+- Mantenha este arquivo enxuto e focado nas necessidades dos agentes; evite conteúdo tutorial.
+- Atualize quando o stack de tecnologia mudar (editar `pyproject.toml` primeiro) e atualize `last_updated`.
+- Revise trimestralmente para remover regras desatualizadas ou óbvias.
+- Ao alterar o esquema de snapshot ou o algoritmo de checksum, adicione scripts de migração em `migrations/` e atualize os testes.
+
+Última Atualização: 2026-03-17
 
 ---
 
