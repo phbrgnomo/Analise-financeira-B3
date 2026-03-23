@@ -31,6 +31,8 @@ from pandera.errors import SchemaError
 from pandera.pandas import Column, DataFrameSchema
 
 logger = logging.getLogger(__name__)
+# Metric counter for detected outliers (simple module-level integer)
+outliers_detected = 0
 
 
 def parse_date_strict(date_str: str) -> datetime:
@@ -257,6 +259,47 @@ def _fill_special_values(df: pd.DataFrame, name: str, meta: dict, nrows: int):
     return [meta["raw_checksum"]] * nrows if name == "raw_checksum" else None
 
 
+def detect_outlier(
+    open_val, close_val, ticker: str | None = None, date_val=None
+) -> bool:
+    """Detect intraday outliers: |close - open|/open > 1.0.
+
+    Returns True when the absolute relative change is greater than 1.0
+    (strictly more than 100%). Logs a warning using the project's
+    logger.warning pattern and increments the module-level
+    `outliers_detected` counter. The function is defensive and returns
+    False when `open_val` is missing or <= 0 to avoid division by zero.
+    """
+    global outliers_detected
+
+    try:
+        o = float(open_val)
+        c = float(close_val)
+    except Exception:
+        return False
+
+    if o <= 0:
+        return False
+
+    pct = abs(c - o) / o
+    if pct > 1.0:
+        outliers_detected += 1
+        # format date for log
+        date_str = str(date_val) if date_val is not None else "date"
+        # Use existing logging pattern
+        logger.warning(
+            "Outlier detected for %s on %s: open=%s, close=%s, change=%.1f%%",
+            ticker or "ticker",
+            date_str,
+            o,
+            c,
+            pct * 100,
+        )
+        return True
+
+    return False
+
+
 def to_canonical(
     df: pd.DataFrame,
     provider_name: str,
@@ -361,11 +404,7 @@ def to_canonical(
                         else None
                     )
                     # format date for log (keep original object string if None)
-                    date_str = (
-                        str(date_val.date())
-                        if hasattr(date_val, "date")
-                        else str(date_val)
-                    )
+                    date_str = str(date_val) if date_val is not None else "None"
                     logger.warning(
                         "High/low swap for ticker %s on %s: high=%s low=%s -> high=%s low=%s",
                         ticker,
