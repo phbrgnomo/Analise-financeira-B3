@@ -48,6 +48,26 @@ Found mapper.parse_date_strict in src/etl/mapper.py; prices.read/write in src/db
 - Fuzzy suggestions: st.container + st.button in columns, st.session_state
 - Debounce 300ms: use streamlit-keyup component OR client-side widget
   - NO debounce in vanilla Streamlit — components required
+
+Implementation notes (2026-03-23):
+- Replaced selectbox+text_input with single st.text_input in sidebar.
+- Added helper _sidebar_ticker_widget that shows fuzzy suggestions as
+  clickable buttons and implements a simple time-based debounce (300ms)
+  using st.session_state["_ticker_last_changed"].
+- Clicking suggestion buttons sets st.session_state["ticker_input"] and
+  triggers st.rerun() so the selection is applied immediately.
+- When input is empty the widget shows up to 6 recent tickers from
+  list_price_tickers() in reverse order (most recent first).
+- Kept existing date inputs and "Forçar reload" checkbox; deletion
+  controls extracted to _sidebar_delete_controls.
+
+Limitations / decisions:
+- True client-side debounce requires a Streamlit component; implemented a
+  simple server-side time-based debounce to avoid excessive fuzzy calls.
+- suggest_tickers returns candidates without scores; we compute a
+  SequenceMatcher ratio locally to show a percentage score beside each
+  suggestion.
+- All Streamlit imports remain inside functions to keep module import-safe.
 - Stop/cancel: toggle st.session_state.running with on_click callback
 - Dynamic title: st.set_page_config + st.rerun()
 - Provider selectbox: adapter factory pattern (already in codebase)

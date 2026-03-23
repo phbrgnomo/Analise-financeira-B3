@@ -218,7 +218,7 @@ def _sidebar_ticker_widget(st, tickers: list[str]) -> str:  # noqa: C901
             if cols[idx].button(label, key=key):
                 st.session_state["ticker_input"] = tck
                 st.session_state["_ticker_last_changed"] = time.time()
-                st.rerun()
+                st.experimental_rerun()
 
     return query
 
