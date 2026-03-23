@@ -7,11 +7,10 @@ non-UI contexts (CLI, tests).
 from __future__ import annotations
 
 from datetime import datetime, timedelta
-from typing import List, Optional, Sequence, Tuple
+from typing import List, Sequence, Tuple
 
 from src.db.prices import read_prices, resolve_existing_ticker
 from src.ingest import pipeline as ingest_pipeline
-from src.adapters.factory import get_adapter
 
 
 def _to_iso(date_val: str) -> str:
@@ -133,9 +132,8 @@ def ensure_prices(
             errors.append(f"ingest error for {mr_start}..{mr_end}: {err}")
         else:
             fetched_ranges.append((mr_start, mr_end))
-            # Try to compute rows added: persist result contains 'persist'->'rows_added' or similar
+            # Try to compute rows added: common keys are 'rows_added' or 'rows'
             pers = res.get("persist") or res.get("persist_result") or {}
-            # fallback to len of saved rows if available
             rows = pers.get("rows_added") or pers.get("rows") or res.get("rows")
             try:
                 rows_added += int(rows) if rows is not None else 0
