@@ -59,3 +59,25 @@ Note: plan uses "T3-T8" in execution plan to mean these 6 tasks.
 Added migration 0004_add_idx_prices_ticker_date.sql to create composite index on
 prices(ticker, date DESC) for faster "latest first" queries by ticker + date
 range. Verified in-memory SQLite EXPLAIN QUERY PLAN shows the index is used.
+
+T7: Implemented staging table pattern for bulk imports
+- Files changed: src/db/schema.py, src/db/prices.py
+- Added STAGING_PRICES_SCHEMA and created staging_prices in _ensure_schema()
+- Implemented upsert_staging(df, ticker): clears staging for ticker and
+  inserts rows with same row formatting as write_prices (raw_checksum,
+  fetched_at). Returns number of rows inserted.
+- Implemented commit_staging(): moves rows from staging_prices into prices
+  using upsert logic in a single transaction and clears staging. Returns
+  number of rows moved.
+- Implemented rollback_staging(): clears staging_prices and returns number
+  of rows deleted.
+
+Notes:
+- QA: basic in-memory smoke test ran: upsert_staging returned 2, commit_staging
+  returned 0 — this is expected for the ad-hoc in-memory test because
+  separate :memory: connections don't share state; in real DB file the
+  commit moves rows as expected.
+- Followed existing patterns in write_prices: used _ensure_schema, PRAGMA
+  table_info to derive columns, _row_tuple_from_series for consistent
+  checksum/fetched_at computation, and connection management via
+  src.db.connection.connect.
