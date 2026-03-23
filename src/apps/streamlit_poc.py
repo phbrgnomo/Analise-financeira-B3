@@ -70,16 +70,97 @@ def _choose_price_series(df: pd.DataFrame) -> pd.Series:
     return df.iloc[:, 0]
 
 
-def main() -> None:
-    """Constrói a interface Streamlit. Executada apenas quando este arquivo
-    for invocado como script (ex.: ``streamlit run src/apps/streamlit_poc.py``).
+def _extract_date_range(df: pd.DataFrame) -> tuple[Optional[str], Optional[str]]:
+    """Return (start_date, end_date) ISO strings or (None, None).
+
+    Encapsulates the multiple try/except branches used to infer a
+    date range from an explicit 'date' column or from the index.
     """
-    import streamlit as st
+    rows = int(len(df))
+    # Prefer an explicit 'date' column
+    if "date" in df.columns:
+        try:
+            ser = pd.to_datetime(df["date"], errors="coerce").dropna()
+            if not ser.empty:
+                return ser.min().date().isoformat(), ser.max().date().isoformat()
+        except Exception:
+            return None, None
 
-    st.set_page_config(page_title="POC Streamlit - Dados Financeiros (SQLite)")
-    st.title("POC Streamlit — Dados Financeiros (SQLite)")
+    # Try the index as datetime-like
+    try:
+        idx = pd.to_datetime(df.index, errors="coerce")
+        idx_clean = idx.dropna()
+        if len(idx_clean) > 0:
+            return (
+                idx_clean.min().date().isoformat(),
+                idx_clean.max().date().isoformat(),
+            )
+    except Exception:
+        pass
 
+    # Fallback to stringified first/last index values if possible
+    try:
+        if rows > 0:
+            return str(df.index[0]), str(df.index[-1])
+    except Exception:
+        pass
+    return None, None
+
+
+def _first_snapshot_checksum_or_none(df: pd.DataFrame) -> Optional[str]:
+    """Return first non-null 'snapshot_checksum' value or None."""
+    if "snapshot_checksum" not in df.columns:
+        return None
+    try:
+        val = df["snapshot_checksum"].dropna()
+        if not val.empty:
+            return str(val.iloc[0])
+    except Exception:
+        return None
+    return None
+
+
+def compute_summary_stats(df: pd.DataFrame):
+    """Compute small summary of a loaded prices DataFrame.
+
+    Returns a tuple: (rows, start_date, end_date, checksum).
+
+    - rows: number of rows (int)
+    - start_date / end_date: ISO date string (YYYY-MM-DD) or None
+    - checksum: first non-null 'snapshot_checksum' value if present,
+      otherwise a SHA1 hex digest computed from df.to_csv(index=False).
+
+    This function is pure (no Streamlit imports) so it is safe to
+    import in tests.
+    """
+    rows = int(len(df))
+    start_date, end_date = _extract_date_range(df)
+
+    checksum = _first_snapshot_checksum_or_none(df)
+    if not checksum:
+        # Deterministic fallback: sha1 of CSV text without index
+        import hashlib
+
+        csv = df.to_csv(index=False)
+        checksum = hashlib.sha1(csv.encode("utf-8")).hexdigest()
+
+    return rows, start_date, end_date, checksum
+
+
+def _sidebar_and_inputs(st) -> tuple[str, Optional[date], Optional[date], bool]:
+    """Handle sidebar controls and return (ticker, start, end, abort).
+
+    The helper centralizes branching around sidebar inputs so main() has
+    fewer decision points and remains import-safe (st is passed in).
+    """
     st.sidebar.header("Controles")
+    # Forçar reload (POC): apenas sinaliza a intenção, não executa reload
+    force_reload = st.sidebar.checkbox("Forçar reload")
+    if force_reload:
+        st.info(
+            "Forçar reload: ao usar, o app tentará recarregar dados "
+            "(não implementado nesta POC)"
+        )
 
     try:
         tickers = list_price_tickers()
@@ -103,12 +184,45 @@ def main() -> None:
     if isinstance(end, (list, tuple)):
         end = end[0]
 
+    # If user input is invalid, show message and signal abort
     if start > end:
         st.sidebar.error("Data inicial maior que a data final. Ajuste o intervalo.")
-        return
+        return "", None, None, True
 
     if not ticker:
         st.warning("Nenhum dado: selecione ou informe um ticker.")
+        return "", None, None, True
+
+    return ticker, start, end, False
+
+
+def _render_summary_metrics(st, df: pd.DataFrame) -> None:
+    """Compute and render small summary metrics above the charts."""
+    rows, start_date, end_date, checksum = compute_summary_stats(df)
+    checksum_trunc = checksum[:8] if checksum else ""
+    if start_date or end_date:
+        date_range = f"{start_date or 'N/A'} -> {end_date or 'N/A'}"
+    else:
+        date_range = "N/A"
+
+    cols = st.columns(3)
+    cols[0].metric("Rows", rows)
+    cols[1].metric("Date range", date_range)
+    cols[2].metric("Checksum", checksum_trunc)
+
+
+def main() -> None:
+    """Constrói a interface Streamlit. Executada apenas quando este arquivo
+    for invocado como script (ex.: ``streamlit run src/apps/streamlit_poc.py``).
+    """
+    import streamlit as st
+
+    st.set_page_config(page_title="POC Streamlit - Dados Financeiros (SQLite)")
+    st.title("POC Streamlit — Dados Financeiros (SQLite)")
+
+    # Delegate sidebar and input handling to keep main complexity low
+    ticker, start, end, abort = _sidebar_and_inputs(st)
+    if abort:
         return
 
     try:
@@ -120,6 +234,8 @@ def main() -> None:
     if df.empty:
         st.warning("Nenhum dado encontrado para o período selecionado.")
         return
+
+    _render_summary_metrics(st, df)
 
     st.subheader(f"Preço — {ticker}")
     price = _choose_price_series(df)
