@@ -51,9 +51,22 @@ def _safe_line_chart(data: DataLike) -> None:
         df = data.to_frame()
     else:
         df = data
+
+    if isinstance(df.index, pd.DatetimeIndex) and "date" not in df.columns:
+        df = df.reset_index()
+        date_col = df.columns[0]
+        if date_col != "date":
+            df = df.rename(columns={date_col: "date"})
+        numeric_cols = df.select_dtypes(include="number").columns.tolist()
+        if numeric_cols:
+            df = df[["date"] + numeric_cols[:1]]
     if df.empty:
         return
-    st.line_chart(df)
+    st.line_chart(
+        df[["date", df.select_dtypes(include="number").columns[0]]],
+        x="date",
+        y=df.select_dtypes(include="number").columns[0],
+    )
 
 
 def _choose_price_series(df: pd.DataFrame) -> pd.Series:
