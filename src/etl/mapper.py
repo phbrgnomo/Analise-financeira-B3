@@ -337,6 +337,69 @@ def to_canonical(
         data = _build_canonical_data(df, meta, nrows, columns_map)
 
         canonical_df = pd.DataFrame(data)
+
+        # Enforce schema invariant: high >= low. Some providers occasionally
+        # return corrupted rows where high < low — swap values and log a
+        # warning per-row when this occurs so downstream consumers get
+        # consistent data instead of failing validation.
+        if "high" in canonical_df.columns and "low" in canonical_df.columns:
+            mask = (
+                canonical_df["high"].notna()
+                & canonical_df["low"].notna()
+                & (canonical_df["high"] < canonical_df["low"])
+            )
+            if mask.any():
+                for idx in canonical_df[mask].index:
+                    old_high = canonical_df.at[idx, "high"]
+                    old_low = canonical_df.at[idx, "low"]
+                    # swap
+                    canonical_df.at[idx, "high"] = old_low
+                    canonical_df.at[idx, "low"] = old_high
+                    date_val = (
+                        canonical_df.at[idx, "date"]
+                        if "date" in canonical_df.columns
+                        else None
+                    )
+                    # format date for log (keep original object string if None)
+                    date_str = (
+                        str(date_val.date())
+                        if hasattr(date_val, "date")
+                        else str(date_val)
+                    )
+                    logger.warning(
+                        "High/low swap for ticker %s on %s: high=%s low=%s -> high=%s low=%s",
+                        ticker,
+                        date_str,
+                        old_high,
+                        old_low,
+                        canonical_df.at[idx, "high"],
+                        canonical_df.at[idx, "low"],
+                    )
+
+        # After ensuring high/low invariants, detect large open/close
+        # intraday moves (outliers). Preserve rows; we only log and count.
+        if "open" in canonical_df.columns and "close" in canonical_df.columns:
+            for idx in canonical_df.index:
+                try:
+                    o = canonical_df.at[idx, "open"]
+                    c = canonical_df.at[idx, "close"]
+                    date_val = (
+                        canonical_df.at[idx, "date"]
+                        if "date" in canonical_df.columns
+                        else None
+                    )
+                except Exception:
+                    continue
+                # Call detect_outlier which logs and increments counter when
+                # appropriate. We intentionally ignore the return value here
+                # because the pipeline should not reject rows.
+                try:
+                    detect_outlier(o, c, ticker=ticker, date_val=date_val)
+                except Exception:
+                    # Detection should never raise; protect mapping pipeline
+                    logger.warning(
+                        "Outlier detection failed for %s on %s", ticker, date_val
+                    )
     except (KeyError, ValueError, TypeError) as e:
         raise MappingError(
             f"Failed to construct canonical DataFrame for {ticker}: {e}"
