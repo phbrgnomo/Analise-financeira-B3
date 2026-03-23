@@ -216,6 +216,50 @@ Checklist de verificação (mínimo)
 - [ ] Checksum SHA256 calculado e conferido
 - [ ] Notebook relacionado abre e gera os plots esperados
 
+## Streamlit POC (POC Streamlit — Dados Financeiros)
+
+Esta seção descreve como executar o aplicativo Streamlit que visualiza dados financeiros do banco SQLite local.
+
+### Pré-requisitos
+
+- Dependências instaladas: `poetry install` (inclui `streamlit`)
+- Banco local SQLite com dados em `dados/data.db` (execute o pipeline de ingest primeiro)
+
+### Como executar
+
+Método direto via Streamlit:
+
+```bash
+streamlit run src/apps/streamlit_poc.py
+```
+
+Método alternativo via CLI do projeto:
+
+```bash
+poetry run main --streamlit
+```
+
+### O que você verá
+
+A interface do Streamlit oferece:
+
+- **Barra lateral (Controles)**:
+  - `selectbox` com tickers disponíveis no banco de dados
+  - Campo de texto para informar um ticker livre (ex.: PETR4)
+  - Seletores de data inicial e final para filtrar o período
+
+- **Área principal**:
+  - Gráfico de preços (série temporal)
+  - Gráfico de retornos diários (percentual)
+
+- **Estados vazios**: quando não houver dados para o ticker ou período selecionados, uma mensagem em português será exibida (ex.: "Nenhum dado encontrado para o período selecionado.").
+
+### Observações
+
+- Este POC **apenas lê** os dados já persistidos no banco SQLite local.
+- Não faz fetch de dados novos nem ingest.
+- Para coletar novos dados, consulte o pipeline principal (Phase 2).
+
 Referências
 - Arquitetura: docs/planning-artifacts/architecture.md
 - PRD: docs/planning-artifacts/prd.md
