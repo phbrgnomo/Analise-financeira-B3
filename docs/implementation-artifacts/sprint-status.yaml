@@ -44,7 +44,7 @@ development_status:
   3-2-notebooks-parametrizaveis-e-quickstart-notebook: ready-for-dev
   3-3-streamlit-poc-basico-que-consome-o-db:
     status: completed
-    completed_date: 2026-03-23
+    completed_date: 2026-03-22
   3-4-cli-health-metrics-commands-metrics-test-conn: in-progress
   3-5-quickstart-examples-and-reproducible-scripts: completed
   3-6-documentar-expected-outputs-e-paths-no-readme-e-notebooks: ready-for-dev
