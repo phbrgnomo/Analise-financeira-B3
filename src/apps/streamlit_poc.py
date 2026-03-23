@@ -326,7 +326,7 @@ def _render_summary_metrics(st, df: pd.DataFrame) -> None:
     cols[2].metric("Checksum", checksum_trunc)
 
 
-def main() -> None:
+def main() -> None:  # noqa: C901
     """Constrói a interface Streamlit. Executada apenas quando este arquivo
     for invocado como script (ex.: ``streamlit run src/apps/streamlit_poc.py``).
     """
