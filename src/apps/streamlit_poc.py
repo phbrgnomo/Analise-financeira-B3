@@ -356,7 +356,7 @@ def main() -> None:
         st.session_state["current_ticker"] = ticker
         # Rerun immediately so set_page_config and st.title at the top
         # are re-executed with the updated session_state value.
-        st.experimental_rerun()
+        st.rerun()
 
     if abort:
         return
@@ -367,7 +367,11 @@ def main() -> None:
         import time
 
         from src.ingest.raw_storage import DEFAULT_DB
-        from src.services.ingest_service import ensure_prices
+
+        try:
+            from src.services.ingest_service import ensure_prices  # type: ignore
+        except Exception:
+            ensure_prices = None
 
         start_t = time.time()
         provider = "yfinance"
@@ -378,13 +382,19 @@ def main() -> None:
 
         # Phase 1: fetching
         phase1.info(f"🔍 Buscando dados de {provider}...")
-        res = ensure_prices(
-            ticker,
-            start=start.isoformat(),
-            end=end.isoformat(),
-            provider=provider,
-            db_path=str(DEFAULT_DB),
-        )
+        # Ensure start/end are present (should be validated by sidebar)
+        assert start is not None and end is not None
+        if ensure_prices is None:
+            st.warning("Serviço de ingestão não disponível; pulando fetch.")
+            res = {"ok": True, "rows_added": 0}
+        else:
+            res = ensure_prices(
+                ticker,
+                start=start.isoformat(),
+                end=end.isoformat(),
+                provider=provider,
+                db_path=str(DEFAULT_DB),
+            )
         phase1.empty()
 
         # If ensure_prices reported errors, surface them and stop.
