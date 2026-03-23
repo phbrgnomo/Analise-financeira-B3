@@ -33,6 +33,56 @@ from pandera.pandas import Column, DataFrameSchema
 logger = logging.getLogger(__name__)
 
 
+def parse_date_strict(date_str: str) -> datetime:
+    """Parse an ISO date string (YYYY-MM-DD) strictly and return a UTC-aware
+    datetime at midnight UTC.
+
+    Rules:
+    - Accepts only the exact format '%Y-%m-%d' when given a string.
+    - Accepts datetime or pandas.Timestamp values as well and normalizes
+      them to UTC.
+    - Rejects dates in the future (strictly greater than now UTC).
+    - Rejects dates before 2000-01-01.
+
+    Raises ValueError on any violation.
+    """
+    if isinstance(date_str, pd.Timestamp):
+        dt = date_str.to_pydatetime()
+    elif isinstance(date_str, datetime):
+        dt = date_str
+    elif isinstance(date_str, str):
+        try:
+            dt = datetime.strptime(date_str, "%Y-%m-%d")
+        except Exception as e:  # ValueError from strptime
+            raise ValueError(
+                f"Invalid date format, expected YYYY-MM-DD: {date_str}"
+            ) from e
+    else:
+        raise ValueError(f"Unsupported date type: {type(date_str)!r}")
+
+    # Normalize to timezone-aware UTC using pandas.Timestamp helpers to avoid
+    # edge-case differences between naive and aware datetimes.
+    ts = pd.Timestamp(dt)
+    if ts.tzinfo is None:
+        ts = ts.tz_localize(timezone.utc)
+    else:
+        ts = ts.tz_convert(timezone.utc)
+
+    # Normalize to midnight UTC (date affinity)
+    ts = ts.normalize()
+    dt = ts.to_pydatetime()
+
+    now = datetime.now(timezone.utc)
+    if dt > now:
+        raise ValueError(f"Date is in the future: {dt.isoformat()}")
+
+    min_allowed = datetime(2000, 1, 1, tzinfo=timezone.utc)
+    if dt < min_allowed:
+        raise ValueError(f"Date before allowed minimum (2000-01-01): {dt.date()}")
+
+    return dt
+
+
 class MappingError(Exception):
     """Exception raised when mapping from provider to canonical schema fails."""
 
@@ -184,9 +234,20 @@ def _fill_special_values(df: pd.DataFrame, name: str, meta: dict, nrows: int):
     """
     if name == "date":
         date_col = next((c for c in df.columns if str(c).lower() == "date"), None)
-        if date_col is not None:
-            return pd.to_datetime(df[date_col])
-        return pd.to_datetime(df.index)
+        # Validate and normalize each date value strictly. Invalid dates are
+        # logged and replaced with pandas.NaT so downstream validation can
+        # decide on rejecting rows while keeping mapping deterministic.
+        values = df[date_col] if date_col is not None else df.index
+        normalized = []
+        for v in values:
+            try:
+                dt = parse_date_strict(v)
+                normalized.append(pd.Timestamp(dt))
+            except ValueError as exc:
+                logger.warning("Rejected date value during mapping: %s (%s)", v, exc)
+                normalized.append(pd.NaT)
+
+        return pd.to_datetime(pd.Series(normalized))
     if name == "ticker":
         return [meta["ticker"]] * nrows
     if name == "source":
