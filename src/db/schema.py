@@ -53,9 +53,7 @@ def _sql_type(col_type: str) -> str:
     return mapping.get(col_type, "TEXT")
 
 
-def _ensure_schema(
-    conn: sqlite3.Connection, schema_path: Optional[str] = None
-) -> None:
+def _ensure_schema(conn: sqlite3.Connection, schema_path: Optional[str] = None) -> None:
     """
     Ensure the database schema exists and is up to date.
 
@@ -83,15 +81,35 @@ def _ensure_schema(
     pk = "(ticker, date)" if "ticker" in names and "date" in names else ""
     pk_sql = f", PRIMARY KEY {pk}" if pk else ""
 
+    # Add CHECK constraint for date column to prevent pre-2000 or future
+    # dates. SQLite supports CHECK constraints and CURRENT_DATE is valid.
+    check_sql = ""
+    if "date" in names:
+        check_sql = ", CHECK (date >= '2000-01-01' AND date <= CURRENT_DATE)"
+
     create_prices = (
         "CREATE TABLE IF NOT EXISTS prices ("
         + ", ".join(col_sql_parts)
         + pk_sql
+        + check_sql
         + ")"
     )
 
     cur = conn.cursor()
     cur.execute(create_prices)
+    # Staging table for bulk imports. Mirrors prices logical schema and
+    # uses the same primary key to allow easy promotion to the canonical
+    # "prices" table during commit.
+    STAGING_PRICES_SCHEMA = """
+  CREATE TABLE IF NOT EXISTS staging_prices (
+    ticker TEXT NOT NULL,
+    date TEXT NOT NULL,
+    open REAL, high REAL, low REAL, close REAL, volume INTEGER,
+    source TEXT, fetched_at TEXT, raw_checksum TEXT,
+    PRIMARY KEY (ticker, date)
+  )
+"""
+    cur.execute(STAGING_PRICES_SCHEMA)
     # only trigger the potentially expensive date-column migration if the
     # database hasn't already been bumped to user_version >= 1.  the
     # migration helper repeats this same check internally, but avoiding the
