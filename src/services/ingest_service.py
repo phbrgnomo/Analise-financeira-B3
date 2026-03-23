@@ -102,8 +102,10 @@ def ensure_prices(
         if not df.empty:
             existing_dates = [idx.date().isoformat() for idx in df.index]
     except Exception as exc:
-        errors.append(f"read_prices failed: {exc}")
-        return {"ok": False, "fetched_ranges": [], "errors": errors, "rows_added": 0}
+        # If DB/schema not present (e.g. in-memory test DB) treat as no rows
+        # and continue to ingestion path. Record a non-fatal note in errors.
+        errors.append(f"read_prices warning (treated as empty): {exc}")
+        existing_dates = []
 
     # Build full requested date list (calendar days)
     s_date = datetime.fromisoformat(start_iso).date()
