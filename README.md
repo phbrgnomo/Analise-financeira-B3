@@ -114,6 +114,39 @@ poetry run pytest -q
 ./examples/run_quickstart_example.sh
 ```
 
+### Quickstart end-to-end
+
+Use este fluxo para reproduzir ingest → persist → snapshot → notebook:
+
+```bash
+cp .env.example .env
+poetry install
+poetry run main --help
+poetry run main --ticker PETR4 --force-refresh
+```
+
+Tickers de exemplo: `PETR4`, `VALE3`, `ITUB4`.
+
+Saídas esperadas:
+
+- `dados/data.db` → SQLite principal
+- `raw/<provider>/` → CSV bruto do provider
+- `snapshots/` → snapshots gerados + checksums
+
+Notebook de referência: `docs/examples/notebooks/returns-consumer.ipynb`
+
+Variáveis mínimas em `.env`:
+
+- `DEFAULT_TICKERS=PETR4,VALE3,ITUB4`
+- `DB_PATH=dados/data.db`
+- `SNAPSHOT_CACHE_FILE=dados/snapshot_cache.json`
+
+Troubleshooting rápido:
+
+- `poetry: command not found` → instale o Poetry antes de seguir o quickstart
+- `main --help` falha por import/local env → rode `python -m src.main --help`
+- Sem arquivos novos em `snapshots/` ou `raw/` → repita o comando com `--force-refresh`
+
 ### Modo de testes de rede (NETWORK_MODE)
 
 Para reduzir flakiness em CI, os testes que dependem de chamadas de rede rodam
